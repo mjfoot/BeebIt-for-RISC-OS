@@ -1,0 +1,913 @@
+;>6502cpui.h
+;
+; BeebIt - BBC Micro Model B Emulator
+;
+; (C) Copyright Michael J Foot, 1998-2006
+;
+; Email: <mjfoot@paradise.net.nz>
+;
+
+;  IMPORT |constFFFFFFFF|
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502NEXTOPCODE_SLOW
+  MOV pc,lr
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502NEXTOPCODE
+  ;no good for B+ emulation because of reading from shadow RAM
+  CMP rcycles,#0
+  MOVLE pc,lr
+  LDRB r3,[r12,rpc] ;get opcode
+  ADD rpc,rpc,#1
+  LDR r0,=r6502opcodes
+  LDR pc,[r0,r3,LSL#2]
+  ;MOV pc,lr
+  MEND
+
+;
+;rockwell 6512 cpu
+;
+  MACRO
+  R6512NEXTOPCODE_SLOW
+  MOV pc,lr
+  MEND
+
+;
+;rockwell 6512 cpu
+;
+  MACRO
+  R6512NEXTOPCODE_S
+  ;no good for B+ emulation because of reading from shadow RAM
+  CMP rcycles,#0
+  MOVLE pc,lr
+  LDRB r3,[r12,rpc] ;get opcode
+  ADD rpc,rpc,#1
+  LDR r0,=r6512opcodes
+  LDR pc,[r0,r3,LSL#2]
+  ;MOV pc,lr
+  MEND
+
+;
+;rockwell 6512 cpu
+;
+  MACRO
+  R6512NEXTOPCODE
+  CMP rcycles,#0
+  MOVLE pc,lr
+  CMP rpc,#&3000
+  LDRLTB r0,[r12,rpc] ;get opcode
+  ADDLT pc,pc,#(READMEMBP_LEN+4)-4 ;4*4 (-4)
+
+  MOV r0,rpc ;1*4
+  READMEMBP ;3*4
+
+  ADD rpc,rpc,#1
+  LDR r1,=r6512opcodes
+  LDR pc,[r1,r0,LSL#2]
+  ;MOV pc,lr
+  MEND
+
+;
+;rockwell 65C12 cpu
+;
+  MACRO
+  R65C12NEXTOPCODE_SLOW
+  MOV pc,lr
+  MEND
+
+;
+;rockwell 65C12 cpu
+;
+  MACRO
+  R65C12NEXTOPCODE
+  CMP rcycles,#0
+  MOVLE pc,lr
+  CMP rpc,#&3000
+  LDRLTB r0,[r12,rpc] ;get opcode
+  ADDLT pc,pc,#12 ;20 ;6*4 (-4)
+
+  MOV r0,rpc ;1*4
+  READMEMM ;3*4
+
+  ADD rpc,rpc,#1
+  LDR r1,=r65c12opcodes
+  LDR pc,[r1,r0,LSL#2]
+  ;MOV pc,lr
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ADC
+  ;r0=number to adc with A
+
+  ;if not decimal
+  MOV r0,r0,LSL#24 ;n=(n<<24)
+
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+;  MOV ra,ra,LSL#24 ;a=(a<<24) jdl** combined with ORR
+  MOV r1,#&00FFFFFF ;raFFFFFF
+  ORR ra,r1,ra,LSL #24 ;jdl** changed to eliminate MOV
+
+;  MOV r1,#1 ;bit      jdl** no longer required
+;  MOV r2,#0 ;bit mask jdl** no longer required
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11]
+
+  ;n flag
+  ;ANDS r3,rps,#NFLAG
+  ;ORRNE r2,r2,r1,LSL#31 ;set n flag in bit mask
+  ;z flag
+  ;ANDS r3,rps,#ZFLAG
+  ;ORRNE r2,r2,r1,LSL#30 ;set z flag in bit mask
+  ;c flag
+;  ANDS r3,rps,#CFLAG  jdl** no longer required
+;  ORRNE r2,r2,r1,LSL#29 ;set c flag in bit mask jdl** no longer required
+  ;v flag
+  ;ANDS r3,rps,#VFLAG
+  ;ORRNE r2,r2,r1,LSL#28 ;set v flag in bit mask
+
+;  TEQP r3,r2 ;set flags in ARM PSR jdl** not 32bit
+  TEQ r0,rps,LSR #1   ;jdl** ARM c =6502 c
+
+  ;TEQ   PC,#0             ; ensure some processor flags are set
+  ;TEQ   PC,PC             ; if not equal flags are in PC therefor 26bit mode
+  ;CMPNE PC,#1<<29         ; old way of setting V
+  ;MSREQ CPSR_f,#1<<29     ; new way of setting V
+
+  ADCS ra,ra,r0 ;ra=a+n+c
+
+  AND rps,rps,#&3C ;%00111100 ;clear NVubdiZC
+  ORRMI rps,rps,#NFLAG
+  ORRVS rps,rps,#VFLAG
+  ;ORREQ rps,rps,#ZFLAG
+  ORRCS rps,rps,#CFLAG
+  ;STRB rps,[r11]
+
+  MOVS ra,ra,LSR#24 ;(a=(a>>24) jdl** also (z=(a=0))
+;  CMP ra,#0    jdl** combined with MOV above
+  ORREQ rps,rps,#ZFLAG
+  ;STRB ra,[r12] ;store a
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ADCBCD
+  ;if decimal
+  MOV r1,#1 ;bit
+  MOV r2,#0 ;bit mask
+  ;c flag
+  ANDS r3,rps,#CFLAG
+  ORRNE r2,r2,r1,LSL#29 ;set c flag in bit mask
+  TEQP r3,r2 ;set flags in ARM PSR
+
+  AND r2,ra,#&0F
+  ;MOV r3,ra,ra,LSL#24 ;a=(a<<24)
+  ;MOV r1,#&00FFFFFF ;raFFFFFF
+  ;ORR r3,r3,r1
+  AND r1,r0,#&0F
+  ADC r1,r1,r2 ;=a+n+c
+
+  CMP r1,#10
+  SUBHS r1,r1,#10
+  ;MOV r1,r1,LSL#4
+  MOV r2,r0,LSR#4
+  ADC ra,r2,ra,LSR#4
+
+  CMP ra,#10
+  SUBHS ra,ra,#10
+  ORR ra,r1,ra,LSL#4
+
+  ;MOV r1,#&FF
+  ;ORRCS r0,r0,r1
+
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ADCBCDXX
+  ;if decimal
+  MOV r1,#1 ;bit
+  MOV r2,#0 ;bit mask
+  ;c flag
+  ANDS r3,rps,#CFLAG
+  ORRNE r2,r2,r1,LSL#29 ;set c flag in bit mask
+  TEQP r3,r2 ;set flags in ARM PSR
+
+  AND r3,ra,#&0F
+  MOV r3,ra,ra,LSL#24 ;a=(a<<24)
+  MOV r1,#&00FFFFFF ;raFFFFFF
+  ORR r3,r3,r1
+
+  AND r2,r0,#&0F
+  MOV r2,r2,LSL#24 ;n=(n<<24)
+  ADC r2,r2,r3
+  MOV r2,r2,LSR#24 ;n=(n>>24)
+  CMP r2,#10
+  SUBCS r2,r2,#10
+  MOV ra,ra,LSR#28
+
+  ADCS ra,ra,r0 ;ra=a+n+c
+
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ADCBCD2
+  ;r0=number to adc with A
+  ADD r1,ra,r0 ;r1=ra+r0
+  ANDS r3,rps,#CFLAG
+  ADDNE r1,r1,#1
+  SETZFLAG r1
+
+  AND r3,ra,#&0F ;ra & 0x0F
+  AND r2,r0,#&0F ;r0 & 0x0F
+  ADD r3,r3,r2 ;lo byte
+  ANDS r1,rps,#CFLAG
+  ADDNE r3,r3,#1 ;lo byte
+  CMP r3,#9
+  ADDGT r3,r3,#6 ;lo byte
+
+  MOV r2,ra,LSR#4 ;ra >> 4
+  MOV r1,r0,LSR#4 ;r0 >> 4
+  ADD r2,r2,r1 ;hi byte
+  CMP r3,#&0F ;lo byte
+  ADDGT r2,r2,#1 ;hi byte
+
+  AND r3,r3,#&0F ;lo byte
+
+  MOV r1,r2,LSL#4 ;hi << 4
+  ADD r1,r1,r3 ;r3=(hi << 4) + lo
+  SETNFLAG r1
+
+  MOV r1,r2,LSL#4 ;hi << 4
+
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ALR
+  ;r0=number to alr
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+  AND ra,ra,r0 ;a = a and n
+  ANDS r0,ra,#&01
+  ORRNE rps,rps,#CFLAG ;set c flag
+  ANDEQ rps,rps,#NOTCFLAG ;clear c flag
+  MOVS ra,ra,LSR #&01 ;shift right
+  ;STRB ra,[r12] ;save a
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  SETZFLAG0 ;ra
+  AND rps,rps,#NOTNFLAG
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ANC
+  ;r0=number to and
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+  ANDS ra,ra,r0 ;a = a and n
+  ;STRB ra,[r12] ;save a
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  SETZFLAG0 ;ra
+  ;SETNFLAG ra
+  ANDS r0,ra,#&80
+  ORRNE rps,rps,#(NFLAG+CFLAG)
+  ANDEQ rps,rps,#&7E ;(NOTNFLAG+NOTCFLAG)
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502AND
+  ;r0=number to and
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+  ANDS ra,ra,r0 ;a = a and n
+  ;STRB ra,[r12] ;save a
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  ;MOV r0,ra ;r0=ra
+  SETZFLAG0 ;ra
+  SETNFLAG ra
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ASL $n
+  ;IN: $n=number to asl
+  ;OUT:$n=result
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11]
+  ANDS r1,$n,#&80
+  ORRNE rps,rps,#CFLAG ;set c flag
+  ANDEQ rps,rps,#NOTCFLAG ;clear c flag
+  MOV $n,$n,LSL #&01 ;shift left
+  ANDS $n,$n,#&FF
+  SETZFLAG0 ;r0
+  SETNFLAG $n
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ASO
+  ;IN: r0=number to aso
+  ;OUT:r0=result
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11]
+  ANDS r1,r0,#&80
+  ORRNE rps,rps,#CFLAG
+  ANDNE rps,rps,#NOTCFLAG
+  MOV r0,r0,LSL #&01 ;shift left
+  ;LDR r10,=r6502_a
+  ;LDRB ra,[r10]
+  ANDS ra,ra,r0
+  ;STRB ra,[r10]
+  SETZFLAG0 ;ra
+  SETNFLAG ra
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502BIT
+  ;r0=number to bit
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+  ANDS r1,ra,r0 ;a=(a and n)
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  SETZFLAG0 ;r1 ;against r1
+  SETNFLAG r0 ;against r0
+  SETVFLAG r0 ;against r0
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502CMP
+  ;r0=number to cmp
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+  SUBS r3,ra,r0 ;r3=ra-r0
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+
+  SETZFLAG0 ;r3
+
+  CMP ra,r0
+  ORRGE rps,rps,#CFLAG
+  ANDLT rps,rps,#NOTCFLAG
+  ;MOV r0,r1 ;r0=n1
+  SETNFLAG r3
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502CPX
+  ;r0=number to cmp
+  ;LDR r12,=r6502_x
+  ;LDRB rx,[r12] ;load x
+  SUBS r3,rx,r0 ;r3=rx-r0
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+
+  SETZFLAG0 ;r3
+
+  CMP rx,r0
+  ORRGE rps,rps,#CFLAG
+  ANDLT rps,rps,#NOTCFLAG
+  ;MOV r0,r1 ;r0=n1
+  SETNFLAG r3
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502CPY
+  ;r0=number to compare
+  ;LDR r12,=r6502_y
+  ;LDRB ry,[r12] ;load y
+  SUBS r3,ry,r0 ;r3=ry-r0
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+
+  SETZFLAG0 ;r3
+
+  CMP ry,r0
+  ORRGE rps,rps,#CFLAG
+  ANDLT rps,rps,#NOTCFLAG
+  ;MOV r0,r1 ;r0=n1
+  SETNFLAG r3
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502DEC $n
+  ;IN: $n=number to dec
+  ;OUT:$n=result
+  SUB $n,$n,#1
+  ANDS $n,$n,#&FF
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;load ps
+
+  SETZFLAG0 ;$n ;z flag
+
+  ;MOV r0,$n
+  SETNFLAG $n ;n flag
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502DEA
+  ;IN: ra=number to dea
+  ;OUT:ra=result
+  SUB ra,ra,#1
+  ANDS ra,ra,#&FF
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;load ps
+
+  SETZFLAG0 ;ra ;z flag
+
+  SETNFLAG ra ;n flag
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502DEX
+  ;IN: rx=number to dex
+  ;OUT:rx=result
+  SUB rx,rx,#1
+  ANDS rx,rx,#&FF
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;load ps
+
+  SETZFLAG0 ;rx ;z flag
+
+  SETNFLAG rx ;n flag
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502DEY
+  ;IN: ry=number to dey
+  ;OUT:ry=result
+  SUB ry,ry,#1
+  ANDS ry,ry,#&FF
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;load ps
+
+  SETZFLAG0 ;ry ;z flag
+
+  SETNFLAG ry ;n flag
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502EOR
+  ;r0=number to eor
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+  EORS ra,ra,r0 ;a = a eor n
+  ;STRB ra,[r12] ;save a
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  ;MOV r0,ra
+
+  SETZFLAG0 ;ra ;z flag
+
+  SETNFLAG ra ;n flag
+  ;SETZFLAG ra ;z flag
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502INC $n
+  ;IN: $n=number to inc
+  ;OUT:$n=result
+  ADD $n,$n,#1
+  ANDS $n,$n,#&FF
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;load ps
+  ;MOV r0,$n
+
+  SETZFLAG0 ;$n ;z flag
+
+  SETNFLAG $n ;n flag
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502INA
+  ;IN: ra=number to ina
+  ;OUT:ra=result
+  ADD ra,ra,#1
+  ANDS ra,ra,#&FF
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;load ps
+
+  SETZFLAG0 ;ra ;z flag
+
+  SETNFLAG ra ;n flag
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502INX
+  ;IN: rx=number to inx
+  ;OUT:rx=result
+  ADD rx,rx,#1
+  ANDS rx,rx,#&FF
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;load ps
+
+  SETZFLAG0 ;rx ;z flag
+
+  SETNFLAG rx ;n flag
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502INY
+  ;IN: ry=number to iny
+  ;OUT:ry=result
+  ADD ry,ry,#1
+  ANDS ry,ry,#&FF
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;load ps
+
+  SETZFLAG0 ;ry ;z flag
+
+  SETNFLAG ry ;n flag
+  SETZFLAG ry ;z flag
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502LDA
+  ;r0=value of ra
+  ;LDR r12,=r6502_a
+  ;STRB r0,[r12] ;save a
+  MOVS ra,r0
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  SETZFLAG0 ;ra
+  SETNFLAG ra
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502LDX
+  ;r0=value of rx
+  ;LDR r12,=r6502_x
+  ;STRB r0,[r12] ;save x
+  MOVS rx,r0
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  SETZFLAG0 ;rx
+  SETNFLAG rx
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502LDY
+  ;r0=value of ry
+  ;LDR r12,=r6502_y
+  ;STRB r0,[r12] ;save y
+  MOVS ry,r0
+  ;set psr
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  SETZFLAG0 ;ry
+  SETNFLAG ry
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502LSR $n
+  ;IN: $n=number to lsr
+  ;OUT:$n=result
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11]
+  ANDS r1,$n,#&01
+  ORRNE rps,rps,#CFLAG ;set c flag
+  ANDEQ rps,rps,#NOTCFLAG ;clear c flag
+  MOV $n,$n,LSR #&01 ;shift left
+  AND rps,rps,#NOTNFLAG ;clear n flag
+  ANDS $n,$n,#&FF
+  SETZFLAG0 ;$n
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502NOP
+  ;SWI OS_WriteI+32
+  ;SWI OS_WriteI+73
+  ;SWI OS_WriteI+76
+  ;SWI OS_WriteI+76
+  ;CPU_CYCLES 2
+  SUB rcycles,rcycles,#2
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ORA
+  ;r0=number to or
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+  ORRS ra,ra,r0 ;a = a or n
+  ;STRB ra,[r12] ;save a
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12] ;load ps
+  ;MOV r0,ra
+  SETZFLAG0 ;ra ;z flag
+  SETNFLAG ra ;n flag
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502RLA
+  ;IN: r0=number to rla
+  ;OUT:r0=result
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11] ;program status
+  AND r3,rps,#CFLAG ;store c flag
+  ANDS r1,r0,#&80
+  ORRNE rps,rps,#CFLAG ;set c flag
+  ANDEQ rps,rps,#NOTCFLAG ;clear c flag
+  MOV r0,r0,LSL #&01 ;shift left
+  CMP r3,#0
+  ORRNE r0,r0,#&01
+  AND r0,r0,#&FF
+  ;LDR r10,=r6502_a
+  ;LDRB ra,[r10]
+  ANDS ra,ra,r0
+  SETZFLAG0 ;ra
+  SETNFLAG ra
+  ;STRB ra,[r10]
+  ;STRB rps,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ROL $n
+  ;IN: $n=number to rol
+  ;OUT:$n=result
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12]
+  AND r3,rps,#CFLAG ;store c flag
+  ANDS r1,$n,#&80
+  ORRNE rps,rps,#CFLAG ;set c flag
+  ANDEQ rps,rps,#NOTCFLAG ;clear c flag
+  MOV $n,$n,LSL #&01 ;shift left
+  CMP r3,#0
+  ORRNE $n,$n,#&01
+  ANDS $n,$n,#&FF
+  SETZFLAG0 ;$n
+  SETNFLAG $n
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502ROR $n
+  ;IN: $n=number to ror
+  ;OUT:$n=result
+  ;LDR r12,=r6502_ps
+  ;LDRB rps,[r12]
+  AND r3,rps,#CFLAG ;store c flag
+  ANDS r1,$n,#&01
+  ORRNE rps,rps,#CFLAG ;set c flag
+  ANDEQ rps,rps,#NOTCFLAG ;clear c flag
+  MOV $n,$n,LSR #&01 ;shift right
+  CMP r3,#0
+  ORRNE $n,$n,#&80
+  ANDS $n,$n,#&FF
+  SETZFLAG0 ;$n
+  SETNFLAG $n
+  ;STRB rps,[r12]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502SKB
+  ;SWI OS_WriteI+32
+  ;SWI OS_WriteI+83
+  ;SWI OS_WriteI+75
+  ;SWI OS_WriteI+66
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11]
+  ADD rpc,rpc,#1
+  ANDS r0,rpc,#&10000
+  MOVNE r0,#&FF00
+  ORRNE r0,r0,#&00FF
+  ANDNE rpc,rpc,r0
+  ;STR rpc,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502SKW
+  ;SWI OS_WriteI+32
+  ;SWI OS_WriteI+83
+  ;SWI OS_WriteI+75
+  ;SWI OS_WriteI+87
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11]
+  ADD rpc,rpc,#2
+  ANDS r0,rpc,#&10000
+  MOVNE r0,#&FF00
+  ORRNE r0,r0,#&00FF
+  ANDNE rpc,rpc,r0
+  ;STR rpc,[r11]
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502SBC
+  ;r0=number to sbc with A
+
+  ;if not decimal
+  MOV r0,r0,LSL#24 ;n=(n<<24)
+
+  ;LDR r12,=r6502_a
+  ;LDRB ra,[r12] ;load a
+  MOV ra,ra,LSL#24 ;a=(a<<24)
+
+;  MOV r1,#1 ;bit       jdl** no longer required
+;  MOV r2,#0 ;bit mask  jdl** no longer required
+  ;LDR r11,=r6502_ps
+  ;LDRB rps,[r11]
+
+  ;n flag
+  ;ANDS r3,rps,#NFLAG
+  ;ORRNE r2,r2,r1,LSL#31 ;set n flag in bit mask
+  ;z flag
+  ;ANDS r3,rps,#ZFLAG
+  ;ORRNE r2,r2,r1,LSL#30 ;set z flag in bit mask
+  ;c flag
+;  ANDS r3,rps,#CFLAG   jdl** no longer required
+;  ORRNE r2,r2,r1,LSL#29 ;set c flag in bit mask jdl** no longer required
+  ;v flag
+  ;ANDS r3,rps,#VFLAG
+  ;ORRNE r2,r2,r1,LSL#28 ;set v flag in bit mask
+
+;  TEQP r3,r2 ;set flags in ARM PSR jdl** not 32bit
+  TEQ r0,rps,LSR #1    ;jdl** ARM c =6502 c
+
+  SBCS ra,ra,r0 ;ra=a-n-c
+
+  AND rps,rps,#&3C ;%00111100 ;clear NVubdiZC
+  ORRMI rps,rps,#NFLAG
+  ORRVS rps,rps,#VFLAG
+  ;ORREQ rps,rps,#ZFLAG
+  ORRCS rps,rps,#CFLAG
+  ;STRB rps,[r11]
+
+  MOVS ra,ra,LSR#24 ;(a=(a>>24) jdl** also (z=(a=0))
+;  CMP ra,#0     jdl** combined with MOV above
+  ORREQ rps,rps,#ZFLAG
+  ;STRB ra,[r12] ;store a
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502STA
+  ;r1=value of ra
+  ;LDR r11,=r6502_a
+  ;LDRB r1,[r11] ;load a
+  MOV r1,ra
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502STX
+  ;r1=value of rx
+  ;LDR r11,=r6502_x
+  ;LDRB r1,[r11] ;load x
+  MOV r1,rx
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  R6502STY
+  ;r1=value of ry
+  ;LDR r11,=r6502_y
+  ;LDRB r1,[r11] ;load y
+  MOV r1,ry
+  MEND
+
+  END

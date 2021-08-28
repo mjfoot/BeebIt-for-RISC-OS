@@ -1,0 +1,1490 @@
+;>6502cpus.s
+;
+; BeebIt - BBC Micro Model B Emulator
+;
+; (C) Copyright Michael J Foot, 1998-2006
+;
+; Email: <mjfoot@paradise.net.nz>
+;
+; r12=pointer to variable
+; r11=pointer to variable
+; r10=pointer to variable
+; r9=PC
+; r8=PS
+; r7=Y
+; r6=X
+; r5=A
+
+  GET h.6502cpus
+
+; Use the GET directive to include register definitions as if typed here
+
+  GET h.RegNames
+
+; Use the GET directive to include a list of SWI names as if typed here
+
+  GET h.SWInames
+
+; Area name C$$code advisable as wanted to link with C output
+
+  AREA    |C$$code|, CODE, READONLY
+
+; Import global symbols
+
+  IMPORT |memory|
+  IMPORT |shadow|
+  IMPORT |beebit_romwritable|
+  IMPORT |beebit_romselected|
+  IMPORT |beebit_rommodified|
+  IMPORT |beebit_romsel|
+  IMPORT |beebit_acccon|
+  ;IMPORT |beebit_memorymap|
+  IMPORT |r6502_sp|
+  IMPORT |r6502_pc|
+  IMPORT |r6502_ps|
+  IMPORT |r6502_a|
+  IMPORT |r6502_x|
+  IMPORT |r6502_y|
+  ;IMPORT |r6502_n|
+  ;IMPORT |r6502_v|
+  ;IMPORT |r6502_b|
+  ;IMPORT |r6502_d|
+  ;IMPORT |r6502_i|
+  ;IMPORT |r6502_z|
+  ;IMPORT |r6502_c|
+  IMPORT |r6502_cyclestogo|
+
+  IMPORT |r6502read|
+  IMPORT |r6502write|
+  IMPORT |sheilaread_b|
+  IMPORT |sheilaread_bp|
+  IMPORT |sheilaread_m|
+  IMPORT |sheilawrite_b|
+  IMPORT |sheilawrite_bp|
+  IMPORT |sheilawrite_m|
+  ;IMPORT |r6522sysvia_porta|
+  ;IMPORT |r6522sysvia_rtcreadwrite|
+  ;IMPORT |r6522sysvia_rtcdatastrobe|
+  ;IMPORT |r6522sysvia_rtcaddrstrobe|
+  ;IMPORT |r6522sysvia_rtcchipselect|
+; Export global symbols
+
+  ;EXPORT |r6502addressofabsolute|
+  ;EXPORT |r6502addressofabsolutex|
+  ;EXPORT |r6502addressofabsolutey|
+  ;EXPORT |r6502addressofabsolutexplus|
+  ;EXPORT |r6502addressofabsoluteyplus|
+  ;EXPORT |r6502addressofzeropage|
+  ;EXPORT |r6502addressofzeropagex|
+  ;EXPORT |r6502addressofzeropagey|
+  ;EXPORT |r6502addressofindirect|
+  ;EXPORT |r6502addressofpreindexed|
+  ;EXPORT |r6502addressofpostindexedy|
+  ;EXPORT |r6502valueofabsolute|
+  ;EXPORT |r6502valueofabsolutexplus|
+  ;EXPORT |r6502valueofabsoluteyplus|
+  ;EXPORT |r6502valueofimmediate|
+  ;EXPORT |r6502valueofzeropage|
+  ;EXPORT |r6502valueofzeropagex|
+  ;EXPORT |r6502valueofzeropagey|
+  ;EXPORT |r6502valueofpreindexed|
+  ;EXPORT |r6502valueofpostindexedy|
+  EXPORT |r6502setnflag|
+  EXPORT |r6502setvflag|
+  EXPORT |r6502setbflag|
+  EXPORT |r6502setiflag|
+  EXPORT |r6502setzflag|
+  ;EXPORT |r6502readmem|
+  EXPORT |r6502readb|
+  EXPORT |r6502readbp|
+  EXPORT |r6502readm|
+  ;EXPORT |r6502writemem|
+  EXPORT |r6502writeb|
+  EXPORT |r6502writebp|
+  EXPORT |r6502writem|
+  EXPORT |r6502stackpush|
+  EXPORT |r6502stackpop|
+
+  EXPORT |r6502readbpoffset|
+  EXPORT |r6502readmoffset|
+  EXPORT |r6502writebpoffset|
+  EXPORT |r6502writemoffset|
+
+  EXPORT |r6502readbp3000|
+  EXPORT |r6502readbp3000_ram|
+  EXPORT |r6502readbp8000|
+  EXPORT |r6502readbp8000_ram|
+  EXPORT |r6502writebp3000|
+  EXPORT |r6502writebp3000_ram|
+  EXPORT |r6502writebp8000|
+  EXPORT |r6502writebp8000_ram|
+
+  EXPORT |r6502readm3000|
+  EXPORT |r6502readm3000_x|
+  EXPORT |r6502readm3000_e|
+  EXPORT |r6502readm8000|
+  EXPORT |r6502readm8000_ram|
+  EXPORT |r6502readmC000|
+  EXPORT |r6502readmC000_y|
+  EXPORT |r6502writem3000|
+  EXPORT |r6502writem3000_x|
+  EXPORT |r6502writem3000_e|
+  EXPORT |r6502writem8000|
+  EXPORT |r6502writem8000_ram|
+  EXPORT |r6502writemC000|
+  EXPORT |r6502writemC000_y|
+
+;
+;rockwell 6502 cpu
+;
+;|r6502addressofabsolute|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFABSOLUTE
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofabsolutex|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFABSOLUTEX
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofabsolutey|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFABSOLUTEY
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofabsolutexplus|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFABSOLUTEXPLUS
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofabsoluteyplus|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFABSOLUTEYPLUS
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofzeropage|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFZEROPAGE r0
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofzeropagex|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFZEROPAGEX
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofzeropagey|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFZEROPAGEY
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofindirect|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFINDIRECT
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofpreindexed|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFPREINDEXED
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502addressofpostindexedy|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  ADDRESSOFPOSTINDEXEDY
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofabsolute|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFABSOLUTE
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofabsolutexplus|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFABSOLUTEXPLUS
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofabsoluteyplus|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFABSOLUTEYPLUS
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofimmediate|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFIMMEDIATE r0
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofzeropage|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFZEROPAGE
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofzeropagex|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFZEROPAGEX
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofzeropagey|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFZEROPAGEY
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofpreindexed|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFPREINDEXED
+;  LDMFD sp!,{r1-r12,pc}
+
+;|r6502valueofpostindexedy|
+;  ;OUT:r0 =address
+;  STMFD sp!,{r1-r12,lr}
+;  VALUEOFPOSTINDEXEDY
+;  LDMFD sp!,{r1-r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502setnflag|
+  ;r0=register
+  STMFD sp!,{r1,rps,r12,lr}
+  LDR r12,=r6502_ps
+  LDRB rps,[r12]
+  SETNFLAG r0
+  STRB rps,[r12]
+  LDMFD sp!,{r1,rps,r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502setvflag|
+  ;r0=register
+  STMFD sp!,{r1,rps,r12,lr}
+  LDR r12,=r6502_ps
+  LDRB rps,[r12]
+  SETVFLAG r0
+  STRB rps,[r12]
+  LDMFD sp!,{r1,rps,r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502setbflag|
+  ;r0=register
+  STMFD sp!,{r1,rps,r12,lr}
+  LDR r12,=r6502_ps
+  LDRB rps,[r12]
+  SETBFLAG r0
+  STRB rps,[r12]
+  LDMFD sp!,{r1,rps,r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502setiflag|
+  ;r0=register
+  STMFD sp!,{r1,rps,r12,lr}
+  LDR r12,=r6502_ps
+  LDRB rps,[r12]
+  SETIFLAG r0
+  STRB rps,[r12]
+  LDMFD sp!,{r1,rps,r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502setzflag|
+  ;r0=register
+  STMFD sp!,{r1,rps,r12,lr}
+  LDR r12,=r6502_ps
+  LDRB rps,[r12]
+  SETZFLAG r0
+  STRB rps,[r12]
+  LDMFD sp!,{r1,rps,r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502readmem|
+  ;interface gateway into r6502read
+  STMFD sp!,{r12,lr}
+  LDR r12,=r6502read
+  MOV lr,pc
+  LDR pc,[r12]
+  LDMFD sp!,{r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502readb|
+  ;IN: r0=address
+  ;OUT:r0=value
+  STMFD sp!,{r1-r9,r11-r12,lr}
+  ;ANDS r1,r0,#&10000
+  ;MOVNE r1,#&FF00
+  ;ORRNE r1,r1,#&00FF
+  ;ANDNE r0,r0,r1
+  AND r1,r0,#&F000
+  LDR r11,=r6502readboffset
+  ;MOV lr,pc
+  LDR pc,[r11,r1,LSR#10]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readb0000
+  ;&0000 - &2FFF
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readb3000
+  ;&3000 - &7FFF
+  ;LDR r12,=beebit_acccon
+  ;LDR r1,[r12]
+  ;ANDS r1,r1,#&80
+  ;LDRNE r12,=shadow
+  ;LDREQ r12,=memory
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readb8000
+  ;&8000 - &FBFF
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbC000
+  ;&C000 - &FBFF (ROM)
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbF000
+  AND r1,r0,#&0F00
+  CMP r1,#&0C00 ;<&FC00
+  ;BLT r6502readbC000
+  LDRLTB r0,[r12,r0]  ;r0=memory[address]
+  LDMLTFD sp!,{r1-r9,r11-r12,pc}
+  CMP r1,#&0D00 ;<&FD00
+  BLT r6502readbFC00
+  CMP r1,#&0E00 ;<&FE00
+  BLT r6502readbFD00
+  CMP r1,#&0F00 ;<&FF00
+  BLT r6502readbFE00
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbFC00
+  ;&FC00 - &FCFF (FRED)
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r2,#&FE ; unimplemented
+  MOV r0,#&92 ; (146) read FRED
+  SWI XOS_Byte ; may return V
+  MOVS r0,r2 ; result in R0 (clearing V!)
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r0,[r11]
+  ;SUB r0,r0,#2
+  SUB rcycles,rcycles,#2
+  ;STR r0,[r11] ;r6502_cyclestogo -= 2
+  ;MOV r0,#&FE
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbFD00
+  ;&FD00 - &FDFF (JIM)
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r2,#&FE ; unimplemented
+  MOV r0,#&94 ; (148) read JIM
+  SWI XOS_Byte ; may return V
+  MOVS r0,r2 ; result in R0 (clearing V!)
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r0,[r11]
+  ;SUB r0,r0,#2
+  SUB rcycles,rcycles,#2
+  ;STR r0,[r11] ;r6502_cyclestogo -= 2
+  ;MOV r0,#&FE
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbFE00
+  ;FE00 - &FEFF (SHEILA)
+  LDR r11,=r6502_cyclestogo
+  STR rcycles,[r11]
+  BL sheilaread_b
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readboffset
+  DCD r6502readb0000 ;0
+  DCD r6502readb0000 ;1
+  DCD r6502readb0000 ;2
+  DCD r6502readb3000 ;3
+  DCD r6502readb3000 ;4
+  DCD r6502readb3000 ;5
+  DCD r6502readb3000 ;6
+  DCD r6502readb3000 ;7
+  DCD r6502readb8000 ;8
+  DCD r6502readb8000 ;9
+  DCD r6502readb8000 ;A
+  DCD r6502readb8000 ;B
+  DCD r6502readbC000 ;C
+  DCD r6502readbC000 ;D
+  DCD r6502readbC000 ;E
+  DCD r6502readbF000 ;F
+
+;
+;rockwell 6502 cpu
+;
+|r6502readbp|
+  ;BBC B+
+  ;IN: r0=address
+  ;OUT:r0=value
+  STMFD sp!,{r1-r9,r11-r12,lr}
+  AND r1,r0,#&F000
+  LDR r11,=r6502readbpoffset
+  LDR pc,[r11,r1,LSR#10]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbp0000
+  ;&0000 - &2FFF
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbp3000
+  ;&3000 - &7FFF (RAM)
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbp3000_ram
+  ;&3000 - &7FFF (RAM)
+  ;VDU driver
+  CMP rpc,#&C000 ;if r6502_pc < &C000
+  BLT r6502readbp3000_ram2
+
+  CMP rpc,#&E000 ;if r6502_pc >= &E000
+  BGE r6502readbp3000_ram2
+
+  LDR r12,=shadow
+  LDRB r0,[r12,r0] ;r0=shadow[r0]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbp3000_ram2
+  LDR r11,=beebit_romsel ;acccon
+  LDR r2,[r11] ;romsel
+  ANDS r2,r2,#&80
+  LDREQB r0,[r12,r0] ;r0=memory[r0]
+  LDMEQFD sp!,{r1-r9,r11-r12,pc}
+
+  ;romsel AND &80
+  CMP rpc,#&A000 ;if r6502_pc < &A000
+  ;;BLT r6502writebp0000
+  LDRLTB r0,[r12,r0] ;r0=memory[r0]
+  LDMLTFD sp!,{r1-r9,r11-r12,pc}
+  CMP rpc,#&B000 ;if r6502_pc >= &B000
+  ;;BGE r6502writebp0000
+  LDRGEB r0,[r12,r0] ;r0=memory[r0]
+  LDMGEFD sp!,{r1-r9,r11-r12,pc}
+
+  LDR r12,=shadow
+  LDRB r0,[r12,r0] ;r0=shadow[r0]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbp8000
+  ;&8000 - &AFFF (SIDEWAYS RAM)
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbp8000_ram
+  ;&8000 - &AFFF (SIDEWAYS RAM)
+  LDR r12,=shadow
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbpB000
+  ;&B000 - &BFFF (ROM)
+  ;LDR r11,=beebit_romsel
+  ;LDR r1,[r11]
+  ;ANDS r1,r1,#&80 ;sram
+  ;LDREQ r12,=memory
+  ;LDRNE r12,=shadow
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbpC000
+  ;&C000 - &FBFF (ROM)
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbpF000
+  AND r1,r0,#&0F00
+  CMP r1,#&0C00 ;<&FC00
+  ;BLT r6502readbpC000
+  LDRLTB r0,[r12,r0]  ;r0=memory[address]
+  LDMLTFD sp!,{r1-r9,r11-r12,pc}
+  CMP r1,#&0D00 ;<&FD00
+  BLT r6502readbpFC00
+  CMP r1,#&0E00 ;<&FE00
+  BLT r6502readbpFD00
+  CMP r1,#&0F00 ;<&FF00
+  BLT r6502readbpFE00
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbpFC00
+  ;&FC00 - &FCFF (FRED)
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r2,#&FE ; unimplemented
+  MOV r0,#&92 ; (146) read FRED
+  SWI XOS_Byte ; may return V
+  MOVS r0,r2 ; result in R0 (clearing V!)
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r0,[r11]
+  ;SUB r0,r0,#2
+  SUB rcycles,rcycles,#2
+  ;STR r0,[r11] ;r6502_cyclestogo -= 2
+  ;MOV r0,#&FE
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbpFD00
+  ;&FD00 - &FDFF (JIM)
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r2,#&FE ; unimplemented
+  MOV r0,#&94 ; (148) read JIM
+  SWI XOS_Byte ; may return V
+  MOVS r0,r2 ; result in R0 (clearing V!)
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r0,[r11]
+  ;SUB r0,r0,#2
+  SUB rcycles,rcycles,#2
+  ;STR r0,[r11] ;r6502_cyclestogo -= 2
+  ;MOV r0,#&FE
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbpFE00
+  ;FE00 - &FEFF (SHEILA)
+  LDR r11,=r6502_cyclestogo
+  STR rcycles,[r11]
+  BL sheilaread_bp
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readbpoffset
+  DCD r6502readbp0000 ;0
+  DCD r6502readbp0000 ;1
+  DCD r6502readbp0000 ;2
+  DCD r6502readbp3000 ;3
+  DCD r6502readbp3000 ;4
+  DCD r6502readbp3000 ;5
+  DCD r6502readbp3000 ;6
+  DCD r6502readbp3000 ;7
+  DCD r6502readbp8000 ;8
+  DCD r6502readbp8000 ;9
+  DCD r6502readbp8000 ;A
+  DCD r6502readbpB000 ;B
+  DCD r6502readbpC000 ;C
+  DCD r6502readbpC000 ;D
+  DCD r6502readbpC000 ;E
+  DCD r6502readbpF000 ;F
+
+;
+;rockwell 6502 cpu
+;
+|r6502readm|
+  ;MASTER 128
+  ;IN: r0=address
+  ;OUT:r0=value
+  STMFD sp!,{r1-r9,r11-r12,lr}
+
+  AND r1,r0,#&F000
+  LDR r11,=r6502readmoffset
+  LDR pc,[r11,r1,LSR#10]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readm0000
+  ;&0000 - &2FFF (RAM)
+  LDRB r0,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readm3000
+  ;&3000 - &7FFF (RAM)
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readm3000_x
+  ;&3000 - &7FFF (ACCCON b2) (LYNNE) (RAM)
+  ;STMFD sp!,{r0,r1}
+  ;MOV r10,r0
+
+  ;MOV r0, rpc ;get RPC
+  ;LDR r1,=buffermem
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+82
+  ;SWI OS_WriteI+69
+  ;MOV r0,r10
+  ;LDR r1,=buffermem
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_NewLine
+
+  ;LDMFD sp!,{r0,r1}
+
+  LDR r12,=shadow
+  LDRB r0,[r12,r0]  ;r0=shadow[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readm3000_e
+  ;&3000 - &7FFF (ACCCON b1) (E) (RAM)
+  CMP rpc,#&C000 ;skip
+  BLT r6502readm3000 ;if < &C000
+
+  CMP rpc,#&E000 ;skip
+  BGE r6502readm3000 ;if >= &E000
+
+  LDR r12,=shadow
+  LDRB r0,[r12,r0]  ;r0=shadow[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readm8000
+  ;&8000 - &8FFF (RAM)
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readm8000_ram
+  ;&8000 - &8FFF (ROMSEL b7) (RAM)
+  LDR r12,=shadow
+  LDRB r0,[r12,r0]  ;r0=shadow[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readm9000
+  ;&9000 - &BFFF (ROM)
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readmC000
+  ;&C000 - &DFFF (ROM)
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readmC000_y
+  ;&C000 - &DFFF (ACCCON b3) (RAM)
+  LDR r12,=shadow
+  LDRB r0,[r12,r0]  ;r0=shadow[address]
+  ;LDR r12,=memory
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readmE000
+  ;&E000 - &F000
+  LDRB r0,[r12,r0]  ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readmF000
+  AND r1,r0,#&0F00
+  CMP r1,#&0C00 ;<&FC00
+  ;BLT r6502readmE000
+  LDRLTB r0,[r12,r0]  ;r0=memory[address]
+  LDMLTFD sp!,{r1-r9,r11-r12,pc}
+  CMP r1,#&0D00 ;<&FD00
+  BLT r6502readmFC00
+  CMP r1,#&0E00 ;<&FE00
+  BLT r6502readmFD00
+  CMP r1,#&0F00 ;<&FF00
+  BLT r6502readmFE00
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0] ;r0=memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readmFC00
+  ;&FC00 - &FCFF (FRED)
+  LDR r11,=beebit_acccon
+  LDR r3,[r11] ;acccon
+  ANDS r2,r3,#&40 ;TST
+  LDRNEB r0,[r12,r0] ;r0=memory[address]
+  LDMNEFD sp!,{r1-r9,r11-r12,pc}
+
+  ANDS r2,r3,#&20 ;IFJ
+  MOVNE r0,#0 ;cartridge
+  LDMNEFD sp!,{r1-r9,r11-r12,pc}
+
+  ;1MHz bus
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r2,#&00 ; unimplemented
+  MOV r0,#&92 ; (146) read FRED
+  SWI XOS_Byte ; may return V
+  MOVS r0,r2 ; result in R0 (clearing V!)
+
+  SUB rcycles,rcycles,#2
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readmFD00
+  ;&FD00 - &FDFF (JIM)
+  LDR r11,=beebit_acccon
+  LDR r3,[r11] ;acccon
+  ANDS r2,r3,#&40 ;TST
+  LDRNEB r0,[r12,r0] ;r0=memory[address]
+  LDMNEFD sp!,{r1-r9,r11-r12,pc}
+
+  ANDS r2,r3,#&20 ;IFJ
+  MOVNE r0,#0 ;cartridge
+  LDMNEFD sp!,{r1-r9,r11-r12,pc}
+
+  ;1MHz bus
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r2,#&00 ; unimplemented
+  MOV r0,#&94 ; (148) read JIM
+  SWI XOS_Byte ; may return V
+  MOVS r0,r2 ; result in R0 (clearing V!)
+
+  SUB rcycles,rcycles,#2
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502readmFE00
+  ;FE00 - &FEFF (SHEILA)
+  ;STMFD sp!,{r0}
+  ;SWI OS_WriteI+32
+  ;SWI OS_WriteI+82
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;LDMFD sp!,{r0}
+  LDR r11,=beebit_acccon
+  LDR r3,[r11] ;acccon
+  ANDS r2,r3,#&40 ;TST
+  LDRNEB r0,[r12,r0] ;r0=memory[address]
+  LDMNEFD sp!,{r1-r9,r11-r12,pc}
+
+  LDR r11,=r6502_cyclestogo
+  STR rcycles,[r11]
+  ;STMFD sp!,{r1-r12,lr}
+  BL sheilaread_m
+  ;LDMFD sp!,{r1-r12,pc}
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+|r6502readmoffset|
+  DCD r6502readm0000 ;0
+  DCD r6502readm0000 ;1
+  DCD r6502readm0000 ;2
+  DCD r6502readm3000 ;3
+  DCD r6502readm3000 ;4
+  DCD r6502readm3000 ;5
+  DCD r6502readm3000 ;6
+  DCD r6502readm3000 ;7
+  DCD r6502readm8000 ;8
+  DCD r6502readm9000 ;9
+  DCD r6502readm9000 ;A
+  DCD r6502readm9000 ;B
+  DCD r6502readmC000 ;C
+  DCD r6502readmC000 ;D
+  DCD r6502readmE000 ;E
+  DCD r6502readmF000 ;F
+
+;buffer2
+;  DCD 0
+;  DCD 0
+;  DCD 0
+;  DCD 0
+
+;
+;rockwell 6502 cpu
+;
+|r6502writemem|
+  ;interface gateway into r6502write
+  STMFD sp!,{r12,lr}
+  LDR r12,=r6502write
+  MOV lr,pc
+  LDR pc,[r12]
+  LDMFD sp!,{r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502writeb|
+  ;r0=addresss
+  ;r1=value
+  STMFD sp!,{r0-r9,r11-r12,lr}
+  ;ANDS r2,r0,#&10000
+  ;ANDS r2,r0,#&10000
+  ;MOVNE r2,#&FF00
+  ;ORRNE r2,r2,#&00FF
+  ;ANDNE r0,r0,r2
+  AND r2,r0,#&F000
+  LDR r11,=r6502writeboffset
+  ;MOV lr,pc
+  LDR pc,[r11,r2,LSR#10]
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writeb0000
+  ;&0000 - &2FFF (RAM)
+  ;LDR r12,=memory
+  STRB r1,[r12,r0] ;memory[r12] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writeb3000
+  ;&3000 - &7FFF (RAM)
+  ;LDR r12,=memory
+  STRB r1,[r12,r0] ;memory[r12] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writeb8000
+  ;&8000 - &BFFF (SIDEWAYS RAM)
+  LDR r5,=beebit_romselected
+  LDR r4,=beebit_romwritable
+  LDR r3,[r5]
+  LDR r2,[r4,r3,LSL#2] ;r2 = beebit_romwritable[beebit_romselected]
+  CMP r2,#&00 ;if beebit_romwritable[beebit_romselected]
+  LDMEQFD sp!,{r0-r9,r11-r12,pc}
+
+  ;LDR r12,=memory
+  STRB r1,[r12,r0] ;memory[r12] = r1;
+  MOV r3,#&FF
+  LDR r4,=beebit_rommodified
+  STR r3,[r4] ;beebit_rommodifed = TRUE
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebC000
+  ;&C000 - &FBFF (OS - should not be allowed!)
+  ;LDR r12,=memory
+  ;STRB r1,[r12,r0] ;memory[r12] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebF000
+  ;&F000 - &FFFF (OS - should not be allowed!)
+  AND r2,r0,#&0F00
+  CMP r2,#&0C00 ;<&FC00
+  ;BLT r6502writebC000
+  LDMLTFD sp!,{r0-r9,r11-r12,pc}
+  CMP r2,#&0D00 ;<&FD00
+  BLT r6502writebFC00
+  CMP r2,#&0E00 ;<&FE00
+  BLT r6502writebFD00
+  CMP r2,#&0F00 ;<&FF00
+  BLT r6502writebFE00
+  ;FF00 - &FFFF (OS - should not be allowed!)
+  ;LDR r12,=memory
+  ;STRB r1,[r12,r0] ;memory[r12+r0] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebFC00
+  ;&FC00 - &FCFF (FRED)
+  AND r2,r1,#255
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r0,#&93 ; (147) write FRED
+  SWI XOS_Byte ; may return V
+
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r4,[r11]
+  ;SUB r4,r4,#2
+  SUB rcycles,rcycles,#2
+  ;STR r4,[r11] ;r6502_cyclestogo -= 2
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebFD00
+  ;&FD00 - &FDFF (JIM)
+  AND r2,r1,#255
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r0,#&95 ; (149) write JIM
+  SWI XOS_Byte ; may return V
+
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r4,[r11]
+  ;SUB r4,r4,#2
+  SUB rcycles,rcycles,#2
+  ;STR r4,[r11] ;r6502_cyclestogo -= 2
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebFE00
+  ;FE00 - &FEFF (SHEILA)
+  LDR r11,=r6502_cyclestogo
+  STR rcycles,[r11]
+  BL sheilawrite_b
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11]
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writeboffset
+  DCD r6502writeb0000 ;0
+  DCD r6502writeb0000 ;1
+  DCD r6502writeb0000 ;2
+  DCD r6502writeb3000 ;3
+  DCD r6502writeb3000 ;4
+  DCD r6502writeb3000 ;5
+  DCD r6502writeb3000 ;6
+  DCD r6502writeb3000 ;7
+  DCD r6502writeb8000 ;8
+  DCD r6502writeb8000 ;9
+  DCD r6502writeb8000 ;A
+  DCD r6502writeb8000 ;B
+  DCD r6502writebC000 ;C
+  DCD r6502writebC000 ;D
+  DCD r6502writebC000 ;E
+  DCD r6502writebF000 ;F
+
+;
+;rockwell 6502 cpu
+;
+|r6502writebp|
+  ;r0=addresss
+  ;r1=value
+  STMFD sp!,{r0-r9,r11-r12,lr}
+  ;ANDS r2,r0,#&10000
+  ;MOVNE r2,#&FF00
+  ;ORRNE r2,r2,#&00FF
+  ;ANDNE r0,r0,r2
+  AND r2,r0,#&F000
+  LDR r11,=r6502writebpoffset
+  ;MOV lr,pc
+  LDR pc,[r11,r2,LSR#10]
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebp0000
+  ;&0000 - &2FFF (RAM)
+  ;LDR r12,=memory
+  STRB r1,[r12,r0] ;memory[r12] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebp3000
+  ;&3000 - &7FFF (RAM)
+  STRB r1,[r12,r0] ;memory[r12] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebp3000_ram
+  ;&3000 - &7FFF (RAM)
+  ;VDU driver
+  CMP rpc,#&C000 ;if r6502_pc < &C000
+  BLT r6502writebp3000_ram2
+
+  CMP rpc,#&E000 ;if r6502_pc >= &E000
+  BGE r6502writebp3000_ram2
+
+  LDR r12,=shadow
+  STRB r1,[r12,r0] ;shadow[r0] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebp3000_ram2
+  LDR r11,=beebit_romsel ;acccon
+  LDR r2,[r11] ;romsel
+  ANDS r2,r2,#&80
+  STREQB r1,[r12,r0] ;memory[r0] = r1
+  LDMEQFD sp!,{r0-r9,r11-r12,pc}
+
+  ;romsel AND &80
+  CMP rpc,#&A000 ;if r6502_pc < &A000
+  ;;BLT r6502writebp0000
+  STRLTB r1,[r12,r0] ;memory[r12] = r1;
+  LDMLTFD sp!,{r0-r9,r11-r12,pc}
+  CMP rpc,#&B000 ;if r6502_pc >= &B000
+  ;;BGE r6502writebp0000
+  STRGEB r1,[r12,r0] ;memory[r12] = r1;
+  LDMGEFD sp!,{r0-r9,r11-r12,pc}
+
+  LDR r12,=shadow
+  STRB r1,[r12,r0] ;shadow[r0] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebp8000
+  ;&8000 - &AFFF (SIDEWAYS RAM)
+  LDR r11,=beebit_romsel
+  LDR r2,[r11] ;romsel
+  AND r3,r2,#&0F
+  CMP r3,#1 ;if rom <= 1
+  LDMLEFD sp!,{r0-r9,r11-r12,pc} ;exit
+
+;r6502writebp8000_2
+  LDR r5,=beebit_romselected
+  LDR r4,=beebit_romwritable
+  LDR r3,[r5]
+  LDR r2,[r4,r3,LSL#2] ;r2 = beebit_romwritable[beebit_romselected]
+  CMP r2,#&00 ;if beebit_romwritable[beebit_romselected]
+  LDMEQFD sp!,{r0-r9,r11-r12,pc}
+  STRB r1,[r12,r0] ;memory[r12] = r1;
+  MOV r3,#&FF
+  LDR r4,=beebit_rommodified
+  STR r3,[r4] ;beebit_rommodifed = TRUE
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebp8000_ram
+  LDR r12,=shadow
+  STRB r1,[r12,r0] ;shadow[r0] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebpB000
+  ;&B000 - &BFFF (SIDEWAYS RAM)
+  LDR r5,=beebit_romselected
+  LDR r4,=beebit_romwritable
+  LDR r3,[r5]
+  LDR r2,[r4,r3,LSL#2] ;r2 = beebit_romwritable[beebit_romselected]
+  CMP r2,#&00 ;if beebit_romwritable[beebit_romselected]
+  LDMEQFD sp!,{r0-r9,r11-r12,pc}
+
+  LDR r11,=beebit_romsel
+  LDR r2,[r11]
+  AND r3,r2,#&0F
+  CMP r3,#1 ;if rom <= 1
+  LDMLEFD sp!,{r0-r9,r11-r12,pc} ;exit
+
+  ;ANDS r2,r2,#&80 ;sram AND &80
+  ;LDRNE r12,=shadow
+  STRB r1,[r12,r0] ;memory[r0] = r1;
+  MOV r3,#&FF
+  LDR r4,=beebit_rommodified
+  STR r3,[r4] ;beebit_rommodifed = TRUE
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebpC000
+  ;&C000 - &FBFF (OS - should not be allowed!)
+  ;LDR r12,=memory
+  ;STRB r1,[r12,r0] ;memory[r12] = r1;
+  ;B r6502writebpend
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebpF000
+  ;&F000 - &FFFF (OS - should not be allowed!)
+  AND r2,r0,#&0F00
+  CMP r2,#&0C00 ;<&FC00
+  ;BLT r6502writebpC000
+  LDMLTFD sp!,{r0-r9,r11-r12,pc}
+  CMP r2,#&0D00 ;<&FD00
+  BLT r6502writebpFC00
+  CMP r2,#&0E00 ;<&FE00
+  BLT r6502writebpFD00
+  CMP r2,#&0F00 ;<&FF00
+  BLT r6502writebpFE00
+  ;FF00 - &FFFF (OS - should not be allowed!)
+  ;LDR r12,=memory
+  ;STRB r1,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebpFC00
+  ;&FC00 - &FCFF (FRED)
+  AND r2,r1,#255
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r0,#&93 ; (147) write FRED
+  SWI XOS_Byte ; may return V
+
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r4,[r11]
+  ;SUB r4,r4,#2
+  SUB rcycles,rcycles,#2
+  ;STR r4,[r11] ;r6502_cyclestogo -= 2
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebpFD00
+  ;&FD00 - &FDFF (JIM)
+  AND r2,r1,#255
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r0,#&95 ; (149) write JIM
+  SWI XOS_Byte ; may return V
+
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r4,[r11]
+  ;SUB r4,r4,#2
+  SUB rcycles,rcycles,#2
+  ;STR r4,[r11] ;r6502_cyclestogo -= 2
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebpFE00
+  ;FE00 - &FEFF (SHEILA)
+  LDR r11,=r6502_cyclestogo
+  STR rcycles,[r11]
+  BL sheilawrite_bp
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11]
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writebpoffset
+  DCD r6502writebp0000 ;0
+  DCD r6502writebp0000 ;1
+  DCD r6502writebp0000 ;2
+  DCD r6502writebp3000 ;3
+  DCD r6502writebp3000 ;4
+  DCD r6502writebp3000 ;5
+  DCD r6502writebp3000 ;6
+  DCD r6502writebp3000 ;7
+  DCD r6502writebp8000 ;8
+  DCD r6502writebp8000 ;9
+  DCD r6502writebp8000 ;A
+  DCD r6502writebpB000 ;B
+  DCD r6502writebpC000 ;C
+  DCD r6502writebpC000 ;D
+  DCD r6502writebpC000 ;E
+  DCD r6502writebpF000 ;F
+
+;
+;rockwell 6502 cpu
+;
+|r6502writem|
+  ;r0=addresss
+  ;r1=value
+  STMFD sp!,{r0-r9,r11-r12,lr}
+
+  AND r2,r0,#&F000
+  LDR r11,=r6502writemoffset
+  ;MOV lr,pc
+  LDR pc,[r11,r2,LSR#10]
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writem0000
+  ;&0000 - &2FFF (RAM)
+  STRB r1,[r12,r0] ;memory[r12] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writem3000
+  ;&3000 - &7FFF (RAM)
+  STRB r1,[r12,r0] ;memory[r0] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writem3000_x
+  ;&3000 - &7FFF (ACCCON b2) (LYNNE) (RAM)
+
+  ;STMFD sp!,{r0,r1}
+  ;MOV r8,r1
+  ;MOV r10,r0
+
+  ;MOV r0, rpc ;get RPC
+  ;LDR r1,=buffermem
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+51
+  ;SWI OS_WriteI+69
+  ;MOV r0,r10
+  ;LDR r1,=buffermem
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+87
+  ;MOV r0,r8
+  ;LDR r1,=buffermem
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+  ;SWI OS_NewLine
+
+  ;LDMFD sp!,{r0,r1}
+
+  LDR r12,=shadow
+  STRB r1,[r12,r0]  ;shadow[r12] = r1
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writem3000_e
+  ;&3000 - &7FFF (ACCCON b1) (E) (RAM)
+  ;STMFD sp!,{r0,r1}
+  ;MOV r8,r1
+  ;MOV r10,r0
+
+  ;MOV r0, rpc ;get RPC
+  ;LDR r1,=buffermem
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+51
+  ;SWI OS_WriteI+69
+  ;MOV r0,r10
+  ;LDR r1,=buffermem
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+87
+  ;MOV r0,r8
+  ;LDR r1,=buffermem
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+  ;SWI OS_NewLine
+
+  ;LDMFD sp!,{r0,r1}
+
+  CMP rpc,#&C000
+  BLT r6502writem3000 ;if < &C000
+
+  CMP rpc,#&E000
+  BGE r6502writem3000 ;if >= &E000
+
+  LDR r12,=shadow
+  STRB r1,[r12,r0] ;shadow[r0] = r1
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writem8000_ram
+  ;&8000 - &8FFF (ROMSEL b7) (RAM)
+  LDR r12,=shadow
+  STRB r1,[r12,r0] ;shadow[r0] = r1;
+  LDMNEFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writem8000
+  ;&8000 - &8FFF (SIDEWAYS RAM)
+  ;fall through
+r6502writem9000
+  ;&9000 - &BFFF (ROM)
+  LDR r5,=beebit_romselected
+  LDR r4,=beebit_romwritable
+  LDR r3,[r5]
+  LDR r2,[r4,r3,LSL#2] ;r2 = beebit_romwritable[beebit_romselected]
+  CMP r2,#&00 ;if beebit_romwritable[beebit_romselected]
+  LDMEQFD sp!,{r0-r9,r11-r12,pc}
+
+  STRB r1,[r12,r0] ;memory[r0] = r1;
+  MOV r3,#&FF
+  LDR r4,=beebit_rommodified
+  STR r3,[r4] ;beebit_rommodifed = TRUE
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writemC000
+  ;&C000 - &DFFF (OS - should not be allowed!)
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writemC000_y
+  ;&C000 - &DFFF (ACCCON b3) (RAM)
+  LDR r12,=shadow
+  STRB r1,[r12,r0] ;shadow[r0] = r1;
+  SUB r0,r0,#&B000 ;duplicate in memory < &3000 for level 9 adventures
+  STRB r1,[r12,r0] ;shadow[r0] = r1;
+  ;LDR r12,=memory
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writemE000
+  ;&E000 - &EFFF (OS - should not be allowed!)
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writemF000
+  ;&F000 - &FFFF (OS - should not be allowed!)
+  AND r2,r0,#&0F00
+  CMP r2,#&0C00 ;<&FC00
+  ;BLT r6502writemC000
+  LDMLTFD sp!,{r0-r9,r11-r12,pc}
+  CMP r2,#&0D00 ;<&FD00
+  BLT r6502writemFC00
+  CMP r2,#&0E00 ;<&FE00
+  BLT r6502writemFD00
+  CMP r2,#&0F00 ;<&FF00
+  BLT r6502writemFE00
+  ;FF00 - &FFFF (OS - should not be allowed!)
+  ;LDR r12,=memory
+  ;STRB r1,[r12,r0] ;memory[r12+r0] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writemFC00
+  ;&FC00 - &FCFF (FRED)
+  LDR r11,=beebit_acccon
+  LDR r3,[r11] ;acccon
+  ANDS r2,r3,#&20 ;IFJ
+  LDMNEFD sp!,{r1-r9,r11-r12,pc} ;cartridge
+
+  ;1MHz bus
+  AND r2,r1,#255
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r0,#&93 ; (147) write FRED
+  SWI XOS_Byte ; may return V
+
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r4,[r11]
+  ;SUB r4,r4,#2
+  SUB rcycles,rcycles,#2
+  ;STR r4,[r11] ;r6502_cyclestogo -= 2
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writemFD00
+  ;&FD00 - &FDFF (JIM)
+  LDR r11,=beebit_acccon
+  LDR r3,[r11] ;acccon
+  ANDS r2,r3,#&20 ;IFJ
+  LDMNEFD sp!,{r1-r9,r11-r12,pc} ;cartridge
+
+  ;1MHz bus
+  AND r2,r1,#255
+  AND r1,r0,#255 ; low 8 bits in R1
+  MOV r0,#&95 ; (149) write JIM
+  SWI XOS_Byte ; may return V
+
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r4,[r11]
+  ;SUB r4,r4,#2
+  SUB rcycles,rcycles,#2
+  ;STR r4,[r11] ;r6502_cyclestogo -= 2
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writemFE00
+  ;FE00 - &FEFF (SHEILA)
+  ;MOV r3,r1
+  ;STMFD sp!,{r0,r1}
+  ;SWI OS_WriteI+87
+  ;SWI OS_WriteI+32
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+  ;MOV r0,r3
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_NewLine
+  ;LDMFD sp!,{r0,r1}
+
+  ;SWI OS_WriteI+32
+  ;mov r3,r1
+  ;STMFD sp!,{r0,r1}
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0,r3
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_NewLine
+  ;LDMFD sp!,{r0,r1}
+
+  LDR r11,=r6502_cyclestogo
+  STR rcycles,[r11]
+  ;STMFD sp!,{r0-r12,lr}
+  BL sheilawrite_m
+  ;LDMFD sp!,{r0-r12,lr}
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11]
+
+  ;STMFD sp!,{r0,r1}
+
+  ;LDR r0,=r6522sysvia_rtcreadwrite
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;LDR r0,=r6522sysvia_rtcdatastrobe
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_NewLine
+
+  ;LDR r0,=r6522sysvia_rtcchipselect
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;LDR r0,=r6522sysvia_rtcaddrstrobe
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer2
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_NewLine
+
+  ;LDMFD sp!,{r0,r1}
+
+  ;MOV r3,r0
+  ;MOV r0,#&81
+  ;MOV r1,#&7F
+  ;MOV r2,#&00
+  ;SWI OS_Byte
+  ;MOV r0,r3
+
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502writemoffset
+  DCD r6502writem0000 ;0
+  DCD r6502writem0000 ;1
+  DCD r6502writem0000 ;2
+  DCD r6502writem3000 ;3
+  DCD r6502writem3000 ;4
+  DCD r6502writem3000 ;5
+  DCD r6502writem3000 ;6
+  DCD r6502writem3000 ;7
+  DCD r6502writem8000 ;8
+  DCD r6502writem9000 ;9
+  DCD r6502writem9000 ;A
+  DCD r6502writem9000 ;B
+  DCD r6502writemC000 ;C
+  DCD r6502writemC000 ;D
+  DCD r6502writemE000 ;E
+  DCD r6502writemF000 ;F
+
+;
+;rockwell 6502 cpu
+;
+|r6502stackpush|
+  ;pushes byte into decreasing stack memory (&100 - &1FF)
+  ;IN: r0 = byte to push
+  ;OUT: nothing
+  STMFD sp!,{r1,r2,rsp,r11,r12,lr}
+  LDR r12,=memory ;pointer to memory
+  LDR r11,=r6502_sp ;pointer to r6502_sp
+  LDRB rsp,[r11] ;load r6502_sp
+  STACKPUSH r0
+  STRB rsp,[r11] ;store r6502_sp
+  LDMFD sp!,{r1,r2,rsp,r11,r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502stackpop|
+  ;pops byte from decreasing stack memory (&100 - &1FF)
+  ;OUT:r0=byte from stack
+  STMFD sp!,{r1,r2,rsp,r11,r12,lr}
+  LDR r12,=memory ;pointer to memory
+  LDR r11,=r6502_sp ;pointer to r6502_sp
+  LDRB rsp,[r11] ;load r6502_sp
+  STACKPOP r0
+  ;AND rsp,rsp,#&FF
+  STRB rsp,[r11] ;store r6502_sp
+  LDMFD sp!,{r1,r2,rsp,r11,r12,pc}
+
+;Data Area
+
+;  AREA    |C$$data|, DATA
+
+buffermem
+  DCD 0
+  DCD 0
+  DCD 0
+  DCD 0
+
+
+  END

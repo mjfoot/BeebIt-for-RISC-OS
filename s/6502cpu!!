@@ -1,0 +1,1127 @@
+;>6502cpu!!.s
+;
+; BeebIt - BBC Micro Model B Emulator
+;
+; (C) Copyright Michael J Foot, 1998-1999
+;
+; Email: <mikef@voyager.co.nz>
+;
+; r12=pointer to variable
+; r11=pointer to variable
+; r10=pointer to variable
+; r9=PC
+; r8=PS
+; r7=Y
+; r6=X
+; r5=A
+
+  GET h.6502cpus
+
+  GET h.6502cpui
+
+; Use the GET directive to include register definitions as if typed here
+
+  GET h.RegNames
+
+; Use the GET directive to include a list of SWI names as if typed here
+
+  GET h.SWInames
+
+; Area name C$$code advisable as wanted to link with C output
+
+  AREA |C$$code|, CODE, READONLY
+
+; Import global symbols
+
+  IMPORT r6502opcode00
+  IMPORT r6502opcode01
+  IMPORT r6502opcode02
+  IMPORT r6502opcode03
+  IMPORT r6502opcode04
+  IMPORT r6502opcode05
+  IMPORT r6502opcode06
+  IMPORT r6502opcode07
+  IMPORT r6502opcode08
+  IMPORT r6502opcode09
+  IMPORT r6502opcode0A
+  IMPORT r6502opcode0B
+  IMPORT r6502opcode0C
+  IMPORT r6502opcode0D
+  IMPORT r6502opcode0E
+  IMPORT r6502opcode0F
+  IMPORT r6502opcode10
+  IMPORT r6502opcode11
+  IMPORT r6502opcode12
+  IMPORT r6502opcode13
+  IMPORT r6502opcode14
+  IMPORT r6502opcode15
+  IMPORT r6502opcode16
+  IMPORT r6502opcode17
+  IMPORT r6502opcode18
+  IMPORT r6502opcode19
+  IMPORT r6502opcode1A
+  IMPORT r6502opcode1B
+  IMPORT r6502opcode1C
+  IMPORT r6502opcode1D
+  IMPORT r6502opcode1E
+  IMPORT r6502opcode1F
+  IMPORT r6502opcode20
+  IMPORT r6502opcode21
+  IMPORT r6502opcode22
+  IMPORT r6502opcode23
+  IMPORT r6502opcode24
+  IMPORT r6502opcode25
+  IMPORT r6502opcode26
+  IMPORT r6502opcode27
+  IMPORT r6502opcode28
+  IMPORT r6502opcode29
+  IMPORT r6502opcode2A
+  IMPORT r6502opcode2B
+  IMPORT r6502opcode2C
+  IMPORT r6502opcode2D
+  IMPORT r6502opcode2E
+  IMPORT r6502opcode2F
+  IMPORT r6502opcode30
+  IMPORT r6502opcode31
+  IMPORT r6502opcode32
+  IMPORT r6502opcode33
+  IMPORT r6502opcode34
+  IMPORT r6502opcode35
+  IMPORT r6502opcode36
+  IMPORT r6502opcode37
+  IMPORT r6502opcode38
+  IMPORT r6502opcode39
+  IMPORT r6502opcode3A
+  IMPORT r6502opcode3B
+  IMPORT r6502opcode3C
+  IMPORT r6502opcode3D
+  IMPORT r6502opcode3E
+  IMPORT r6502opcode3F
+  IMPORT r6502opcode40
+  IMPORT r6502opcode41
+  IMPORT r6502opcode42
+  IMPORT r6502opcode43
+  IMPORT r6502opcode44
+  IMPORT r6502opcode45
+  IMPORT r6502opcode46
+  IMPORT r6502opcode47
+  IMPORT r6502opcode48
+  IMPORT r6502opcode49
+  IMPORT r6502opcode4A
+  IMPORT r6502opcode4B
+  IMPORT r6502opcode4C
+  IMPORT r6502opcode4D
+  IMPORT r6502opcode4E
+  IMPORT r6502opcode4F
+  IMPORT r6502opcode50
+  IMPORT r6502opcode51
+  IMPORT r6502opcode52
+  IMPORT r6502opcode53
+  IMPORT r6502opcode54
+  IMPORT r6502opcode55
+  IMPORT r6502opcode56
+  IMPORT r6502opcode57
+  IMPORT r6502opcode58
+  IMPORT r6502opcode59
+  IMPORT r6502opcode5A
+  IMPORT r6502opcode5B
+  IMPORT r6502opcode5C
+  IMPORT r6502opcode5D
+  IMPORT r6502opcode5E
+  IMPORT r6502opcode5F
+  IMPORT r6502opcode60
+  IMPORT r6502opcode61
+  IMPORT r6502opcode62
+  IMPORT r6502opcode63
+  IMPORT r6502opcode64
+  IMPORT r6502opcode65
+  IMPORT r6502opcode66
+  IMPORT r6502opcode67
+  IMPORT r6502opcode68
+  IMPORT r6502opcode69
+  IMPORT r6502opcode6A
+  IMPORT r6502opcode6B
+  IMPORT r6502opcode6C
+  IMPORT r6502opcode6D
+  IMPORT r6502opcode6E
+  IMPORT r6502opcode6F
+  IMPORT r6502opcode70
+  IMPORT r6502opcode71
+  IMPORT r6502opcode72
+  IMPORT r6502opcode73
+  IMPORT r6502opcode74
+  IMPORT r6502opcode75
+  IMPORT r6502opcode76
+  IMPORT r6502opcode77
+  IMPORT r6502opcode78
+  IMPORT r6502opcode79
+  IMPORT r6502opcode7A
+  IMPORT r6502opcode7B
+  IMPORT r6502opcode7C
+  IMPORT r6502opcode7D
+  IMPORT r6502opcode7E
+  IMPORT r6502opcode7F
+  IMPORT r6502opcode80
+  IMPORT r6502opcode81
+  IMPORT r6502opcode82
+  IMPORT r6502opcode83
+  IMPORT r6502opcode84
+  IMPORT r6502opcode85
+  IMPORT r6502opcode86
+  IMPORT r6502opcode87
+  IMPORT r6502opcode88
+  IMPORT r6502opcode89
+  IMPORT r6502opcode8A
+  IMPORT r6502opcode8B
+  IMPORT r6502opcode8C
+  IMPORT r6502opcode8D
+  IMPORT r6502opcode8E
+  IMPORT r6502opcode8F
+  IMPORT r6502opcode90
+  IMPORT r6502opcode91
+  IMPORT r6502opcode92
+  IMPORT r6502opcode93
+  IMPORT r6502opcode94
+  IMPORT r6502opcode95
+  IMPORT r6502opcode96
+  IMPORT r6502opcode97
+  IMPORT r6502opcode98
+  IMPORT r6502opcode99
+  IMPORT r6502opcode9A
+  IMPORT r6502opcode9B
+  IMPORT r6502opcode9C
+  IMPORT r6502opcode9D
+  IMPORT r6502opcode9E
+  IMPORT r6502opcode9F
+  IMPORT r6502opcodeA0
+  IMPORT r6502opcodeA1
+  IMPORT r6502opcodeA2
+  IMPORT r6502opcodeA3
+  IMPORT r6502opcodeA4
+  IMPORT r6502opcodeA5
+  IMPORT r6502opcodeA6
+  IMPORT r6502opcodeA7
+  IMPORT r6502opcodeA8
+  IMPORT r6502opcodeA9
+  IMPORT r6502opcodeAA
+  IMPORT r6502opcodeAB
+  IMPORT r6502opcodeAC
+  IMPORT r6502opcodeAD
+  IMPORT r6502opcodeAE
+  IMPORT r6502opcodeAF
+  IMPORT r6502opcodeB0
+  IMPORT r6502opcodeB1
+  IMPORT r6502opcodeB2
+  IMPORT r6502opcodeB3
+  IMPORT r6502opcodeB4
+  IMPORT r6502opcodeB5
+  IMPORT r6502opcodeB6
+  IMPORT r6502opcodeB7
+  IMPORT r6502opcodeB8
+  IMPORT r6502opcodeB9
+  IMPORT r6502opcodeBA
+  IMPORT r6502opcodeBB
+  IMPORT r6502opcodeBC
+  IMPORT r6502opcodeBD
+  IMPORT r6502opcodeBE
+  IMPORT r6502opcodeBF
+  IMPORT r6502opcodeC0
+  IMPORT r6502opcodeC1
+  IMPORT r6502opcodeC2
+  IMPORT r6502opcodeC3
+  IMPORT r6502opcodeC4
+  IMPORT r6502opcodeC5
+  IMPORT r6502opcodeC6
+  IMPORT r6502opcodeC7
+  IMPORT r6502opcodeC8
+  IMPORT r6502opcodeC9
+  IMPORT r6502opcodeCA
+  IMPORT r6502opcodeCB
+  IMPORT r6502opcodeCC
+  IMPORT r6502opcodeCD
+  IMPORT r6502opcodeCE
+  IMPORT r6502opcodeCF
+  IMPORT r6502opcodeD0
+  IMPORT r6502opcodeD1
+  IMPORT r6502opcodeD2
+  IMPORT r6502opcodeD3
+  IMPORT r6502opcodeD4
+  IMPORT r6502opcodeD5
+  IMPORT r6502opcodeD6
+  IMPORT r6502opcodeD7
+  IMPORT r6502opcodeD8
+  IMPORT r6502opcodeD9
+  IMPORT r6502opcodeDA
+  IMPORT r6502opcodeDB
+  IMPORT r6502opcodeDC
+  IMPORT r6502opcodeDD
+  IMPORT r6502opcodeDE
+  IMPORT r6502opcodeDF
+  IMPORT r6502opcodeE0
+  IMPORT r6502opcodeE1
+  IMPORT r6502opcodeE2
+  IMPORT r6502opcodeE3
+  IMPORT r6502opcodeE4
+  IMPORT r6502opcodeE5
+  IMPORT r6502opcodeE6
+  IMPORT r6502opcodeE7
+  IMPORT r6502opcodeE8
+  IMPORT r6502opcodeE9
+  IMPORT r6502opcodeEA
+  IMPORT r6502opcodeEB
+  IMPORT r6502opcodeEC
+  IMPORT r6502opcodeED
+  IMPORT r6502opcodeEE
+  IMPORT r6502opcodeEF
+  IMPORT r6502opcodeF0
+  IMPORT r6502opcodeF1
+  IMPORT r6502opcodeF2
+  IMPORT r6502opcodeF3
+  IMPORT r6502opcodeF4
+  IMPORT r6502opcodeF5
+  IMPORT r6502opcodeF6
+  IMPORT r6502opcodeF7
+  IMPORT r6502opcodeF8
+  IMPORT r6502opcodeF9
+  IMPORT r6502opcodeFA
+  IMPORT r6502opcodeFB
+  IMPORT r6502opcodeFC
+  IMPORT r6502opcodeFD
+  IMPORT r6502opcodeFE
+  IMPORT r6502opcodeFF
+
+  IMPORT |memory|
+  IMPORT |r6502_sp|
+  IMPORT |r6502_pc|
+  IMPORT |r6502_ps|
+  IMPORT |r6502_a|
+  IMPORT |r6502_x|
+  IMPORT |r6502_y|
+  IMPORT |r6502_cyclestogo|
+  ;IMPORT |r6502read|
+  IMPORT |r6502readbp|
+  ;IMPORT |r6502write|
+  IMPORT |beebit_trace|
+  IMPORT |beebit_romsel|
+  IMPORT |beebit_acccon|
+
+; Export global symbols
+
+  EXPORT |r6502loadregs|
+  EXPORT |r6502saveregs|
+  EXPORT |r6502execute|
+  EXPORT |r6502execute_ram|
+  ;EXPORT |r6502adc|
+  ;EXPORT |r6502sbc|
+  EXPORT |r6502irq|
+  EXPORT |r6502nmi|
+  ;EXPORT |constFFFFFFFF|
+  EXPORT |r6502opcodes|
+
+|r6502loadregs|
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  LDR r12,=r6502_a
+  LDRB ra,[r12] ;load a
+  LDR r12,=r6502_x
+  LDRB rx,[r12] ;load x
+  LDR r12,=r6502_y
+  LDRB ry,[r12] ;load y
+
+  LDR r12,=r6502_pc
+  LDR rpc,[r12] ;load pc
+  LDR r12,=r6502_ps
+  LDRB rps,[r12] ;load ps
+  LDR r12,=r6502_sp
+  LDRB rsp,[r12] ;load sp
+
+  LDR r12,=r6502_cyclestogo
+  LDR rcycles,[r12] ;load sp
+
+  LDR r12,=memory
+  ;LDMFD sp!,{pc}
+  LDR pc, [sp], #4
+  ;MOV pc,lr
+
+|r6502saveregs|
+  STMFD sp!,{r12,lr}
+  LDR r12,=r6502_a
+  STRB ra,[r12] ;save a
+  LDR r12,=r6502_x
+  STRB rx,[r12] ;save x
+  LDR r12,=r6502_y
+  STRB ry,[r12] ;save y
+
+  LDR r12,=r6502_pc
+  STR rpc,[r12] ;save pc
+  LDR r12,=r6502_ps
+  STRB rps,[r12] ;save ps
+  LDR r12,=r6502_sp
+  STRB rsp,[r12] ;save sp
+
+  LDR r12,=r6502_cyclestogo
+  STR rcycles,[r12] ;load sp
+
+  LDMFD sp!,{r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502adc|
+  ;r0=number to adc with A
+  STMFD sp!,{r0-r12,lr}
+
+  ;if not decimal
+  MOV r0,r0,LSL#24 ;n=(n<<24)
+
+  LDR r12,=r6502_a
+  LDRB ra,[r12] ;load a
+  MOV ra,ra,LSL#24 ;a=(a<<24)
+  MOV r1,#&00FFFFFF ;raFFFFFF
+  ORR ra,ra,r1
+
+  MOV r1,#1 ;bit
+  MOV r2,#0 ;bit mask
+  LDR r11,=r6502_ps
+  LDRB rps,[r11]
+
+  ;n flag
+  ;ANDS r3,rps,#NFLAG
+  ;ORRNE r2,r2,r1,LSL#31 ;set n flag in bit mask
+  ;z flag
+  ;ANDS r3,rps,#ZFLAG
+  ;ORRNE r2,r2,r1,LSL#30 ;set z flag in bit mask
+  ;c flag
+  ANDS r3,rps,#CFLAG
+  ORRNE r2,r2,r1,LSL#29 ;set c flag in bit mask
+  ;v flag
+  ;ANDS r3,rps,#VFLAG
+  ;ORRNE r2,r2,r1,LSL#28 ;set v flag in bit mask
+  ;TEQP r3,r2 ;set flags in ARM PSR
+
+  TEQ PC,PC
+  TEQNEP r3,r2 ;set flags in ARM PSR
+  MSREQ CPSR_f,R2
+
+  ADCS ra,ra,r0 ;ra=a+n+c
+
+  AND rps,rps,#&3C ;%00111100 ;clear NVubdiZC
+  ORRMI rps,rps,#NFLAG
+  ;ORREQ rps,rps,#ZFLAG
+  ORRCS rps,rps,#CFLAG
+  ORRVS rps,rps,#VFLAG
+  STRB rps,[r11]
+
+  MOV ra,ra,LSR#24 ;(a=(a>>24)
+  CMP ra,#0
+  ORREQ rps,rps,#ZFLAG
+  STRB ra,[r12] ;store a
+
+  LDMFD sp!,{r0-r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502sbc|
+  ;r0=number to sbc with A
+  STMFD sp!,{r0-r12,lr}
+
+  ;if not decimal
+  MOV r0,r0,LSL#24 ;n=(n<<24)
+
+  LDR r12,=r6502_a
+  LDRB ra,[r12] ;load a
+  MOV ra,ra,LSL#24 ;a=(a<<24)
+
+  MOV r1,#1 ;bit
+  MOV r2,#0 ;bit mask
+  LDR r11,=r6502_ps
+  LDRB rps,[r11]
+  ;n flag
+  ;ANDS r3,rps,#NFLAG
+  ;ORRNE r2,r2,r1,LSL#31 ;set n flag in bit mask
+  ;z flag
+  ;ANDS r3,rps,#ZFLAG
+  ;ORRNE r2,r2,r1,LSL#30 ;set z flag in bit mask
+  ;c flag
+  ANDS r3,rps,#CFLAG
+  ORRNE r2,r2,r1,LSL#29 ;set c flag in bit mask
+  ;v flag
+  ;ANDS r3,rps,#VFLAG
+  ;ORRNE r2,r2,r1,LSL#28 ;set v flag in bit mask
+  ;TEQP r3,r2 ;set flags in ARM PSR
+
+  TEQ PC,PC
+  TEQNEP r3,r2 ;set flags in ARM PSR
+  MSREQ CPSR_f,R2
+
+  SBCS ra,ra,r0 ;ra=a-n-c
+
+  AND rps,rps,#&3C ;%00111100 ;clear NVubdiZC
+  ;n flag
+  ORRMI rps,rps,#NFLAG
+  ;z flag
+  ;ORREQ rps,rps,#ZFLAG
+  ;c flag
+  ORRCS rps,rps,#CFLAG
+  ;v flag
+  ORRVS rps,rps,#VFLAG
+  STRB rps,[r11]
+
+  MOV ra,ra,LSR#24 ;(a=(a>>24)
+  CMP ra,#0
+  ORREQ rps,rps,#ZFLAG
+  STRB ra,[r12] ;store a
+
+  LDMFD sp!,{r0-r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502irq|
+  STMFD sp!,{r0-r12,lr}
+  LDR r12,=memory ;pointer to memory
+  LDR r11,=r6502_pc ;pointer to r6502_pc
+  LDR rpc,[r11]
+  LDR r10,=r6502_sp ;pointer to r6502_sp
+  LDRB rsp,[r10] ;load r6502_sp
+  AND r0,rpc,#&FF00
+  MOV r0,r0,LSR#8
+  STACKPUSH r0
+  AND r0,rpc,#&FF
+  STACKPUSH r0
+  ;PROCESSORSTATUS(0)
+  LDR r2,=r6502_ps
+  LDRB rps,[r2] ;load ps
+  AND rps,rps,#NOTBFLAG ;clear b flag
+  ORR r0,rps,#UFLAG ;set u flag
+  STACKPUSH r0
+  ORR rps,rps,#IFLAG ;set i flag
+  STRB rps,[r2]
+  ADD r2,r12,#&10000 ;memory+&10000
+  LDRB r0,[r2,#-2] ;&FFFE
+  LDRB r1,[r2,#-1] ;&FFFF
+  ADD rpc,r0,r1,LSL#8
+  STRB rsp,[r10]
+  STR rpc,[r11]
+
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11] ;r6502_cyclestogo
+  CPU_CYCLES 7
+  STR rcycles,[r11] ;r6502_cyclestogo
+  LDMFD sp!,{r0-r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502nmi|
+  STMFD sp!,{r0-r12,lr}
+  LDR r12,=memory ;pointer to memory
+  LDR r11,=r6502_pc ;pointer to r6502_pc
+  LDR rpc,[r11]
+  LDR r10,=r6502_sp ;pointer to r6502_sp
+  LDRB rsp,[r10] ;load r6502_sp
+  AND r0,rpc,#&FF00
+  MOV r0,r0,LSR#8
+  STACKPUSH r0
+  AND r0,rpc,#&FF
+  STACKPUSH r0
+  ;PROCESSORSTATUS(0)
+  LDR r2,=r6502_ps
+  LDRB rps,[r2] ;load ps
+  AND rps,rps,#NOTBFLAG ;clear b flag
+  ORR r0,rps,#UFLAG ;set u flag
+  STACKPUSH r0
+  ORR rps,rps,#IFLAG ;set i flag
+  STRB rps,[r2]
+  ADD r2,r12,#&10000 ;memory+&10000
+  LDRB r0,[r2,#-6] ;&FFFA
+  LDRB r1,[r2,#-5] ;&FFFB
+  ADD rpc,r0,r1,LSL#8
+  STRB rsp,[r10]
+  STR rpc,[r11]
+
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11] ;r6502_cyclestogo
+  CPU_CYCLES 7
+  STR rcycles,[r11] ;r6502_cyclestogo
+  LDMFD sp!,{r0-r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502execute|
+  STMFD sp!,{r0-r12,lr}
+
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r0,[r11]
+  ;LDR r11,=r6502_cyclestore
+  ;STR r0,[r11]
+
+  BL r6502loadregs
+
+r6502execute_loop
+  ;-------------------
+  ;LDR r11,=beebit_trace ;trace
+  ;LDR r0,[r11]
+
+  ;CMP r0,#00
+  ;BEQ r6502execute_loop2
+
+  ;MOV r0, rpc ;get RPC
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;LDRB r0,[r12,rpc] ;get opcode
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, rps ;program status
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, ra ;a
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_NewLine
+  ;-------------------
+
+r6502execute_loop2
+  LDRB r3,[r12,rpc] ;get opcode
+  ADD rpc,rpc,#1
+  ;ANDS r0,rpc,#&10000
+  ;MOVNE r0,#&FF00
+  ;ORRNE r0,r0,#&00FF
+  ;ANDNE rpc,rpc,r0
+  ;STR rpc,[r11] ;pc
+
+  LDR r0,=r6502opcodes
+  ;STMFD sp!,{lr}
+  MOV lr,pc
+  LDR pc,[r0,r3,LSL#2]
+  ;LDMFD sp!,{lr}
+
+  ;-------------------
+  ;LDR r11,=beebit_trace ;trace
+  ;LDR r0,[r11]
+  ;CMP r0,#00
+  ;BEQ r6502execute_loop3
+
+  ;LDR r1,=flag
+  ;LDR r0,[r1]
+  ;CMP r0,#&00
+  ;BEQ skip2
+  ;B skip2
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, ra ;a
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, rx ;x
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, ry ;y
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, rps ;program status
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, rsp ;sp
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;LDR r0,=beebit_romsel
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;LDR r0,=beebit_acccon
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_NewLine
+
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r0,[r11]
+  ;CMP r0,#0
+  ;-------------------
+;skip2
+
+r6502execute_loop3
+  ;SWI OS_WriteI+87
+  CMP rcycles,#0
+  ;SWI OS_WriteI+88
+  BGT r6502execute_loop
+
+;r6502execute_end
+  ;LDR r12,=r6502_cyclestore
+  ;LDA r0,[r12]
+  ;LDR r11,=r6502cyclestogo
+  ;LDR r1,[r11]
+  ;SUB r0,r0,r1
+  BL r6502saveregs
+  ;SWI OS_WriteI+90
+  LDMFD sp!,{r0-r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r6502execute_ram|
+  STMFD sp!,{r0-r12,lr}
+  BL r6502loadregs
+
+r6502execute_ram_loop
+  ;-------------------
+  ;CMP rpc,#&400
+  ;BLT r6502execute_ram_loop2
+  ;CMP rpc,#&800
+  ;BGE r6502execute_ram_loop2
+
+  ;LDR r11,=beebit_trace ;trace
+  ;LDR r0,[r11]
+
+  ;CMP r0,#00
+  ;BEQ r6502execute_ram_loop2
+
+  ;MOV r0, rpc ;get RPC
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;LDRB r0,[r12,rpc] ;get opcode
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_NewLine
+  ;-------------------
+
+r6502execute_ram_loop2
+  ;CMP rpc,#&3000
+  ;LDRLTB r0,[r12,rpc] ;get opcode
+  ;MOVGE r0,rpc
+  ;BLGE r6502readbp ;=r0
+  MOV r0,rpc
+  BL r6502readbp ;=r0
+
+  ;---------------------
+  ;LDR r11,=beebit_trace ;trace
+  ;LDR r2,[r11]
+
+  ;CMP r2,#00
+  ;BEQ r6502execute_ram_loop3
+
+  ;CMP rpc,#&400
+  ;BLT r6502execute_ram_loop3
+  ;CMP rpc,#&800
+  ;BGE r6502execute_ram_loop3
+
+  ;STMFD sp!,{r0}
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;LDMFD sp!,{r0}
+  ;--------------------
+
+r6502execute_ram_loop3
+  ADD rpc,rpc,#1
+
+  LDR r1,=r6502opcodes
+  ;STMFD sp!,{lr}
+  MOV lr,pc
+  LDR pc,[r1,r0,LSL#2]
+  ;LDMFD sp!,{lr}
+
+  ;------------------
+  ;LDR r11,=beebit_trace ;trace
+  ;LDR r0,[r11]
+
+  ;CMP r0,#00
+  ;BEQ r6502execute_ram_loop4
+  ;CMP rpc,#&400
+  ;BLT r6502execute_ram_loop4
+  ;CMP rpc,#&800
+  ;BGE r6502execute_ram_loop4
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, ra ;a
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, rx ;x
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, ry ;y
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, rps ;program status
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, rsp ;sp
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;LDR r0,=beebit_romsel
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;LDR r0,=beebit_acccon
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_NewLine
+  ;--------------------
+
+r6502execute_ram_loop4
+  CMP rcycles,#0
+  BGT r6502execute_ram_loop
+
+  BL r6502saveregs
+  LDMFD sp!,{r0-r12,pc}
+
+|r6502opcodes|
+  DCD r6502opcode00
+  DCD r6502opcode01
+  DCD r6502opcode02
+  DCD r6502opcode03
+  DCD r6502opcode04
+  DCD r6502opcode05
+  DCD r6502opcode06
+  DCD r6502opcode07
+  DCD r6502opcode08
+  DCD r6502opcode09
+  DCD r6502opcode0A
+  DCD r6502opcode0B
+  DCD r6502opcode0C
+  DCD r6502opcode0D
+  DCD r6502opcode0E
+  DCD r6502opcode0F
+  DCD r6502opcode10
+  DCD r6502opcode11
+  DCD r6502opcode12
+  DCD r6502opcode13
+  DCD r6502opcode14
+  DCD r6502opcode15
+  DCD r6502opcode16
+  DCD r6502opcode17
+  DCD r6502opcode18
+  DCD r6502opcode19
+  DCD r6502opcode1A
+  DCD r6502opcode1B
+  DCD r6502opcode1C
+  DCD r6502opcode1D
+  DCD r6502opcode1E
+  DCD r6502opcode1F
+  DCD r6502opcode20
+  DCD r6502opcode21
+  DCD r6502opcode22
+  DCD r6502opcode23
+  DCD r6502opcode24
+  DCD r6502opcode25
+  DCD r6502opcode26
+  DCD r6502opcode27
+  DCD r6502opcode28
+  DCD r6502opcode29
+  DCD r6502opcode2A
+  DCD r6502opcode2B
+  DCD r6502opcode2C
+  DCD r6502opcode2D
+  DCD r6502opcode2E
+  DCD r6502opcode2F
+  DCD r6502opcode30
+  DCD r6502opcode31
+  DCD r6502opcode32
+  DCD r6502opcode33
+  DCD r6502opcode34
+  DCD r6502opcode35
+  DCD r6502opcode36
+  DCD r6502opcode37
+  DCD r6502opcode38
+  DCD r6502opcode39
+  DCD r6502opcode3A
+  DCD r6502opcode3B
+  DCD r6502opcode3C
+  DCD r6502opcode3D
+  DCD r6502opcode3E
+  DCD r6502opcode3F
+  DCD r6502opcode40
+  DCD r6502opcode41
+  DCD r6502opcode42
+  DCD r6502opcode43
+  DCD r6502opcode44
+  DCD r6502opcode45
+  DCD r6502opcode46
+  DCD r6502opcode47
+  DCD r6502opcode48
+  DCD r6502opcode49
+  DCD r6502opcode4A
+  DCD r6502opcode4B
+  DCD r6502opcode4C
+  DCD r6502opcode4D
+  DCD r6502opcode4E
+  DCD r6502opcode4F
+  DCD r6502opcode50
+  DCD r6502opcode51
+  DCD r6502opcode52
+  DCD r6502opcode53
+  DCD r6502opcode54
+  DCD r6502opcode55
+  DCD r6502opcode56
+  DCD r6502opcode57
+  DCD r6502opcode58
+  DCD r6502opcode59
+  DCD r6502opcode5A
+  DCD r6502opcode5B
+  DCD r6502opcode5C
+  DCD r6502opcode5D
+  DCD r6502opcode5E
+  DCD r6502opcode5F
+  DCD r6502opcode60
+  DCD r6502opcode61
+  DCD r6502opcode62
+  DCD r6502opcode63
+  DCD r6502opcode64
+  DCD r6502opcode65
+  DCD r6502opcode66
+  DCD r6502opcode67
+  DCD r6502opcode68
+  DCD r6502opcode69
+  DCD r6502opcode6A
+  DCD r6502opcode6B
+  DCD r6502opcode6C
+  DCD r6502opcode6D
+  DCD r6502opcode6E
+  DCD r6502opcode6F
+  DCD r6502opcode70
+  DCD r6502opcode71
+  DCD r6502opcode72
+  DCD r6502opcode73
+  DCD r6502opcode74
+  DCD r6502opcode75
+  DCD r6502opcode76
+  DCD r6502opcode77
+  DCD r6502opcode78
+  DCD r6502opcode79
+  DCD r6502opcode7A
+  DCD r6502opcode7B
+  DCD r6502opcode7C
+  DCD r6502opcode7D
+  DCD r6502opcode7E
+  DCD r6502opcode7F
+  DCD r6502opcode80
+  DCD r6502opcode81
+  DCD r6502opcode82
+  DCD r6502opcode83
+  DCD r6502opcode84
+  DCD r6502opcode85
+  DCD r6502opcode86
+  DCD r6502opcode87
+  DCD r6502opcode88
+  DCD r6502opcode89
+  DCD r6502opcode8A
+  DCD r6502opcode8B
+  DCD r6502opcode8C
+  DCD r6502opcode8D
+  DCD r6502opcode8E
+  DCD r6502opcode8F
+  DCD r6502opcode90
+  DCD r6502opcode91
+  DCD r6502opcode92
+  DCD r6502opcode93
+  DCD r6502opcode94
+  DCD r6502opcode95
+  DCD r6502opcode96
+  DCD r6502opcode97
+  DCD r6502opcode98
+  DCD r6502opcode99
+  DCD r6502opcode9A
+  DCD r6502opcode9B
+  DCD r6502opcode9C
+  DCD r6502opcode9D
+  DCD r6502opcode9E
+  DCD r6502opcode9F
+  DCD r6502opcodeA0
+  DCD r6502opcodeA1
+  DCD r6502opcodeA2
+  DCD r6502opcodeA3
+  DCD r6502opcodeA4
+  DCD r6502opcodeA5
+  DCD r6502opcodeA6
+  DCD r6502opcodeA7
+  DCD r6502opcodeA8
+  DCD r6502opcodeA9
+  DCD r6502opcodeAA
+  DCD r6502opcodeAB
+  DCD r6502opcodeAC
+  DCD r6502opcodeAD
+  DCD r6502opcodeAE
+  DCD r6502opcodeAF
+  DCD r6502opcodeB0
+  DCD r6502opcodeB1
+  DCD r6502opcodeB2
+  DCD r6502opcodeB3
+  DCD r6502opcodeB4
+  DCD r6502opcodeB5
+  DCD r6502opcodeB6
+  DCD r6502opcodeB7
+  DCD r6502opcodeB8
+  DCD r6502opcodeB9
+  DCD r6502opcodeBA
+  DCD r6502opcodeBB
+  DCD r6502opcodeBC
+  DCD r6502opcodeBD
+  DCD r6502opcodeBE
+  DCD r6502opcodeBF
+  DCD r6502opcodeC0
+  DCD r6502opcodeC1
+  DCD r6502opcodeC2
+  DCD r6502opcodeC3
+  DCD r6502opcodeC4
+  DCD r6502opcodeC5
+  DCD r6502opcodeC6
+  DCD r6502opcodeC7
+  DCD r6502opcodeC8
+  DCD r6502opcodeC9
+  DCD r6502opcodeCA
+  DCD r6502opcodeCB
+  DCD r6502opcodeCC
+  DCD r6502opcodeCD
+  DCD r6502opcodeCE
+  DCD r6502opcodeCF
+  DCD r6502opcodeD0
+  DCD r6502opcodeD1
+  DCD r6502opcodeD2
+  DCD r6502opcodeD3
+  DCD r6502opcodeD4
+  DCD r6502opcodeD5
+  DCD r6502opcodeD6
+  DCD r6502opcodeD7
+  DCD r6502opcodeD8
+  DCD r6502opcodeD9
+  DCD r6502opcodeDA
+  DCD r6502opcodeDB
+  DCD r6502opcodeDC
+  DCD r6502opcodeDD
+  DCD r6502opcodeDE
+  DCD r6502opcodeDF
+  DCD r6502opcodeE0
+  DCD r6502opcodeE1
+  DCD r6502opcodeE2
+  DCD r6502opcodeE3
+  DCD r6502opcodeE4
+  DCD r6502opcodeE5
+  DCD r6502opcodeE6
+  DCD r6502opcodeE7
+  DCD r6502opcodeE8
+  DCD r6502opcodeE9
+  DCD r6502opcodeEA
+  DCD r6502opcodeEB
+  DCD r6502opcodeEC
+  DCD r6502opcodeED
+  DCD r6502opcodeEE
+  DCD r6502opcodeEF
+  DCD r6502opcodeF0
+  DCD r6502opcodeF1
+  DCD r6502opcodeF2
+  DCD r6502opcodeF3
+  DCD r6502opcodeF4
+  DCD r6502opcodeF5
+  DCD r6502opcodeF6
+  DCD r6502opcodeF7
+  DCD r6502opcodeF8
+  DCD r6502opcodeF9
+  DCD r6502opcodeFA
+  DCD r6502opcodeFB
+  DCD r6502opcodeFC
+  DCD r6502opcodeFD
+  DCD r6502opcodeFE
+  DCD r6502opcodeFF
+
+;f113
+;  DCD &F113
+;flag
+;  DCD 00
+
+buffer
+  DCD 0
+  DCD 0
+  DCD 0
+  DCD 0
+
+;Data Area
+
+;  AREA    |C$$data|, DATA
+
+;|constFFFFFFFF|
+;  DCD &FFFFFFFF
+
+;r6502_cyclestore
+;  DCD 0
+
+  END

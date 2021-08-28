@@ -1,0 +1,140 @@
+/*>beebit.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#include <stdio.h>
+
+/* DEFINES */
+#define AND   &&
+#define NOT   !
+#define OR    ||
+#define TRUE  0xFF
+#define FALSE 0x00
+
+#define IRQ_6522SYSVIA 0x01
+#define IRQ_6522USRVIA 0x02
+#define IRQ_6850ACIA 0x04
+
+#define IRQ_NOT6522SYSVIA 0xFE
+#define IRQ_NOT6522USRVIA 0xFD
+#define IRQ_NOT6850ACIA 0xFB
+
+#define NAME_MODELB "Model B"
+#define NAME_MODELBPLUS "Model B+"
+#define NAME_MASTER128 "Master 128"
+#define NAME_MASTERCOMPACT "Compact"
+
+#define MACHINE_MODELB 0
+#define MACHINE_MODELBPLUS 1
+#define MACHINE_MASTER128 2
+#define MACHINE_COMPACT 3
+#define MACHINE_ELECTRON 4
+#define CPU_2MHZ 0
+#define CPU_FAST 1
+#define CPU_6502 0
+#define CPU_65C12 1
+#define VIDEO_FAST 0
+#define VIDEO_SLOW 1
+#define VIDEO_50FPS 0
+#define VIDEO_25FPS 1
+#define VIDEO_12FPS 2
+#define MOUSE_OFF 0
+#define MOUSE_JOYSTICK 1
+#define MOUSE_AMXMOUSE 2
+#define DISPLAY_MODE_AUTO 0
+#define DISPLAY_MODE_LOW 1
+#define DISPLAY_MODE_MEDIUM 2
+#define DISPLAY_MODE_HIGH 3
+#define DISPLAY_MODE_12801024 4
+#define DISPLAY_MODE_16001024 5
+
+/*define this for RISC OS machines*/
+#define __RISCOS__
+
+/*#define __DEVELOP__*/
+/*#define __DEBUG__*/
+
+#ifdef __DEVELOP__
+  extern FILE *htrace;
+#else
+  #ifdef __DEBUG__
+    extern FILE *htrace;
+  #endif
+#endif
+
+extern char memory[0x10000]; /*65536 bytes*/
+extern char shadow[0x10000]; /*65536 bytes*/
+/*shadow replaces lynne,hazel and andy for speed*/
+/*extern char lynne[0x5000];*/ /*20480 bytes*/
+/*extern char hazel[0x2000];*/ /*8192 bytes*/
+/*extern char andy[0x1000];*/ /*4096 bytes*/
+extern char roms[16][0x4000];
+
+/*extern char *shadow;*/ /*pointer to 65536 bytes*/
+
+extern int beebit_trace;
+extern char beebit_osrom[MACHINE_COMPACT+1][128];
+extern int beebit_romwritable[16];
+extern int beebit_romwrite[(MACHINE_COMPACT*16)+16];
+extern char beebit_romimage[(MACHINE_COMPACT*16)+16][128];
+extern char beebit_rompath[128];
+extern char beebit_keylayout[128];
+
+extern char beebit_discimage[4][128];
+extern int beebit_sectorcount[4];
+extern int beebit_imagetype[4];
+extern int beebit_discwritable[2];
+extern FILE *beebit_driveimage[4]; /*file handles*/
+
+extern char beebit_uefimage[128];
+extern FILE *beebit_tapeimage; /*file handles*/
+
+extern char beebit_cmosdefault[0x40];
+extern char beebit_cmos[0x40];
+
+extern int beebit_graphicsmode; /*can mode 12,15 or 21 be used for graphics?*/
+extern int beebit_teletextmode; /*can teletext use mode 7 or 15?*/
+extern int beebit_currenttype;
+extern int beebit_machinetype;
+extern int beebit_cpuspeed;
+extern int beebit_videospeed;
+extern int beebit_framerate;
+extern int beebit_mouseemulation;
+extern int beebit_displaymode;
+extern int beebit_sound;
+extern int beebit_cursor;
+extern int beebit_fasttape;
+extern int beebit_printer;
+extern int beebit_links; /*keyboard links*/
+extern int beebit_button1; /*joystick button 1*/
+extern int beebit_button2; /*joystick button 2*/
+extern int beebit_romsel; /*ROMSELect*/
+extern int beebit_acccon; /*ACCCON*/
+extern int beebit_memorymap; /*flags for memory/shadow swapping*/
+extern int beebit_vdusel; /*VDUSEL (0x80) for B+, D (0x01) for Master 128*/
+extern int beebit_romselected;
+extern int beebit_rommodified;
+extern int beebit_leds,host_leds;
+extern int beebit_rommask;
+
+extern int beebit_irq;
+extern int beebit_nmi;
+extern int beebit_oldnmi;
+
+extern void pageinrom(int nrom, int lmosram);
+extern int loadrom(char *cfilename,int nslot);
+extern void updateviatimers(int ncycles);
+extern void updateothertimers(int ncycles);
+extern void updatetimers(void);
+extern void updatekeyboard(void);
+extern int beebitsectorcount(FILE *hfile);
+extern int beebitimagetype(FILE *hfile, int nsectorcount);
+extern void beebitinit(void);
+extern void beebitreset(void);
+extern int beebitmain(void);
+extern void beebitclosedown(void);

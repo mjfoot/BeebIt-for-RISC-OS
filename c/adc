@@ -1,0 +1,185 @@
+/*>adc.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * NEC Analogue to Digital Converter - D7002C [1MHz]
+ *
+ * (C) Copyright Michael J Foot, 1998-2002
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#include <stdio.h>
+#include "6502cpu.h"
+#include "6522sysvia.h"
+#include "beebit.h"
+#include "kernel.h"
+#include "swis.h"
+
+extern _kernel_swi_regs regs;
+
+/*analog to digital converter*/
+int adc_channel;
+int adc_flag;
+int adc_resolution;
+int adc_status;
+int adc_highbyte;
+int adc_lowbyte;
+int adc_timer; /*adc timer*/
+static int adc_suppressfirst;
+
+void adcreset(void)
+{
+  adc_channel = 0;
+  adc_flag = 0;
+  adc_resolution = 0;
+  adc_highbyte = 0;
+  adc_lowbyte = 0;
+  adc_timer = 0;
+}
+
+void adcenter(void)
+{
+  adc_suppressfirst = 0;
+}
+
+void adcpoll(void)
+{
+  int nvalue;
+  adc_status &= 0x0F;
+
+  if (beebit_mouseemulation == MOUSE_JOYSTICK)
+  {
+    /*1280x1024*/
+    _kernel_swi(OS_Mouse,&regs,&regs);
+
+    if (adc_suppressfirst == 0)
+      beebit_button1 = 0;
+    else
+      beebit_button1 = ((regs.r[2] & 0x04)>>2);
+
+    if (((regs.r[2] & 0x04)>>2) == 0)
+      adc_suppressfirst = 1;
+
+    beebit_button2 = (regs.r[2] & 0x01);
+    switch (adc_status & 3)
+    {
+      case 0:
+        /*master left/right*/
+        /*nvalue = ((1279-regs.r[0])<<9)/10;*/ /*(n*512)/10=n*51.2*/
+        break;
+      case 1:
+        /*master up/down*/
+        nvalue = (regs.r[1]<<6);
+        break;
+      case 2:
+        /*secondary left/right*/
+        nvalue = 0x7FFF;
+        break;
+      case 3:
+        /*secondary up/down*/
+        nvalue = 0x7FFF;
+        break;
+      default:
+        nvalue = 0;
+        break;
+    }
+  }
+  else
+    nvalue = 0;
+
+  adc_status |= 0x40; /*not busy*/
+  adc_status |= ((nvalue & 0xC000)>>10);
+  adc_highbyte = (nvalue>>8);
+  adc_lowbyte = (nvalue & 0xF0);
+
+  if (beebit_mouseemulation == MOUSE_JOYSTICK)
+  {
+    if (beebit_button1)
+      r6522sysvia_portb &= 0xEF;
+    else
+      r6522sysvia_portb |= 0x10;
+
+    if (beebit_button2)
+      r6522sysvia_portb &= 0xDF;
+    else
+      r6522sysvia_portb |= 0x20;
+  }
+
+  r6522sysvia_irb = (r6522sysvia_orb & r6522sysvia_ddrb) + (r6522sysvia_portb & ~r6522sysvia_ddrb);
+  /*set CB1 to indicate end of conversion*/
+  r6522sysvia_ifr |= 0x10;
+}
+
+char adcread(int naddress)
+{
+  /*&FC00
+   *b0+b1: which of the 4 input channels was selected.
+   *b2: not used.
+   *b3=0: 8 bit resolution/4ms
+   *b3=1: 10 bit resolution/10ms
+   *b4: 2nd MSB
+   *b5: 1st MSB
+   *b6:
+   */
+  /*char nresult;*/
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  naddress &= 3;
+  switch (naddress)
+  {
+    case 0:
+      return (adc_status);
+      break;
+    case 1:
+      return (adc_highbyte);
+      break;
+    case 2:
+      return (adc_lowbyte);
+      break;
+    default:
+      return (0);
+      break;
+  }
+  /*return (nresult);*/
+}
+
+void adcwrite(int naddress,int nvalue)
+{
+  /*if naddress=&FC00 then
+   * b1+b0: which of the 4 input channels to select.
+   * b2: flag input.
+   * b3=0: 8 bit resolution/4ms
+   * b3=1: 10 bit resolution/10ms
+   * interrupt is generated when conversion is done.
+   */
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  adc_channel = (nvalue & 3);
+  adc_flag = (nvalue & 4)>>2;
+  adc_resolution = (nvalue & 8)>>3;
+  /*busy*/
+  adc_status = (nvalue & 0x0F);
+  /*not complete*/
+  adc_status |= 0x80;
+  if (adc_resolution)
+    adc_timer +=  10000;
+  else
+    adc_timer +=  4000;
+}

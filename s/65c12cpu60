@@ -1,0 +1,460 @@
+;>65c12cpu60.s
+;
+; BeebIt - BBC Micro Model B Emulator
+;
+; (C) Copyright Michael J Foot, 1998-2005
+;
+; Email: <mjfoot@paradise.net.nz>
+;
+; r12=pointer to variable
+; r11=pointer to variable
+; r10=pointer to variable
+; r9=PC
+; r8=PS
+; r7=Y
+; r6=X
+; r5=A
+
+  GET h.6502cpus
+
+  GET h.6502cpui
+
+; Use the GET directive to include register definitions as if typed here
+
+  GET h.RegNames
+
+; Use the GET directive to include a list of SWI names as if typed here
+
+  GET h.SWInames
+
+; Area name C$$code advisable as wanted to link with C output
+
+  AREA |C$$code|, CODE, READONLY
+
+; Import global symbols
+
+  IMPORT |memory|
+  IMPORT |r6502_sp|
+  IMPORT |r6502_pc|
+  IMPORT |r6502_ps|
+  IMPORT |r6502_a|
+  IMPORT |r6502_x|
+  IMPORT |r6502_y|
+  ;IMPORT |r6502_n|
+  ;IMPORT |r6502_v|
+  ;IMPORT |r6502_b|
+  ;IMPORT |r6502_d|
+  ;IMPORT |r6502_i|
+  ;IMPORT |r6502_z|
+  ;IMPORT |r6502_c|
+  IMPORT |r6502_cyclestogo|
+  ;IMPORT |r6502read|
+  IMPORT |r6502readm|
+  ;IMPORT |r6502writemem|
+  IMPORT |r6502writem|
+  IMPORT |r65c12opcodes|
+
+  ;IMPORT |sheilaread|
+  ;IMPORT |sheilawrite|
+  IMPORT |updatetimers|
+  IMPORT |adcbcd|
+  IMPORT |r65c12loadregs|
+  IMPORT |r65c12saveregs|
+
+; Export global symbols
+
+  EXPORT |r65c12opcode60|
+  EXPORT |r65c12opcode61|
+  EXPORT |r65c12opcode62|
+  EXPORT |r65c12opcode63|
+  EXPORT |r65c12opcode64|
+  EXPORT |r65c12opcode65|
+  EXPORT |r65c12opcode66|
+  EXPORT |r65c12opcode67|
+  EXPORT |r65c12opcode68|
+  EXPORT |r65c12opcode69|
+  EXPORT |r65c12opcode6A|
+  EXPORT |r65c12opcode6B|
+  EXPORT |r65c12opcode6C|
+  EXPORT |r65c12opcode6D|
+  EXPORT |r65c12opcode6E|
+  EXPORT |r65c12opcode6F|
+
+|r65c12opcode60|
+  ;RTS
+  ;STMFD sp!,{r0-r2,rsp,rpc,r10-r12,lr}
+  ;LDR r12,=memory ;pointer to memory
+  ;LDR r10,=r6502_sp ;pointer to r6502_sp
+  ;LDRB rsp,[r10] ;load r6502_sp
+  STACKPOP r2 ;lo
+  STACKPOP r3 ;hi
+  ;STRB rsp,[r10] ;store r6502_sp
+  ;LDR r11,=r6502_pc
+  ADD rpc,r2,r3,LSL#8 ;r6502_pc=nlo+(nhi<<8)
+  ADD rpc,rpc,#1 ;r6502_pc++ (6502 bug)
+
+  ;STR rpc,[r11]
+  CPU_CYCLES 6
+  ;LDMFD sp!,{r0-r2,rsp,rpc,r10-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode61|
+  ;ADC
+  ;STMFD sp!,{r0-r12,lr}
+  ;VALUEOFPREINDEXED
+  ADDRESSOFPREINDEXED_M ;r0 ;4 cycles
+  READMEMM ;1 cycle
+  ;LDR r12,=r6502_ps ;pointer to r6502_ps
+  ;LDRB rps,[r12] ;load r6502_ps
+  ANDS r1,rps,#DFLAG
+  BNE r65c12opcode61_2
+  ;digital
+  R6502ADC ;1 cycle
+  CPU_CYCLES 2
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+r65c12opcode61_2
+  ;BCD
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  BL r65c12saveregs
+  BL adcbcd ;1 cycle
+  BL r65c12loadregs
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+  CPU_CYCLES 3 ;+1
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode62|
+  ;STMFD sp!,{lr}
+  R6502NOP
+  ;LDMFD sp!,{pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode63|
+  ;RRA
+  ;STMFD sp!,{r0-r12,lr}
+  ADDRESSOFPREINDEXED_M ;r0 ;4 cycles
+  MOV r2,r0 ;store address
+  READMEMM ;1 cycle
+  R6502ROR r0 ;1 cycle
+  MOV r1,r0 ;value
+  MOV r0,r2 ;address
+  WRITEMEMM ;1 cycle
+
+  ANDS r1,rps,#DFLAG
+  BNE r65c12opcode63_2
+  ;digital
+  R6502ADC ;1 cycle
+  CPU_CYCLES 4
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+r65c12opcode63_2
+  ;BCD
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  BL r65c12saveregs
+  BL adcbcd ;1 cycle
+  BL r65c12loadregs
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+  CPU_CYCLES 5 ;+1
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode64|
+  ;STZ
+  ;STMFD sp!,{r0-r2,rpc,r11,lr}
+  ADDRESSOFZEROPAGE_M r0
+  MOV r1,#0
+  STRB r1,[r12,r0]
+  CPU_CYCLES 3
+  ;LDMFD sp!,{r0-r2,rpc,r11,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode65|
+  ;ADC
+  ;STMFD sp!,{r0-r12,lr}
+  VALUEOFZEROPAGE_M
+  ;LDR r12,=r6502_ps ;pointer to r6502_ps
+  ;LDRB rps,[r12] ;load r6502_ps
+  ANDS r1,rps,#DFLAG
+  BNE r65c12opcode65_2
+  ;digital
+  R6502ADC
+  CPU_CYCLES 3
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+r65c12opcode65_2
+  ;BCD
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  BL r65c12saveregs
+  BL adcbcd
+  BL r65c12loadregs
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+  CPU_CYCLES 4
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode66|
+  ;STMFD sp!,{r0-r4,rps,rpc,r10-r12,lr}
+  VALUEOFZEROPAGE_M
+  R6502ROR r0
+  STRB r0,[r11]
+  CPU_CYCLES 5
+  ;LDMFD sp!,{r0-r4,rps,rpc,r10-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode67|
+  ;RRA
+  ;STMFD sp!,{r0-r12,lr}
+  VALUEOFZEROPAGE_M
+  R6502ROR r0
+  STRB r0,[r11]
+
+  ANDS r1,rps,#DFLAG
+  BNE r65c12opcode67_2
+  ;digital
+  R6502ADC
+  CPU_CYCLES 5
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+r65c12opcode67_2
+  ;BCD
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  BL r65c12saveregs
+  BL adcbcd
+  BL r65c12loadregs
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+  CPU_CYCLES 6 ;+1
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode68|
+  ;PLA
+  ;STMFD sp!,{r2,rsp,ra,rps,r11-r12,lr}
+  ;LDR r12,=memory ;pointer to memory
+  ;LDR r11,=r6502_sp ;pointer to r6502_sp
+  ;LDRB rsp,[r11] ;load r6502_sp
+  STACKPOP ra
+  ;STRB rsp,[r11]
+
+  ;LDR r11,=r6502_ps ;pointer to r6502_ps
+  ;LDRB rps,[r11] ;r6502_ps
+  SETNFLAG ra
+  SETZFLAG ra
+  ;STRB rps,[r11] ;r6502_ps
+
+  ;LDR r11,=r6502_a ;pointer to r6502_a
+  ;STRB ra,[r11] ;r6502_ps
+
+  CPU_CYCLES 4
+  ;LDMFD sp!,{r2,rsp,ra,rps,r11-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode69|
+  ;ADC
+  ;STMFD sp!,{r0-r12,lr}
+  ;STMFD sp!,{lr}
+  VALUEOFIMMEDIATE_M r0
+  ;LDR r12,=r6502_ps ;pointer to r6502_ps
+  ;LDRB rps,[r12] ;load r6502_ps
+  ANDS r1,rps,#DFLAG
+  BNE r65c12opcode69_2
+  ;digital
+  R6502ADC
+  CPU_CYCLES 2
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  ;LDMFD sp!,{pc}
+  R65C12NEXTOPCODE
+r65c12opcode69_2
+  ;BCD
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  BL r65c12saveregs
+  BL adcbcd
+  BL r65c12loadregs
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+  CPU_CYCLES 3 ;+1
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  ;LDMFD sp!,{pc}
+  R65C12NEXTOPCODE
+
+|r65c12opcode6A|
+  ;STMFD sp!,{r0-r4,rps-r12,lr}
+  ;LDR r10,=r6502_a
+  ;LDRB r0,[r10]
+  ;MOV r0,ra
+  R6502ROR ra
+  ;STRB r0,[r10]
+  ;MOV ra,r0
+  CPU_CYCLES 2
+  ;LDMFD sp!,{r0-r4,rps-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+r65c12opcode6B
+  ;STMFD sp!,{lr}
+  R6502NOP
+  ;LDMFD sp!,{pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode6C|
+  ;JMP
+  ;STMFD sp!,{r0-r2,rpc,r10-r12,lr}
+  CMP rpc,#&3000
+  BGE r65c12opcode6C_2
+
+  ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
+  ;ADD r10,r12,r0 ;memory+r0
+  LDRB r2,[r12,r0] ;lo
+  ;AND r3,r0,#&FF ;test
+  ;CMP r3,#&FF
+  ;ADDNE r0,r0,#1 ;r1 = (r0+1)
+  ;SUBEQ r0,r0,#255 ;r1 = (r0-255)
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0 ;memory+r0
+  LDRB r1,[r12,r0] ;hi
+  ;ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ;STR r0,[r11] ;pc
+  ADD rpc,r2,r1,LSL#8 ;rpc=lo+(hi<<8)
+
+  CPU_CYCLES 3
+  ;LDMFD sp!,{r0-r2,rpc,r10-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+r65c12opcode6C_2
+  ;master 128
+  ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
+  MOV r3,r0 ;store address
+
+  ;BL r6502readm ;lo
+  READMEMM ;lo
+  MOV r2,r0 ;lo
+
+  MOV r0,r3
+  ;ADD r1,r3,#1 ;r1 = (r3+1)
+  ;AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  ;AND r0,r3,#&FF00
+  ;ORR r0,r0,r1
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+
+  ;BL r6502readm ;hi
+  READMEMM ;hi
+
+  ADD rpc,r2,r0,LSL#8 ;rpc=lo+(hi<<8)
+  CPU_CYCLES 3
+  R65C12NEXTOPCODE
+
+|r65c12opcode6D|
+  ;ADC
+  ;STMFD sp!,{r0-r12,lr}
+  ;VALUEOFABSOLUTE
+  ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
+  READMEMM ;1 cycle
+  ;LDR r12,=r6502_ps ;pointer to r6502_ps
+  ;LDRB rps,[r12] ;load r6502_ps
+  ANDS r1,rps,#DFLAG
+  BNE r65c12opcode6D_2
+  ;digital
+  R6502ADC ;1 cycle
+  CPU_CYCLES 2
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+r65c12opcode6D_2
+  ;BCD
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  BL r65c12saveregs
+  BL adcbcd ;1 cycle
+  BL r65c12loadregs
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+  CPU_CYCLES 3 ;+1
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode6E|
+  ;STMFD sp!,{r0-r4,rps-r12,lr}
+  ;VALUEOFABSOLUTE
+  ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
+  MOV r2,r0 ;store address
+  READMEMM ;1 cycle
+  R6502ROR r0 ;2 cycles
+  MOV r1,r0 ;value
+  MOV r0,r2 ;address
+  WRITEMEMM ;1 cycle
+  CPU_CYCLES 4
+  ;LDMFD sp!,{r0-r4,rps-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+|r65c12opcode6F|
+  ;RRA
+  ;STMFD sp!,{r0-r12,lr}
+  ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
+  MOV r2,r0 ;store address
+  READMEMM ;1 cycle
+  R6502ROR r0
+  MOV r1,r0 ;value
+  MOV r0,r2 ;address
+  WRITEMEMM ;1 cycle
+
+  ANDS r1,rps,#DFLAG
+  BNE r65c12opcode6F_2
+  ;digital
+  R6502ADC
+  CPU_CYCLES 4
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+r65c12opcode6F_2
+  ;BCD
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  BL r65c12saveregs
+  BL adcbcd
+  BL r65c12loadregs
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+  CPU_CYCLES 5 ;+1
+  ;LDMFD sp!,{r0-r12,pc}
+  ;MOV pc,lr
+  R65C12NEXTOPCODE
+
+;Data Area
+
+;  AREA    |C$$data|, DATA
+
+  END

@@ -1,0 +1,1340 @@
+;>6502cpus.h
+;
+; BeebIt - BBC Micro Model B Emulator
+;
+; (C) Copyright Michael J Foot, 1998-2005
+;
+; Email: <mjfoot@paradise.net.nz>
+;
+; r12=pointer to variable
+; r11=pointer to variable
+; r10=pointer to variable
+; r9=PC
+; r8=PS
+; r7=Y
+; r6=X
+; r5=A
+
+;  ADDRESSOFABSOLUTE
+;  CPU_CYCLES 2
+;
+;  ADDRESSOFABSOLUTEX
+;  CPU_CYCLES 3
+;
+;  ADDRESSOFABSOLUTEY
+;  CPU_CYCLES 3
+;
+;  ADDRESSOFABSOLUTEXPLUS
+;  CPU_CYCLES 2+
+;
+;  ADDRESSOFABSOLUTEYPLUS
+;  CPU_CYCLES 2+
+;
+;  ADDRESSOFPREINDEXED
+;  CPU_CYCLES 4
+;
+;  ADDRESSOFPOSTINDEXEDY
+;  CPU_CYCLES 3+
+
+;  ADDRESSOFPOSTINDEXEDY_STA
+;  CPU_CYCLES 4
+
+NFLAG EQU &80
+VFLAG EQU &40
+UFLAG EQU &20
+BFLAG EQU &10
+DFLAG EQU &08
+IFLAG EQU &04
+ZFLAG EQU &02
+CFLAG EQU &01
+NOTNFLAG EQU &7F
+NOTVFLAG EQU &BF
+NOTUFLAG EQU &DF
+NOTBFLAG EQU &EF
+NOTDFLAG EQU &F7
+NOTIFLAG EQU &FB
+NOTZFLAG EQU &FD
+NOTCFLAG EQU &FE
+
+;CPU_6502 EQU 0
+;CPU_65C12 EQU 1
+
+rcycles RN 10
+rpc RN 9
+rps RN 8
+ry RN 7
+rx RN 6
+ra RN 5
+rsp RN 4
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  SETNFLAG $n
+  ;IN :$n=register
+  ANDS r1,$n,#NFLAG
+  ;set bit 7 (N)
+  ORRNE rps,rps,#NFLAG
+  ;clear bit 7 (N)
+  ANDEQ rps,rps,#NOTNFLAG
+  MEND
+
+  MACRO
+  SETVFLAG $n
+  ;IN :$n=register
+  ANDS r1,$n,#VFLAG
+  ;set bit 6 (V)
+  ORRNE rps,rps,#VFLAG
+  ;clear bit 6 (V)
+  ANDEQ rps,rps,#NOTVFLAG
+  MEND
+
+  MACRO
+  SETBFLAG $n
+  ;IN :$n=register
+  ANDS r1,$n,#BFLAG
+  ;set bit 4 (B)
+  ORRNE rps,rps,#BFLAG
+  ;clear bit 4 (B)
+  ANDEQ rps,rps,#NOTBFLAG
+  MEND
+
+  MACRO
+  SETIFLAG $n
+  ;IN :$n=register
+  ANDS r1,$n,#IFLAG
+  ;set bit 2 (I)
+  ORRNE rps,rps,#IFLAG
+  ;clear bit 2 (I)
+  ANDEQ rps,rps,#NOTIFLAG
+  MEND
+
+  MACRO
+  SETZFLAG $n
+  ;IN :$n=register
+  CMP $n,#0
+  ;set bit 1 (Z)
+  ORREQ rps,rps,#ZFLAG
+  ;clear bit 1 (Z)
+  ANDNE rps,rps,#NOTZFLAG
+  MEND
+
+  MACRO
+  SETZFLAG0
+  ;set bit 1 (Z)
+  ORREQ rps,rps,#ZFLAG
+  ;clear bit 1 (Z)
+  ANDNE rps,rps,#NOTZFLAG
+  MEND
+
+  MACRO
+  SETFLAG $n
+  ;IN :$n=flag
+  ORR rps,rps,$n
+  MEND
+
+;
+;rockwell 6502 cpu
+;
+  MACRO
+  CPU_CYCLES $n
+  ;LDR r11,=r6502_cyclestogo
+  ;LDR r2,[r11] ;r6502_cyclestogo
+  ;SUB r2,r2,#$n
+  ;STR r2,[r11] ;r6502_cyclestogo
+  SUB rcycles,rcycles,#$n
+  MEND
+
+;READMEM_LEN EQU 5*4
+
+  ;MACRO
+  ;READMEM
+  ;;store variables here!
+  ;;STMFD sp!,{r1-r9,r11-r12}
+  ;LDR r11,=r6502read
+  ;STMFD sp!,{lr}
+  ;MOV lr,pc
+  ;LDR pc,[r11]
+  ;LDMFD sp!,{lr}
+  ;;read variables here!
+  ;;LDMFD sp!,{r1-r9,r11-r12}
+  ;MEND
+
+READMEMB_LEN EQU 5*4
+
+  MACRO
+  READMEMB
+  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
+  BL r6502readb
+  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
+  MEND
+
+READMEMBP_LEN EQU 3*4
+
+  MACRO
+  READMEMBP
+  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
+  BL r6502readbp
+  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
+  MEND
+
+READMEMM_LEN EQU 3*4
+
+  MACRO
+  READMEMM
+  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
+  BL r6502readm
+  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
+  MEND
+
+;WRITEMEM_LEN EQU 5*4
+
+;  MACRO
+;  WRITEMEM
+;  ;store variables here!
+;  ;STMFD sp!,{r0-r9,r11-r12}
+;  LDR r11,=r6502write
+;  STMFD sp!,{lr}
+;  MOV lr,pc
+;  LDR pc,[r11]
+;  LDMFD sp!,{lr}
+;  ;read variables here!
+;  ;LDMFD sp!,{r0-r9,r11-r12}
+;  MEND
+
+WRITEMEMB_LEN EQU 5*4
+
+  MACRO
+  WRITEMEMB
+  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
+  BL r6502writeb
+  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
+  MEND
+
+WRITEMEMBP_LEN EQU 3*4
+
+  MACRO
+  WRITEMEMBP
+  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
+  BL r6502writebp
+  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
+  MEND
+
+WRITEMEMM_LEN EQU 3*4
+
+  MACRO
+  WRITEMEMM
+  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
+  BL r6502writem
+  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
+  MEND
+
+  MACRO
+  STACKPUSH $n
+  ;IN: $n=value
+  ;    r12=pointer to memory
+  ;    r11=pointer to r6502_sp
+  ;    rsp=r6502_sp
+  ORR r1,rsp,#&100 ;r6502_sp += &100 (STACK_START)
+  STRB $n,[r12,r1] ;memory[r1] = $n
+  SUB rsp,rsp,#1 ;r6502_sp--
+  AND rsp,rsp,#&FF
+  MEND
+
+  MACRO
+  STACKPOP $n
+  ;IN: r12=pointer to memory
+  ;    rsp=r6502_sp
+  ;OUT:$n=value
+  ADD rsp,rsp,#1 ;r6502_sp++
+  AND rsp,rsp,#&FF
+  ORR r0,rsp,#&100 ;r6502_sp += &100 (STACK_START)
+  LDRB $n,[r12,r0] ;$n=memory[r0]
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTE_B_BASE
+  ;OUT:r0 =address
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11]
+
+  ADD r11,r12,rpc ;r11=memory+pc (offset)
+  LDRB r2,[r11] ;lo
+  LDRB r1,[r11,#1] ;hi
+
+  ADD rpc,rpc,#2 ;pc+=2
+  ;ANDS r0,rpc,#&10000
+  ;MOVNE r0,#&FF00
+  ;ORRNE r0,r0,#&00FF
+  ;ANDNE rpc,rpc,r0
+
+  ;STR rpc,[r11] ;pc
+
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTE_B
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_B_BASE
+  CPU_CYCLES 2
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTE_W_BASE
+  ;OUT:r0 =address
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11]
+
+  LDR r0,[r12,rpc] ;word
+  MOV r1,#&FF00
+  ORR r1,r1,#&00FF
+  AND r0,r0,r1
+
+  ADD rpc,rpc,#2 ;pc+=2
+  AND rpc,rpc,r1
+  ;STR rpc,[r11] ;pc
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTE_W
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_W_BASE
+  CPU_CYCLES 2
+  MEND
+
+;  MACRO
+;  ADDRESSOFABSOLUTE_r3
+;  ;OUT:r0 =address
+;  ;LDR r12,=memory ;pointer to memory block
+;  ;LDR r11,=r6502_pc
+;  ;LDR rpc,[r11]
+;
+;  ADD r3,r12,rpc ;r3=memory+pc (offset)
+;  LDRB r2,[r3] ;lo
+;  LDRB r1,[r3,#1] ;hi
+;  ADD rpc,rpc,#2 ;pc+=2
+;  ;ANDS r0,rpc,#&10000
+;  ;MOVNE r0,#&FF00
+;  ;ORRNE r0,r0,#&00FF
+;  ;ANDNE rpc,rpc,r0
+;  ;STR rpc,[r11] ;pc
+;  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+;  CPU_CYCLES 2
+;  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTE_BP_BASE
+  ;B+ paged ram version
+  ;OUT:r0 =address
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11]
+
+  ;ADD r11,r12,rpc ;r11=memory+pc (offset)
+  CMP rpc,#&3000
+  ADDGE pc,pc,#12 ;4*4 (-4)
+
+  ;rpc < &3000
+  ADD r11,r12,rpc ;r11=memory+pc (offset)
+  LDRB r2,[r11] ;lo
+  LDRB r0,[r11,#1] ;hi
+  ADD pc,pc,#(READMEMBP_LEN*2)+(3*4)-4 ;13*4 (-4)
+
+  ;rpc >= &3000
+  MOV r0,rpc
+  READMEMBP ;5*4 ;lo
+  MOV r2,r0 ;lo
+
+  ADD r0,rpc,#1 ;rpc += 1
+  READMEMBP ;5*4 ;hi
+
+  ;continue
+  ADD rpc,rpc,#2 ;pc += 2
+  ;ANDS r1,rpc,#&10000
+  ;MOVNE r1,#&FF00
+  ;ORRNE r1,r1,#&00FF
+  ;ANDNE rpc,rpc,r1
+  ADD r0,r2,r0,LSL#8 ;r0=lo+(hi<<8)
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTE_BP
+  ;B+ paged ram version
+  ADDRESSOFABSOLUTE_BP_BASE
+  CPU_CYCLES 2
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTE_M_BASE
+  ;master 128 paged ram version
+  ;OUT:r0 =address
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11]
+
+  ;ADD r11,r12,rpc ;r11=memory+pc (offset)
+  CMP rpc,#&3000
+  ADDGE pc,pc,#12 ;4*4 (-4)
+
+  ;rpc < &3000
+  ADD r11,r12,rpc ;r11=memory+pc (offset)
+  LDRB r2,[r11] ;lo
+  LDRB r0,[r11,#1] ;hi
+  ADD pc,pc,#(READMEMM_LEN*2)+(3*4)-4 ;13*4 (-4)
+
+  ;rpc >= &3000
+  MOV r0,rpc
+  READMEMM ;5*4
+  MOV r2,r0 ;lo
+
+  ADD r0,rpc,#1 ;rpc += 1
+  ;BL r6502readm ;hi
+  READMEMM ;5*4
+
+  ;continue
+  ADD rpc,rpc,#2 ;pc += 2
+  ;ANDS r1,rpc,#&10000
+  ;MOVNE r1,#&FF00
+  ;ORRNE r1,r1,#&00FF
+  ;ANDNE rpc,rpc,r1
+  ADD r0,r2,r0,LSL#8 ;r0=lo+(hi<<8)
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTE_M
+  ;master 128 paged ram version
+  ADDRESSOFABSOLUTE_M_BASE
+  CPU_CYCLES 2
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEX
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_B_BASE ;r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r6=x
+  ADD r0,r0,rx ;r0=r0+x
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  CPU_CYCLES 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEX_BP
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_BP_BASE ;r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r6=x
+  ADD r0,r0,rx ;r0=r0+x
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  CPU_CYCLES 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEX_M
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_M_BASE ;r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r6=x
+  ADD r0,r0,rx ;r0=r0+x
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  CPU_CYCLES 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEY
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_B_BASE ;r0
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r7=y
+  ADD r0,r0,ry ;r0=r0+y
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  CPU_CYCLES 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEY_BP
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_BP_BASE ;r0
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r7=y
+  ADD r0,r0,ry ;r0=r0+y
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  CPU_CYCLES 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEY_M
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_M_BASE ;r0
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r7=y
+  ADD r0,r0,ry ;r0=r0+y
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  CPU_CYCLES 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEXPLUS_B
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_B_BASE ;r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r3=x
+  ADD r0,r0,rx ;r0=r0+x
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  ;CPU_CYCLES 2
+
+  MOV r2,r0,LSR#8 ;r3=(r0>>8)
+  CMP r2,r1 ;if (r2=hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11] ;r6502_cyclestogo
+  SUBEQ rcycles,rcycles,#2 ;r6502_cyclestogo -= 2
+  SUBNE rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEXPLUS_BP
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_BP_BASE ;r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r3=x
+  ADD r0,r0,rx ;r0=r0+x
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  ;CPU_CYCLES 2
+
+  MOV r2,r0,LSR#8 ;r3=(r0>>8)
+  CMP r2,r1 ;if (r2=hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11] ;r6502_cyclestogo
+  SUBEQ rcycles,rcycles,#2 ;r6502_cyclestogo -= 2
+  SUBNE rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEXPLUS_M
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_M_BASE ;r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r3=x
+  ADD r0,r0,rx ;r0=r0+x
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  ;CPU_CYCLES 2
+
+  MOV r2,r0,LSR#8 ;r3=(r0>>8)
+  CMP r2,r1 ;if (r2=hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11] ;r6502_cyclestogo
+  SUBEQ rcycles,rcycles,#2 ;r6502_cyclestogo -= 2
+  SUBNE rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEYPLUS_B
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_B_BASE ;r0
+  ;LDR r11,=r6502_y
+  ;LDR ry,[r11] ;ry=y
+  ADD r0,r0,ry ;r0=r0+y
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+
+  MOV r2,r0,LSR#8 ;r2=(r0>>8)
+  CMP r2,r1 ;if (r2<>hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11] ;r6502_cyclestogo
+  SUBEQ rcycles,rcycles,#2 ;r6502_cyclestogo -= 2
+  SUBNE rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEYPLUS_BP
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_BP_BASE ;r0
+  ;LDR r11,=r6502_y
+  ;LDR ry,[r11] ;ry=y
+  ADD r0,r0,ry ;r0=r0+y
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+
+  MOV r2,r0,LSR#8 ;r2=(r0>>8)
+  CMP r2,r1 ;if (r2<>hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11] ;r6502_cyclestogo
+  SUBEQ rcycles,rcycles,#2 ;r6502_cyclestogo -= 2
+  SUBNE rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  MEND
+
+  MACRO
+  ADDRESSOFABSOLUTEYPLUS_M
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_M_BASE ;r0
+  ;LDR r11,=r6502_y
+  ;LDR ry,[r11] ;ry=y
+  ADD r0,r0,ry ;r0=r0+y
+  ANDS r3,r0,#&10000
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+
+  MOV r2,r0,LSR#8 ;r2=(r0>>8)
+  CMP r2,r1 ;if (r2<>hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11] ;r6502_cyclestogo
+  SUBEQ rcycles,rcycles,#2 ;r6502_cyclestogo -= 2
+  SUBNE rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  MEND
+
+ADDRESSOFZEROPAGE_LEN EQU 2*4
+
+  MACRO
+  ADDRESSOFZEROPAGE_BASE $n
+  ;OUT:$n =address
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11] ;r9=pc
+  ;ADD r11,r12,rpc ;r11=memory+pc (offset)
+  ;LDRB r0,[r11]
+  LDRB $n,[r12,rpc]
+  ADD rpc,rpc,#1 ;pc+=1
+  ;ANDS r1,rpc,#&10000
+  ;MOVNE r1,#&FF00
+  ;ORRNE r1,r1,#&00FF
+  ;ANDNE rpc,rpc,r1
+  ;STR rpc,[r11]
+  MEND
+
+  MACRO
+  ADDRESSOFZEROPAGE_BP $n
+  ;B+ paged ram version
+  ;OUT:$n =address
+  CMP rpc,#&3000
+  ADDGE pc,pc,#ADDRESSOFZEROPAGE_LEN ;+4-4 ;4*4 (-4)
+
+  ;rpc < &3000
+  ADDRESSOFZEROPAGE_BASE $n
+  ADD pc,pc,#READMEMBP_LEN+(3*4)-4 ;8(-4)
+
+  ;rpc > &3000
+  MOV r0,rpc
+  READMEMBP
+  MOV $n,r0
+  ADD rpc,rpc,#1 ;pc+=1
+
+  ;continue
+  MEND
+
+  MACRO
+  ADDRESSOFZEROPAGE_M $n
+  ;OUT:$n =address
+  CMP rpc,#&3000
+  ADDGE pc,pc,#ADDRESSOFZEROPAGE_LEN ;+4-4 ;4*4 (-4)
+
+  ;rpc < &3000
+  ADDRESSOFZEROPAGE_BASE $n
+  ADD pc,pc,#READMEMM_LEN+(3*4)-4 ;8(-4)
+
+  ;rpc > &3000
+  MOV r0,rpc
+  READMEMM
+  MOV $n,r0
+  ADD rpc,rpc,#1 ;pc+=1
+
+  ;continue
+  MEND
+
+  MACRO
+  ADDRESSOFINDZEROPAGE_B
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BASE r0
+  LDRB r1,[r12,r0] ;lo
+  ADD r0,r0,#1
+  LDRB r2,[r12,r0] ;hi
+  ADD r0,r1,r2,LSL#8
+  MEND
+
+  MACRO
+  ADDRESSOFINDZEROPAGE_BP
+  ;B+ paged ram version
+  ;OUT:r0 =address
+  ;CMP rpc,#&3000
+  ;ADDGE pc,pc,#ADDRESSOFZEROPAGE_LEN+(4*4)-4 ;4*4 (-4)
+
+  ;rpc < &3000
+  ;ADDRESSOFZEROPAGE r2
+  ADDRESSOFZEROPAGE_BP r2
+  LDRB r1,[r12,r2] ;lo
+  ADD r2,r2,#1
+  LDRB r0,[r12,r2] ;hi
+  ;ADD pc,pc,#ADDRESSOFZEROPAGE_LEN+(READMEMM_LEN*2)+(3*4)-4 ;13*4 (-4)
+
+  ;rpc >= &3000
+  ;ADDRESSOFZEROPAGE r2
+  ;;LDRB r1,[r12,r0] ;lo
+  ;MOV r0,r2
+  ;READMEMM ;r0
+  ;MOV r1,r0
+  ;;ADD r0,r0,#1
+  ;ADD r0,r2,#1
+  ;;LDRB r2,[r12,r0] ;hi
+  ;;CPU_CYCLES x
+  ;READMEMM
+
+  ;continue
+  ADD r0,r1,r0,LSL#8
+  MEND
+
+  MACRO
+  ADDRESSOFINDZEROPAGE_M
+  ;master 128 paged ram version
+  ;OUT:r0 =address
+  ;CMP rpc,#&3000
+  ;ADDGE pc,pc,#ADDRESSOFZEROPAGE_LEN+(4*4)-4 ;4*4 (-4)
+
+  ;rpc < &3000
+  ;ADDRESSOFZEROPAGE r2
+  ADDRESSOFZEROPAGE_M r2
+  LDRB r1,[r12,r2] ;lo
+  ADD r2,r2,#1
+  LDRB r0,[r12,r2] ;hi
+
+  ;MOV r0,r2
+  ;READMEMM ;r0
+  ;MOV r1,r0
+  ;ADD r0,r2,#1
+  ;READMEMM ;r0
+
+  ;ADD pc,pc,#ADDRESSOFZEROPAGE_LEN+(READMEMM_LEN*2)+(3*4)-4 ;13*4 (-4)
+
+  ;rpc >= &3000
+  ;ADDRESSOFZEROPAGE r2
+  ;;LDRB r1,[r12,r0] ;lo
+  ;MOV r0,r2
+  ;READMEMM ;r0
+  ;MOV r1,r0
+  ;;ADD r0,r0,#1
+  ;ADD r0,r2,#1
+  ;;LDRB r2,[r12,r0] ;hi
+  ;;CPU_CYCLES x
+  ;READMEMM
+
+  ;continue
+  ADD r0,r1,r0,LSL#8
+  MEND
+
+  MACRO
+  ADDRESSOFZEROPAGEX
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BASE r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r3=x
+  ADD r0,r0,rx
+  AND r0,r0,#&FF
+  MEND
+
+  MACRO
+  ADDRESSOFZEROPAGEX_BP
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BP r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r3=x
+  ADD r0,r0,rx
+  AND r0,r0,#&FF
+  MEND
+
+  MACRO
+  ADDRESSOFZEROPAGEX_M
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_M r0
+  ;LDR r11,=r6502_x
+  ;LDRB rx,[r11] ;r3=x
+  ADD r0,r0,rx
+  AND r0,r0,#&FF
+  MEND
+
+  MACRO
+  ADDRESSOFZEROPAGEY
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BASE r0
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ADD r0,r0,ry
+  AND r0,r0,#&FF
+  MEND
+
+  MACRO
+  ADDRESSOFZEROPAGEY_BP
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BP r0
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ADD r0,r0,ry
+  AND r0,r0,#&FF
+  MEND
+
+  MACRO
+  ADDRESSOFZEROPAGEY_M
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_M r0
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ADD r0,r0,ry
+  AND r0,r0,#&FF
+  MEND
+
+  MACRO
+  ADDRESSOFINDIRECT
+  ;OUT:r0 =address
+  ADDRESSOFABSOLUTE_B_BASE ;r0
+  ;ADD r10,r12,r0 ;memory+r0
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0 ;memory+r0
+  LDRB r1,[r12,r0] ;hi
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  MEND
+
+  MACRO
+  ADDRESSOFPREINDEXED_B ;(IND,X)
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGEX ;r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  CPU_CYCLES 4
+  MEND
+
+  MACRO
+  ADDRESSOFPREINDEXED_BP ;(IND,X)
+  ;B+ paged ram version
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGEX_BP ;r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  CMP rpc,#&3000
+  ADDGE pc,pc,#(7*4)-4 ;7*4 (-4)
+
+  ;rpc < &3000
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+  ADD pc,pc,#(READMEMBP_LEN*2)+(7*4)-4 ;13*4 (-4)
+
+  ;rpc >= &3000
+  MOV r3,r0
+  READMEMBP ;r0
+  MOV r2,r0 ;lo
+  ADD r1,r3,#1 ;r1 = (r3+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r3,#&FF00
+  ORR r0,r0,r1
+  READMEMBP ;r0
+  MOV r1,r0 ;hi
+
+  ;continue
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  CPU_CYCLES 4
+  MEND
+
+  MACRO
+  ADDRESSOFPREINDEXED_M ;(IND,X)
+  ;master 128 paged ram version
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGEX_M ;;; ;r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  CMP rpc,#&3000
+  ADDGE pc,pc,#(7*4)-4 ;7*4 (-4)
+
+  ;rpc < &3000
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+  ADD pc,pc,#(READMEMM_LEN*2)+(7*4)-4 ;13*4 (-4)
+
+  ;rpc >= &3000
+  MOV r3,r0
+  READMEMM ;r0
+  MOV r2,r0 ;lo
+  ADD r1,r3,#1 ;r1 = (r3+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r3,#&FF00
+  ORR r0,r0,r1
+  READMEMM ;r0
+  MOV r1,r0 ;hi
+
+  ;continue
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  CPU_CYCLES 4
+  MEND
+
+  MACRO
+  ADDRESSOFPOSTINDEXEDY_B ;(IND),Y
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BASE r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ADD r0,r0,ry
+
+  MOV r2,r0,LSR#8 ;r2=(r0>>8)
+  CMP r2,r1 ;if (r2<>hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11]
+  SUBEQ rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  SUBNE rcycles,rcycles,#4 ;r6502_cyclestogo -= 4
+  MEND
+
+  MACRO
+  ADDRESSOFPOSTINDEXEDY_BP ;(IND),Y
+  ;B+ paged ram version
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BASE r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  CMP rpc,#&3000
+  ADDGE pc,pc,#(7*4)-4 ;7*4 (-4)
+
+  ;rpc < &3000
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+  ;ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ;ADD r0,r0,ry
+  ADD pc,pc,#(READMEMBP_LEN*2)+(7*4)-4 ;7*4 (-4)
+
+  ;rpc >= &3000
+  MOV r3,r0
+  READMEMBP ;r0
+  MOV r2,r0 ;lo
+  ADD r1,r3,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r3,#&FF00
+  ORR r0,r0,r1
+  READMEMBP ;r0
+  MOV r1,r0
+
+  ;continue
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ADD r0,r0,ry
+  MOV r2,r0,LSR#8 ;r2=(r0>>8)
+  CMP r2,r1 ;if (r2<>hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11]
+  SUBEQ rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  SUBNE rcycles,rcycles,#4 ;r6502_cyclestogo -= 4
+  MEND
+
+  MACRO
+  ADDRESSOFPOSTINDEXEDY_M ;(IND),Y
+  ;master 128 paged ram version
+  ;OUT:r0 =address
+  ;;ADDRESSOFZEROPAGE_BASE r0 ;28/10/2020
+  ADDRESSOFZEROPAGE_M r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  CMP rpc,#&3000
+  ADDGE pc,pc,#(7*4)-4 ;7*4 (-4)
+
+  ;rpc < &3000
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+
+  ;ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ;ADD r0,r0,ry
+  ADD pc,pc,#(READMEMM_LEN*2)+(7*4)-4 ;7*4 (-4)
+
+  ;rpc >= &3000
+  MOV r3,r0
+  READMEMM ;r0
+  MOV r2,r0 ;lo
+  ADD r1,r3,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r3,#&FF00
+  ORR r0,r0,r1
+  READMEMM ;r0
+  MOV r1,r0
+
+  ;continue
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ADD r0,r0,ry
+  MOV r2,r0,LSR#8 ;r2=(r0>>8)
+  CMP r2,r1 ;if (r2<>hi)
+  ;LDRNE r11,=r6502_cyclestogo
+  ;LDRNE r3,[r11] ;r6502_cyclestogo
+  ;SUBNE r2,r2,r1 ;r3=(r3-hi)
+  ;SUBNE r3,r3,r2 ;r6502_cyclestogo -= r3
+  ;STRNE r3,[r11]
+  SUBEQ rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
+  SUBNE rcycles,rcycles,#4 ;r6502_cyclestogo -= 4
+  MEND
+
+  MACRO
+  ADDRESSOFPOSTINDEXEDY_STA ;(IND),Y
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BASE r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ADD r0,r0,ry
+  CPU_CYCLES 4
+  MEND
+
+  MACRO
+  ADDRESSOFPOSTINDEXEDY_STA_BP ;(IND),Y
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_BP r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ADD r0,r0,ry
+  CPU_CYCLES 4
+  MEND
+
+  MACRO
+  ADDRESSOFPOSTINDEXEDY_STA_M ;(IND),Y
+  ;OUT:r0 =address
+  ADDRESSOFZEROPAGE_M r0
+  ;ADD r10,r12,r0 ;memory+r0
+  ;LDRB r2,[r10] ;lo
+  LDRB r2,[r12,r0] ;lo
+  ADD r1,r0,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r0,#&FF00
+  ORR r0,r0,r1
+  ;ADD r10,r12,r0
+  ;LDRB r1,[r10] ;hi
+  LDRB r1,[r12,r0] ;hi
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ;LDR r11,=r6502_y
+  ;LDRB ry,[r11] ;r3=y
+  ADD r0,r0,ry
+  CPU_CYCLES 4
+  MEND
+
+  ;MACRO
+  ;VALUEOFABSOLUTE
+  ;;OUT:r0 =value
+  ;ADDRESSOFABSOLUTE_BASE ;r0
+  ;;BL r6502readmem ;r0
+  ;READMEM
+  ;MEND
+
+  ;MACRO
+  ;VALUEOFABSOLUTE_B
+  ;;OUT:r0 =value
+  ;ADDRESSOFABSOLUTE_BASE ;r0
+  ;READMEMB
+  ;MEND
+
+  ;MACRO
+  ;VALUEOFABSOLUTE_W
+  ;;OUT:r0 =value
+  ;ADDRESSOFABSOLUTE_W_BASE ;r0
+  ;READMEM
+  ;MEND
+
+  ;MACRO
+  ;VALUEOFABSOLUTEXPLUS
+  ;;OUT:r0 =value
+  ;ADDRESSOFABSOLUTEXPLUS ;r0
+  ;READMEM
+  ;MEND
+
+  ;MACRO
+  ;VALUEOFABSOLUTEYPLUS
+  ;;OUT:r0 =value
+  ;ADDRESSOFABSOLUTEYPLUS ;r0
+  ;;BL r6502readmem ;r0
+  ;READMEM
+  ;MEND
+
+  MACRO
+  VALUEOFIMMEDIATE_B $n
+  ;OUT:$n=value
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11] ;rpc=pc
+  LDRB $n,[r12,rpc] ;lo
+  ADD rpc,rpc,#1 ;pc+=1
+  ;ANDS r1,rpc,#&10000
+  ;MOVNE r1,#&FF00
+  ;ORRNE r1,r1,#&00FF
+  ;ANDNE rpc,rpc,r1
+  ;STR rpc,[r11]
+  MEND
+
+  MACRO
+  VALUEOFIMMEDIATE_BP $n
+  ;B+ paged ram version
+  ;OUT:$n=value
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11] ;rpc=pc
+  CMP rpc,#&3000
+  ADDGE pc,pc,#4 ;2*4 (-4)
+
+  ;rpc < &3000
+  LDRB $n,[r12,rpc] ;lo
+  ADD pc,pc,#READMEMBP_LEN+(2*4)-4 ;12*4 (-4)
+
+  ;rpc >= &3000
+  MOV r0,rpc
+  READMEMBP
+  MOV $n,r0
+  ;LDRB $n,[r12,rpc] ;lo
+
+  ;continue
+  ADD rpc,rpc,#1 ;pc+=1
+  ;ANDS r1,rpc,#&10000
+  ;MOVNE r1,#&FF00
+  ;ORRNE r1,r1,#&00FF
+  ;ANDNE rpc,rpc,r1
+  ;STR rpc,[r11]
+  MEND
+
+  MACRO
+  VALUEOFIMMEDIATE_M $n
+  ;master 128 paged ram version
+  ;OUT:$n=value
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11] ;rpc=pc
+  CMP rpc,#&3000
+  ADDGE pc,pc,#4 ;2*4 (-4)
+
+  ;rpc < &3000
+  LDRB $n,[r12,rpc] ;lo
+  ADD pc,pc,#READMEMM_LEN+(2*4)-4 ;12*4 (-4)
+
+  ;rpc >= &3000
+  MOV r0,rpc
+  READMEMM
+  MOV $n,r0
+  ;LDRB $n,[r12,rpc] ;lo
+
+  ;continue
+  ADD rpc,rpc,#1 ;pc+=1
+  ;ANDS r1,rpc,#&10000
+  ;MOVNE r1,#&FF00
+  ;ORRNE r1,r1,#&00FF
+  ;ANDNE rpc,rpc,r1
+  ;STR rpc,[r11]
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGE_BASE
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGE_BASE r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGE_BP
+  ;B+ paged ram version
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGE_BP r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGE_M
+  ;master 128 paged ram version
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGE_M r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  ;ADD r0,r12,r0
+  ;READMEMM
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGEX
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGEX ;r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGEX_BP
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGEX_BP ;r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGEX_M
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGEX_M ;r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGEY
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGEY ;r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGEY_BP
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGEY_BP ;r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  MEND
+
+  MACRO
+  VALUEOFZEROPAGEY_M
+  ;OUT:r0 =value
+  ADDRESSOFZEROPAGEY_M ;r0
+  ADD r11,r12,r0 ;r11=memory+r0 (offset)
+  LDRB r0,[r11] ;r0
+  MEND
+
+  ;MACRO
+  ;VALUEOFPREINDEXED
+  ;;OUT:r0 =value
+  ;ADDRESSOFPREINDEXED ;r0
+  ;;BL r6502readmem ;r0
+  ;READMEM
+  ;MEND
+
+  ;MACRO
+  ;VALUEOFPOSTINDEXEDY
+  ;;OUT:r0=value
+  ;ADDRESSOFPOSTINDEXEDY ;r0
+  ;;BL r6502readmem ;r0
+  ;READMEM
+  ;MEND
+
+  END

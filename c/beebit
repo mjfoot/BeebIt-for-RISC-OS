@@ -1,0 +1,1146 @@
+/*>beebit.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#include <stdio.h>
+#include <string.h>
+/*#include <time.h>*/
+#include "1770fdc.h"
+#include "6502cpu.h"
+#include "6522sysvia.h"
+#include "6522usrvia.h"
+#include "6845crtc.h"
+#include "6850acia.h"
+#include "76489sound.h"
+#include "8271fdc.h"
+#include "adc.h"
+#include "beebit.h"
+#include "kernel.h"
+#include "keyboard.h"
+#include "main.h"
+#include "riscos.h"
+#include "sheila.h"
+#include "swis.h"
+#include "video.h"
+#include "videoula.h"
+
+#define OS_Sprite 0x2E
+#define ZeriBeep_Attach 0x55E40
+#define ZeriBeep_Detach 0x55E41
+
+/*extern int r6502_cyclecount;*/
+
+/*#define NEXT_TIME CLK_TCK/25;*/ /*25 times per second*/
+
+/*extern char (*r6502read)(int naddress);*/
+/*extern void (*r6502write)(int naddress, char nvalue);*/
+
+extern _kernel_swi_regs regs;
+
+/*void (*zeribeep_writebyte)(void);
+int zeribeep_workspace;*/
+
+char memory[0x10000]; /*65536 bytes*/
+char shadow[0x10000]; /*65536 bytes*/
+/*shadow replaces lynne,hazel and andy for speed*/
+/*char lynne[0x5000];*/ /*20480 bytes*/
+/*char hazel[0x2000];*/ /*8192 bytes*/
+/*char andy[0x1000];*/ /*4096 bytes*/
+char roms[16][0x4000];
+
+/*char *shadow;*/ /*pointer to 65536 bytes*/
+
+int beebit_trace;
+char beebit_osrom[MACHINE_COMPACT+1][128];
+int beebit_romwritable[16];
+int beebit_romwrite[(MACHINE_COMPACT*16)+16];
+char beebit_romimage[(MACHINE_COMPACT*16)+16][128];
+char beebit_rompath[128];
+char beebit_keylayout[128];
+char beebit_discimage[4][128];
+int beebit_sectorcount[4];
+int beebit_imagetype[4];
+int beebit_discwritable[2];
+FILE *beebit_driveimage[4]; /*file handles*/
+char beebit_uefimage[128];
+FILE *beebit_tapeimage; /*file handles*/
+
+char beebit_cmosdefault[0x40] = {0,0,0,0,0,0xC9,0xFF,0xFE,0x32,0,7,0xC1,0x1E,5,0,0x58,0xA2}; /*default CMOS RAM values*/
+char beebit_cmos[0x40];
+
+int beebit_graphicsmode; /*can mode 12,15 or 21 be used for graphics?*/
+int beebit_teletextmode; /*can teletext use mode 7 or 15?*/
+int beebit_currenttype;
+int beebit_machinetype;
+int beebit_cpuspeed;
+int beebit_videospeed;
+int beebit_framerate;
+int beebit_mouseemulation;
+int beebit_displaymode;
+int beebit_sound;
+int beebit_cursor;
+int beebit_fasttape;
+int beebit_printer;
+int beebit_links; /*keyboard links*/
+int beebit_button1; /*joystick button 1*/
+int beebit_button2; /*joystick button 2*/
+int beebit_romsel; /*ROMSELect*/
+int beebit_acccon; /*ACCCON*/
+int beebit_vdusel; /*VDUSEL (0x80) for B+, D (0x01) for Master 128*/
+int beebit_romselected;
+int beebit_rommodified;
+int beebit_leds,host_leds;
+int beebit_rommask;
+
+int beebit_irq, beebit_nmi, beebit_oldnmi;
+int lexit, lbreak, lprintscreen;
+/*int irqinterrupt, nmiinterrupt, noldnmi;*/
+/*int ncounterstart;*/
+/*clock_t nclock;*/
+
+#ifdef __DEVELOP__
+  FILE *htrace;
+#else
+  #ifdef __DEBUG__
+    FILE *htrace;
+  #endif
+#endif
+
+void pageinrom(int nrom, int lmosram)
+{
+  #ifdef __DEBUG__
+    fprintf(htrace,"paging in ROM %u",nrom);
+  #endif
+
+  /*bbcvdu(82);
+  bbcvdu(79);
+  bbcvdu(77);
+  bbcvdu(32);
+  inttohex4(nrom);
+  bbcvdu(32);
+  inttohex4(lmosram);
+  bbcvdu(32);*/
+
+  /*if (beebit_romselected != nrom)
+  {*/
+    if (beebit_rommodified)
+      memcpy(roms[beebit_romselected],&memory[0x8000],0x4000);
+    beebit_rommodified = FALSE;
+    if (lmosram)
+      /*&C000 - &CFFF is RAM */
+      /*copy &D000 - &FFFF only*/
+      memcpy(&memory[0x9000],roms[nrom]+0x1000,0x3000);
+    else
+      memcpy(&memory[0x8000],roms[nrom],0x4000);
+
+    beebit_romselected = nrom;
+    /*inttohex4(memory[0x8000]);
+    bbcvdu(32);
+    inttohex4(memory[0x8001]);
+    bbcvdu(32);
+    inttohex4(memory[0x8002]);
+    bbcvdu(32);
+    inttohex4(memory[0x8003]);
+    bbcvdu(10);
+    bbcvdu(13);*/
+
+    #ifdef __DEBUG__
+      fprintf(htrace,"done %X %X %X ",memory[0x8000],memory[0x8001],memory[0x8002]);
+      fprintf(htrace,"%s ",&memory[0x8009]);
+    #endif
+  /*}*/
+}
+
+int loadrom(char *cfilename,int nslot)
+{
+  char cname[256] ="BeebItInternalRom:";
+  char setname[256] ="SET BeebItInternalRom$Path ";
+  FILE *hfile;
+  int nlen, lreturn, nfilesize;
+
+  strcat(setname,beebit_rompath);
+  nlen = strlen(setname);
+  if (setname[nlen-1] != 0x2E AND setname[nlen-1] != 0x3A) /*. or :*/
+    strcat(setname,".");
+  _kernel_oscli(setname);
+  strcat(cname,cfilename);
+
+  lreturn = TRUE;
+
+  hfile = fopen(cname,"rb");
+  if (hfile == NULL)
+  {
+    lreturn = FALSE;
+  }
+  else
+  {
+    if (nslot == -1)
+    {
+      nfilesize = fread(&memory[0xC000],1,0x4000,hfile);
+      if (nfilesize > 0x4000)
+      {
+        lreturn = FALSE;
+      }
+    }
+    else
+    {
+      nfilesize = fread(&roms[nslot],1,0x4000,hfile);
+      if (nfilesize > 0x4000)
+      {
+        lreturn = FALSE;
+      }
+    }
+  }
+  fclose(hfile);
+  return (lreturn);
+}
+
+void updatetimers(void)
+{
+  int n1mhzcycles;
+  /*fprintf(htrace,"UPDATE TIMERS &%X &%X\n",r6502_cyclesoriginal,r6502_cyclestogo);*/
+  if (r6502_cyclesstored == 0)
+    r6502_cyclesexpired = (r6502_cyclesoriginal-r6502_cyclestogo); /*+r6502_cycle;*/
+  else
+  {
+    r6502_cyclesexpired = (r6502_cyclesoriginal-r6502_cyclesstored);
+    r6502_cyclesexpired += (2-r6502_cyclestogo);
+    r6502_cyclesstored = 0;
+  }
+  /*r6502_cyclesexpired -= r6502_cycle;*/ /*even cycles only*/
+  /*fprintf(htrace,"expired=&%X\n",r6502_cyclesexpired);*/
+  /*r6502_cyclecount += r6502_cyclesexpired;*/
+  if (r6502_cyclesexpired > 0)
+  {
+    r6502_cyclesmonotonic += r6502_cyclesexpired;
+    /*convert to 1MHz cycles*/
+    n1mhzcycles = (r6502_cyclesexpired >> 1);
+    if (r6502_cyclesexpired & 1)
+    {
+      /*add in the extra tick because r6502_cycle = 1 2MHz cycle*/
+      /*n1mhzcycles += r6502_cycle;
+      r6502_cycle |= 1;*/
+
+      if (r6502_cycle == 0)
+        /*store the extra tick*/
+        r6502_cycle = 1;
+      else
+      {
+        /*add in the extra tick because r6502_cycle+1 = 1 2MHz cycle*/
+        n1mhzcycles++;
+        r6502_cycle = 0;
+      }
+    }
+    systemviasett1t2(n1mhzcycles);
+    userviasett1t2(n1mhzcycles); /*also amx_timer*/
+
+    video_timer -= r6502_cyclesexpired;
+  /*fprintf(htrace,"video_timer=&%X ncycles=&%X\n",video_timer,ncycles);*/
+    if (i8271_timer > 0)
+    {
+      i8271_timer -= n1mhzcycles; /*r6502_cyclesexpired;*/
+      if (i8271_timer == 0)
+        i8271_timer = -1;
+    }
+    if (w1770_timer > 0)
+    {
+      w1770_timer -= n1mhzcycles;
+      if (w1770_timer == 0)
+        w1770_timer = -1;
+    }
+    if (adc_timer > 0)
+    {
+      adc_timer -= n1mhzcycles; /*r6502_cyclesexpired;*/
+      if (adc_timer == 0)
+        adc_timer = -1;
+    }
+    if (m6850_timer > 0)
+    {
+      m6850_timer -= n1mhzcycles;
+      if (m6850_timer == 0)
+        m6850_timer = -1;
+    }
+  }
+  r6502_cyclestogo = 0;
+  r6502_cyclesoriginal = 0;
+}
+
+/*void updatekeyboard(void)
+{*/
+  /*if (r6502_cyclestogo>0)
+  {
+    r6502_cyclesoriginal -= r6502_cyclestogo;
+    r6502_cyclestogo = 0;
+  }*/
+/*}*/
+
+void beebitreset(void)
+{
+  /*char cname[128];*/
+  /*int nlen;*/
+  /*lexit = (!loadrom("<BeebIt$Dir>.ROMs.OS",-1));*/
+  /*strcpy(cname,beebit_rompath);*/
+  /*strcat(cname,".OS");*/
+  /*nlen = strlen(cname);
+  if (cname[nlen-1] != 0x2E AND cname[nlen-1] != 0x3A)*/ /*. or :*/
+    /*strcat(cname,".");*/
+  /*strcat(cname,beebit_osrom[beebit_machinetype]);*/
+  /*lexit = (!loadrom(cname,-1));*/
+  lexit = (!loadrom(beebit_osrom[beebit_machinetype],-1));
+  if (lexit)
+    wimperror("Unable to load Operating System ROM");
+  else
+  {
+    beebit_romsel = 0;
+    beebit_acccon = 0;
+    /*bit flag for shadow memory*/
+    switch (beebit_machinetype)
+    {
+      case MACHINE_MODELB:
+        beebit_vdusel = 0x00;
+        break;
+      case MACHINE_MODELBPLUS:
+        beebit_vdusel = 0x80;
+        break;
+      case MACHINE_MASTER128:
+      case MACHINE_COMPACT:
+        beebit_vdusel = 0x01;
+        break;
+    }
+    lbreak = FALSE;
+    beebit_rommask = 0xFFFFFF;
+    beebit_romselected = -1;
+    beebit_rommodified = FALSE;
+    /*this is used when updating the via timers*/
+    /*ncounterstart = 0;*/
+    /*r6502_cyclestotal = 0;*/
+    r6502_cycle = 0;
+    beebit_button1 = 0;
+    beebit_button2 = 0;
+
+    beebit_sectorcount[0] = 0;
+    beebit_sectorcount[1] = 0;
+    beebit_sectorcount[2] = 0;
+    beebit_sectorcount[3] = 0;
+    beebit_imagetype[0] = DFS_NONE;
+    beebit_imagetype[1] = DFS_NONE;
+    beebit_imagetype[2] = DFS_NONE;
+    beebit_imagetype[3] = DFS_NONE;
+
+    beebit_nmi = beebit_oldnmi = FALSE;
+    aciareset();
+    adcreset();
+    videoulareset(TRUE);
+    crtcreset();
+    keyboardreset();
+    sheilareset();
+    systemviareset(TRUE);
+    userviareset(TRUE);
+    videoreset(TRUE);
+    soundreset();
+    i8271reset();
+    w1770reset();
+    switch (beebit_machinetype)
+    {
+      case MACHINE_MODELB:
+      case MACHINE_MODELBPLUS:
+        r6502reset(TRUE);
+        break;
+      case MACHINE_MASTER128:
+      case MACHINE_COMPACT:
+        r65c12reset(TRUE);
+        break;
+    }
+
+    /*if (lteletextmode)
+    {
+      bbcvdu(22);
+      bbcvdu(7);
+    }*/
+
+    /*don't clear memory on reset*/
+    /*memory[0x258]=0;
+    memory[0x287]=0;
+    writesheila(0xFE4E,0xF2);*/
+
+    /*nclock = clock()+NEXT_TIME;*/
+    beebit_currenttype = beebit_machinetype;
+  }
+}
+
+int beebitsectorcount(FILE *hfile)
+{
+  int nb6, nb7;
+  if (hfile != NULL)
+  {
+    /*track=0, sector=1*/
+    i8271readimage(hfile, 0x100, DFS_SECTOR_SIZE);
+    nb6 = (i8271_data[6] & 0x0F);
+    nb7 = i8271_data[7];
+    return ((nb6<<8)+nb7);
+  }
+  else
+    return (0);
+}
+
+int beebitimagetype(FILE *hfile, int nsectorcount)
+{
+  char nb6, nb7;
+  int nsize, nlocation, nresult;
+  long nlen;
+  if (hfile != NULL)
+  {
+    /*check for ADFS images*/
+    i8271readimage(hfile, 0x00, ADFS_SECTOR_SIZE);
+    nsize = (i8271_data[0xFC] << 16) + (i8271_data[0xFD] << 8) + i8271_data[0xFE];
+    if (nsize == 0x500)
+      /*ADFS M*/
+      nresult = ADFS_NON_INTERLEAVED;
+    else if (nsize == 0xA00)
+      /*ADFS L*/
+      nresult = ADFS_INTERLEAVED;
+    else
+    {
+      /*check for DSD image*/
+      /*find length of image file*/
+      nlocation = (nsectorcount*DFS_SECTOR_SIZE);
+      fseek(hfile,0,SEEK_END);
+      nlen = ftell(hfile);
+      /*if length <= descriptor length*/
+      /*if (nlen <= nlocation)*/
+        /*it's a single sided image*/
+        /*nresult = DFS_SSD;
+      else
+      {*/
+        /*track=1, sector=1*/
+        if (nlen > 0xB00)
+        {
+          i8271readimage(hfile, 0xB00, DFS_SECTOR_SIZE);
+          nb6 = (i8271_data[6] & 0x0F);
+          nb7 = i8271_data[7];
+          if (((nb6<<8)+nb7) == nsectorcount)
+            /*it's a double sided disc, track interleaved*/
+            nresult = DFS_DSD_TRACK;
+          else
+          {
+            nlocation = (nsectorcount+1)*DFS_SECTOR_SIZE;
+            if (nlocation < nlen)
+            {
+              i8271readimage(hfile, nlocation, DFS_SECTOR_SIZE);
+              if ((i8271_data[6] & 0x0F) == nb6 AND i8271_data[7] == nb7)
+                nresult = DFS_DSD_SIDE;
+              else
+                nresult = DFS_SSD;
+            }
+            else
+              nresult = DFS_SSD;
+          }
+        }
+        else
+          nresult = DFS_SSD;
+      /*}*/
+    }
+  }
+  else
+    nresult = DFS_NONE;
+
+  /*inttohex4(nresult);
+  bbcvdu(13);
+  bbcvdu(10);*/
+  return (nresult);
+}
+
+void beebitinit(void)
+{
+  /*FILE *hh1;
+  char cbuffer[128];*/
+  /*shadow memory pointer*/
+  /*shadow = memory+0x10000;*/
+
+  /*shadow[0] = 0x12;
+  shadow[1] = 0x34;
+  shadow[2] = 0x43;
+
+  hh1 = fopen("SHAD","wb");
+  fwrite(memory,1,0x20000,hh1);
+  fclose(hh1);*/
+
+  beebit_trace = FALSE;
+  /*get keyboard status*/
+  regs.r[0] = 202;
+  regs.r[1] = 0;
+  regs.r[2] = 255;
+  _kernel_swi(OS_Byte,&regs,&regs);
+  /*set caps lock on*/
+  beebit_leds = (regs.r[1] & 0xEF);
+  /*set up default configuration*/
+  beebit_machinetype = beebit_currenttype = -1;
+  beebit_sound = TRUE;
+  beebit_cursor = TRUE;
+  beebit_fasttape = FALSE;
+  beebit_links = 0;
+  beebit_videospeed = VIDEO_SLOW;
+  beebit_framerate = VIDEO_50FPS;
+
+  beebit_discimage[0][0] = 0x00;
+  beebit_discimage[1][0] = 0x00;
+  beebit_discimage[2][0] = 0x00;
+  beebit_discimage[3][0] = 0x00;
+
+  videoinit();
+
+  #ifdef __DEVELOP__
+    htrace = fopen("<BeebIt$Dir>.!TRACE","w");
+  #else
+    #ifdef __DEBUG__
+      htrace = fopen("<BeebIt$Dir>.!TRACE","w");
+    #endif
+  #endif
+}
+
+int beebitmain(void)
+{
+  char /*cbuffer[128],*/cname[128];
+  char cmodeblock[28];
+  char choicedir[]="<Choices$Write>.BeebIt";
+  /*char *n;*/
+  /*int nicon[0x10] = {49,46,43,40,37,34,31,28,25,22,19,16,13,10,7,4};*/
+  int i, lredraw, nmask, nindex;
+  FILE *hfile;
+
+  lexit = FALSE;
+  lredraw = TRUE;
+  adcenter();
+
+  if (beebit_machinetype != beebit_currenttype)
+    beebitreset();
+
+  if (lexit)
+    lredraw = FALSE;
+  else
+  {
+    /*configuration*/
+    for (i=0x0F;i>=0x00;i--)
+    {
+      /*set up ROM writable flags*/
+      beebit_romwritable[i] = beebit_romwrite[(beebit_machinetype*16)+i];
+      /*n = readicon(hconfig,nicon[i]);
+      strcpy(cbuffer,n);
+      if (strlen(cbuffer) > 1)*/
+      nmask = (1 << (i+1));
+      if ((beebit_rommask & nmask) == nmask)
+      {
+        nindex = (beebit_machinetype*16)+i;
+        if (strlen(beebit_romimage[nindex]) > 1)
+        {
+          /*strcpy(cname,beebit_rompath);*/
+          /*nlen = strlen(cname);
+          if (cname[nlen-1] != 0x2E AND cname[nlen-1] != 0x3A)*/ /*. or :*/
+            /*strcat(cname,".");*/
+          /*strcat(cname,beebit_romimage[nindex]);*/
+          /*if (!loadrom(cname,i))*/
+          if (!loadrom(beebit_romimage[nindex],i))
+          {
+            strcpy(cname,"Unable to load ROM ");
+            /*strcat(cname,cbuffer);*/
+            strcat(cname,beebit_romimage[nindex]);
+            wimperror(cname);
+          }
+        }
+        else
+        {
+          /*if (!beebit_romwritable[i])
+          {*/
+            /*clear the contents of the ROM*/
+            setword(roms[i],0);
+            setword(roms[i]+4,0);
+            setword(roms[i]+8,0);
+            setword(roms[i]+12,0);
+          /*}*/
+        }
+      }
+    }
+    beebit_rommask = 0;
+    /*disc images*/
+    for (i=0;i<=3;i++)
+    {
+      if (strlen(beebit_discimage[i]) > 1)
+      {
+        beebit_driveimage[i] = fopen(beebit_discimage[i],"rb+");
+        if (beebit_driveimage[i] == NULL)
+        {
+          beebit_sectorcount[i] = 0;
+          beebit_imagetype[i] = DFS_NONE;
+        }
+        else
+        {
+          beebit_sectorcount[i] = beebitsectorcount(beebit_driveimage[i]);
+          beebit_imagetype[i] = beebitimagetype(beebit_driveimage[i],beebit_sectorcount[i]);
+        }
+      }
+      else
+        beebit_driveimage[i] = 0;
+    }
+    if (beebit_imagetype[0] == DFS_DSD_TRACK OR beebit_imagetype[0] == DFS_DSD_SIDE OR beebit_imagetype[0] == ADFS_INTERLEAVED)
+      beebit_imagetype[2] = beebit_imagetype[0];
+    if (beebit_imagetype[1] == DFS_DSD_TRACK OR beebit_imagetype[1] == DFS_DSD_SIDE OR beebit_imagetype[0] == ADFS_INTERLEAVED)
+      beebit_imagetype[3] = beebit_imagetype[1];
+
+    uefopen(); /*reset pointer*/
+
+    keyboardreset();
+    keyboardsetlinks();
+
+    switch (beebit_machinetype)
+    {
+      case MACHINE_MODELB:
+        r6502read = r6502readb;
+        r6502write = r6502writeb;
+        cpu_execute = r6502execute;
+        break;
+      case MACHINE_MODELBPLUS:
+        r6502read = r6502readbp;
+        r6502write = r6502writebp;
+        cpu_execute = r6512execute;
+        break;
+      case MACHINE_MASTER128:
+      case MACHINE_COMPACT:
+        r6502read = r6502readm;
+        r6502write = r6502writem;
+        cpu_execute = r65c12execute;
+        if (beebit_machinetype == MACHINE_MASTER128)
+        {
+          /*new location*/
+          hfile = fopen("Choices:BeebIt.CMOSM","rb");
+          if (hfile == NULL)
+            /*old location*/
+            hfile = fopen("<BeebIt$Dir>.CMOSM","rb");
+        }
+        else
+        {
+          /*new location*/
+          hfile = fopen("Choices:BeebIt.CMOSC","rb");
+          if (hfile == NULL)
+            /*old location*/
+          hfile = fopen("<BeebIt$Dir>.CMOSC","rb");
+        }
+        if (hfile == NULL)
+          memcpy(beebit_cmos,beebit_cmosdefault,0x40);
+        else
+        {
+          fread(beebit_cmos,1,0x40,hfile);
+          fclose(hfile);
+        }
+        break;
+      default:
+        r6502read = r6502readb;
+        r6502write = r6502writeb;
+        break;
+    }
+
+    /*t76489initialise();*/ /*sound*/
+    /*_kernel_swi(0x4E0C0,&regs,&regs);*/
+    /*_kernel_oscli("BeebSoundInitialise");*/
+    /*_kernel_swi(ZeriBeep_Attach,&regs,&regs);
+    zeribeep_writebyte = regs.r[0];
+    zeribeep_workspace = regs.r[1];*/
+    zeribeepattach();
+
+    /*set keyboard status*/
+    regs.r[0] = 202;
+    regs.r[1] = beebit_leds;
+    regs.r[2] = 0;
+    _kernel_swi(OS_Byte,&regs,&regs);
+    /*save current status*/
+    host_leds = regs.r[1];
+    regs.r[0] = 118;
+    _kernel_swi(OS_Byte,&regs,&regs);
+
+    /*disable <Break>*/
+    breakdisable();
+    /*disable <Escape>*/
+    escapedisable();
+
+    /*work out the best video mode to use*/
+    /*hh1 = fopen("<BeebIt$Dir>.Trace","w");*/
+
+    switch (beebit_displaymode)
+    {
+      case DISPLAY_MODE_LOW:
+        beebit_graphicsmode = 12;
+        /*check to see if we can use 16 colour mode 7*/
+        regs.r[0] = 7;
+        regs.r[1] = 3;
+        _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+        if (regs.r[2] == 15)
+          beebit_teletextmode = 7;
+        else
+          beebit_teletextmode = 15;
+        break;
+      case DISPLAY_MODE_MEDIUM:
+        beebit_graphicsmode = 15;
+        beebit_teletextmode = 15;
+        break;
+      case DISPLAY_MODE_HIGH:
+        beebit_graphicsmode = 21;
+        beebit_teletextmode = 21;
+        break;
+      case DISPLAY_MODE_12801024:
+        beebit_graphicsmode = 12801024;
+        beebit_teletextmode = 12801024;
+        break;
+      case DISPLAY_MODE_16001024:
+        beebit_graphicsmode = 16001024;
+        beebit_teletextmode = 16001024;
+        break;
+      case DISPLAY_MODE_AUTO:
+        regs.r[0] = 12; /*MODE 12*/
+        _kernel_swi(OS_CheckModeValid,&regs,&regs);
+        if (regs.r[0] == -1)
+        {
+          /*mode cannot be selected*/
+          regs.r[0] = 15; /*MODE 15*/
+          _kernel_swi(OS_CheckModeValid,&regs,&regs);
+          if (regs.r[0] == -1)
+          {
+            /*mode cannot be selected*/
+            regs.r[0] = 21; /*MODE 21*/
+            _kernel_swi(OS_CheckModeValid,&regs,&regs);
+            if (regs.r[0] == -1)
+            {
+              /*mode cannot be selected*/
+              /*1280 x 1024*/
+              setword(cmodeblock, 1);
+              setword(cmodeblock + 4, 1280);
+              setword(cmodeblock + 8, 1024);
+              setword(cmodeblock + 12, 3); /*log2bpp*/
+              setword(cmodeblock + 16, -1);
+              setword(cmodeblock + 20, -1);
+              regs.r[0] = (int)cmodeblock; /*MODE block*/
+              _kernel_swi(OS_CheckModeValid,&regs,&regs);
+              if (regs.r[0] == -1)
+              {
+                /*beebit_graphicsmode = 12801024;
+                beebit_teletextmode = 12801024;*/
+                wimperror("A suitable screen mode cannot be found");
+                lexit = TRUE;
+              }
+              else
+              {
+                beebit_graphicsmode = 12801024;
+                beebit_teletextmode = 12801024;
+              }
+            }
+            else
+            {
+              beebit_graphicsmode = 21;
+              beebit_teletextmode = 21;
+            }
+          }
+          else
+          {
+            beebit_graphicsmode = 15;
+            beebit_teletextmode = 15;
+          }
+        }
+        else
+        {
+          beebit_graphicsmode = 12;
+          /*check to see if we can use 16 colour mode 7*/
+          regs.r[0] = 7;
+          regs.r[1] = 3;
+          _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+          if (regs.r[2] == 15)
+            beebit_teletextmode = 7;
+          else
+            beebit_teletextmode = 15;
+        }
+      break;
+    }
+
+    /*beebit_trace = TRUE;*/
+
+    if (!lexit)
+    {
+      /*beebit_mode12 = FALSE;*/ /*force 256 colour mode*/
+      /*beebit_graphicsmode = 21;
+      beebit_teletextmode = 21;*/
+
+      /*fclose(hh1);*/
+
+      videosetplot();
+
+      if (video_mode != -1)
+      {
+        switch (video_mode)
+        {
+          case 7:
+            switch (beebit_teletextmode)
+            {
+              case 12801024:
+                /*1280 x 1024*/
+                setword(cmodeblock, 1);
+                setword(cmodeblock + 4, 1280);
+                setword(cmodeblock + 8, 1024);
+                setword(cmodeblock + 12, 3); /*log2bpp*/
+                setword(cmodeblock + 16, -1);
+                setword(cmodeblock + 20, -1);
+                regs.r[0] = 0;
+                regs.r[1] = (int)cmodeblock; /*MODE block*/
+                _kernel_swi(OS_ScreenMode,&regs,&regs);
+                break;
+              case 16001024:
+                /*1600 x 1024*/
+                setword(cmodeblock, 1);
+                setword(cmodeblock + 4, 1600);
+                setword(cmodeblock + 8, 1024);
+                setword(cmodeblock + 12, 3); /*log2bpp*/
+                setword(cmodeblock + 16, -1);
+                setword(cmodeblock + 20, -1);
+                regs.r[0] = 0;
+                regs.r[1] = (int)cmodeblock; /*MODE block*/
+                _kernel_swi(OS_ScreenMode,&regs,&regs);
+                break;
+              default:
+                regs.r[0] = 0;
+                regs.r[1] = beebit_teletextmode;
+                _kernel_swi(OS_ScreenMode,&regs,&regs);
+                /*bbcvdu(22);
+                bbcvdu(beebit_teletextmode);*/
+                break;
+            }
+            break;
+          default:
+            if (beebit_graphicsmode <= 0xFF)
+            {
+              regs.r[0] = 0;
+              regs.r[1] = beebit_graphicsmode;
+              _kernel_swi(OS_ScreenMode,&regs,&regs);
+              /*bbcvdu(22);
+              bbcvdu(beebit_graphicsmode);*/
+            }
+            else
+            {
+              switch (beebit_graphicsmode)
+              {
+                case 12801024:
+                  /*1280 x 1024*/
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1280);
+                  setword(cmodeblock + 8, 1024);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = 0;
+                  regs.r[1] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  break;
+                case 16001024:
+                  /*1600 x 1024*/
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1600);
+                  setword(cmodeblock + 8, 1024);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = 0;
+                  regs.r[1] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  break;
+              }
+            }
+            break;
+        }
+
+        videomodechange();
+        screenstart();
+        cursordisable();
+      }
+    }
+    if (!lexit)
+      keyclaim();
+  }
+
+  if (!lexit)
+  {
+    do
+    {
+      /*find how many cycles are needed until something happens*/
+      /*fprintf(htrace,"r6522sysvia_t1=&%X\n",(r6522sysvia_t1<<1));
+      fprintf(htrace,"r6522sysvia_t2=&%X\n",(r6522sysvia_t1<<1));
+      fprintf(htrace,"r6522usrvia_t1=&%X\n",(r6522sysvia_t1<<1));
+      fprintf(htrace,"r6522usrvia_t2=&%X\n",(r6522sysvia_t1<<1));
+      fprintf(htrace,"video_timer=&%X\n",video_timer);
+      fprintf(htrace,"i8271_timer=&%X\n",i8271_timer);
+      fprintf(htrace,"adc_timer=&%X\n",adc_timer);*/
+      if (r6522sysvia_t1 < r6522sysvia_t2)
+        r6502_cyclestogo = (r6522sysvia_t1 << 1);
+      else
+        r6502_cyclestogo = (r6522sysvia_t2 << 1);
+
+      if (r6522usrvia_t1 < r6522usrvia_t2)
+      {
+        if ((r6522usrvia_t1 << 1) < r6502_cyclestogo)
+          r6502_cyclestogo = (r6522usrvia_t1 << 1);
+      }
+      else
+      {
+        if ((r6522usrvia_t2 << 1) < r6502_cyclestogo)
+          r6502_cyclestogo = (r6522usrvia_t2 << 1);
+      }
+      if (video_timer < r6502_cyclestogo)
+        r6502_cyclestogo = video_timer;
+      if (i8271_timer > 0 AND (i8271_timer << 1) < r6502_cyclestogo)
+        r6502_cyclestogo = (i8271_timer << 1);
+      if (w1770_timer > 0 AND (w1770_timer << 1) < r6502_cyclestogo)
+        r6502_cyclestogo = (w1770_timer << 1);
+      if (adc_timer > 0 AND adc_timer < r6502_cyclestogo)
+        r6502_cyclestogo = adc_timer;
+      if (m6850_timer > 0 AND (m6850_timer << 1) < r6502_cyclestogo)
+        r6502_cyclestogo = m6850_timer;
+      if (beebit_mouseemulation == MOUSE_AMXMOUSE)
+      {
+        if (amx_timer > 0 AND (amx_timer << 1) < r6502_cyclestogo)
+          r6502_cyclestogo = amx_timer;
+      }
+
+      r6502_cyclesoriginal = r6502_cyclestogo;
+
+      cpu_execute();
+
+      updatetimers();
+
+      if (i8271_timer < 0)
+      {
+        i8271_timer = 0;
+        i8271poll();
+      }
+      else if (w1770_timer < 0)
+      {
+        w1770_timer = 0;
+        w1770poll();
+      }
+
+      /*NMI interrupts are only generated on the 6502 when*/
+      /*the signal goes from low to high*/
+      if (beebit_nmi AND !beebit_oldnmi)
+      {
+        beebit_oldnmi = beebit_nmi;
+        /*beebit_nmi = FALSE;*/
+        /*if (beebit_trace)
+          printf("NMI PC=%X, SP=%X\n", r6502_pc, r6502_sp);*/
+        #ifdef __RISCOS__
+          r6502nmi();
+        #else
+          r6502donmi();
+        #endif
+      }
+      else if (!(r6502_ps & 0x04)) /*FLAGI))*/
+      {
+        /*irqinterrupt = (r6522sysvia_irq | r6522usrvia_irq);*/
+        /*if (irqinterrupt AND !r6502_i)*/
+        /*if (r6522sysvia_irq | r6522usrvia_irq)*/
+        /*if (irqinterrupt)*/
+        if (beebit_irq)
+        {
+          /*if (beebit_trace)
+            printf("IRQ PC=%X, SP=%X\n", r6502_pc, r6502_sp);*/
+          #ifdef __RISCOS__
+            r6502irq();
+          #else
+            r6502doirq();
+          #endif
+        }
+      }
+      if (adc_timer < 0)
+      {
+        adc_timer = 0;
+        adcpoll();
+      }
+
+      if (m6850_timer < 0)
+      {
+        aciapoll();
+        m6850_timer += m6850_timerreset;
+      }
+
+      if (video_timer <= 0)
+        videoscanline();
+
+      if (lbreak)
+      {
+        lbreak = FALSE;
+        /*remove low bit*/
+        /*if (r6502_cyclestotal & 1)
+          r6502_cyclestotal--;*/
+        switch (beebit_machinetype)
+        {
+          case MACHINE_MODELB:
+          case MACHINE_MODELBPLUS:
+            r6502reset(FALSE);
+            break;
+          case MACHINE_MASTER128:
+          case MACHINE_COMPACT:
+            r65c12reset(FALSE);
+            break;
+        }
+        beebit_romselected = -1;
+        beebit_rommodified = FALSE;
+        systemviareset(FALSE);
+        userviareset(FALSE);
+        w1770_initialised = FALSE; /*for the B+*/
+        sheilareset();
+        /*videoulareset(FALSE);*/
+        i8271reset();
+        w1770reset();
+        /*set keyboard status*/
+        /*regs.r[0] = 202;
+        regs.r[1] = 0xA0;*/ /*A9;*/
+        /*regs.r[2] = 0;
+        _kernel_swi(OS_Byte,&regs,&regs);
+        regs.r[0] = 118;
+        _kernel_swi(OS_Byte,&regs,&regs);*/
+      }
+      /*else
+      {*/
+        /*if (irqinterrupt AND !fi)
+          doirq();
+        if (beebit_nmi AND !beebit_oldnmi)
+          donmi();
+        beebit_oldnmi = beebit_nmi;*/
+        /*if (clock() >= nclock)
+        {
+          nclock = clock()+NEXT_TIME;
+          videoupdate();
+        }*/
+        /*if (counter <= 0)
+        {*/
+          /*while (clock() < nclock)
+          {
+          }
+          nclock = clock()+NEXT_TIME;*/
+          /*if (nvideoframe <= 0)
+            videoupdate();*/
+          /*#ifdef __DEVELOP__
+            fprintf(htrace,"%u\n",clock());
+          #endif*/
+          /*counter += 80;
+        }*/
+      /*}*/
+    }
+    while (!lexit);
+
+    /*t76489closedown();*/ /*sound*/
+    /*_kernel_swi(0x4E0C1,&regs,&regs);*/
+    /*_kernel_oscli("BeebSoundCloseDown");*/
+    zeribeepdetach();
+
+    keyrelease();
+    /*enable <Escape>*/
+    escapeenable();
+    /*enable <Break>*/
+    breakenable();
+
+    /*get/set keyboard status*/
+    regs.r[0] = 202;
+    regs.r[1] = host_leds;
+    regs.r[2] = 0;
+    _kernel_swi(OS_Byte,&regs,&regs);
+    /*save current status*/
+    beebit_leds = (regs.r[1] & 0x10);
+    regs.r[0] = 118;
+    _kernel_swi(OS_Byte,&regs,&regs);
+
+    switch (beebit_machinetype)
+    {
+      case MACHINE_MODELB:
+      case MACHINE_MODELBPLUS:
+        break;
+      case MACHINE_MASTER128:
+      case MACHINE_COMPACT:
+        regs.r[0] = 8; /* create directory*/
+        regs.r[1] = (int)choicedir;
+        regs.r[4] = 0;
+        _kernel_swi(OS_File,&regs,&regs);
+        if (beebit_machinetype == MACHINE_MASTER128)
+        {
+          /*new location*/
+          hfile = fopen("<Choices$Write>.BeebIt.CMOSM","wb");
+          if (hfile != NULL)
+            /*delete old file*/
+            remove("<BeebIt$Dir>.CMOSM");
+         }
+        else
+        {
+          /*new location*/
+          hfile = fopen("<Choices$Write>.BeebIt.CMOSC","wb");
+          if (hfile != NULL)
+            /*delete old file*/
+            remove("<BeebIt$Dir>.CMOSC");
+        }
+        if (hfile != NULL)
+        {
+          fwrite(beebit_cmos,1,0x40,hfile);
+          fclose(hfile);
+        }
+        break;
+    }
+
+    uefclose();
+
+    if (beebit_driveimage[0])
+      fclose(beebit_driveimage[0]);
+    if (beebit_driveimage[1])
+      fclose(beebit_driveimage[1]);
+    if (beebit_driveimage[2])
+      fclose(beebit_driveimage[2]);
+    if (beebit_driveimage[3])
+      fclose(beebit_driveimage[3]);
+
+    cursorenable();
+
+    /*hfile = fopen("ROMSlots","wb");
+    if (hfile != NULL)
+    {
+      for (i=0;i<16;i++)
+        fwrite(roms[i],1,0x4000,hfile);
+      fclose(hfile);
+    }*/
+  }
+  return (lredraw);
+}
+
+void beebitclosedown(void)
+{
+  #ifdef __DEBUG__
+    FILE *hfile;
+  #endif
+  #ifdef __DEVELOP__
+      fclose(htrace);
+  #else
+    #ifdef __DEBUG__
+      fclose(htrace);
+    #endif
+  #endif
+  #ifdef __DEBUG__
+    hfile = fopen("<BeebIt$Dir>.DUMP","wb");
+    fwrite(memory,1,0x10000,hfile);
+    fclose(hfile);
+    hfile = fopen("<BeebIt$Dir>.SCREEN","wb");
+    fwrite(memory+video_startaddress,1,0x2800,hfile);
+    fclose(hfile);
+  #endif
+
+  i8271closedown();
+}
+
+/*void updateCaI(void)
+{*/
+  /*cyclestogo = counter*/
+/*  dointerrupts();
+} */

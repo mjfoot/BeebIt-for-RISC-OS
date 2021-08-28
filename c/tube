@@ -1,0 +1,111 @@
+/*tube.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2002
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "beebit.h"
+#include "kernel.h"
+
+extern _kernel_swi_regs regs;
+
+char tube_r1status, tube_r2status, tube_r3status, tube_r4status;
+char tube_r1, tube_r2, tube_r3, tube_r4;
+char tube_irq;
+
+void tubereset(void)
+{
+  tube_r1status = 0;
+  tube_r2status = 0;
+  tube_r3status = 0;
+  tube_r4status = 0;
+  tube_r1 = 0;
+  tube_r2 = 0;
+  tube_r3 = 0;
+  tube_r4 = 0;
+  tube_irq = FALSE;
+}
+
+char tuberead(int naddress)
+{
+  char nreturn;
+  switch (naddress & 0x07)
+  {
+    case 0x00:
+      /*r1 status flags*/
+      nreturn = 0xFE;
+      break;
+    case 0x01:
+      /*r1 data*/
+      tube_irq = FALSE;
+      nreturn = tube_r1;
+      break;
+    case 0x02:
+      /*r2 status flags*/
+      nreturn = 0xFE;
+      break;
+    case 0x03:
+      /*r2 data*/
+      nreturn = 0xFE;
+      break;
+    case 0x04:
+      /*r3 status flags*/
+      nreturn = 0xFE;
+      break;
+    case 0x05:
+      /*r3 data*/
+      nreturn = 0xFE;
+      break;
+    case 0x06:
+      /*r4 status flags*/
+      nreturn = 0xFE;
+      break;
+    case 0x07:
+      /*r4 data*/
+      nreturn = 0xFE;
+      break;
+    default:
+      nreturn = 0xFE;
+      break;
+  }
+  return (nreturn);
+}
+
+void tubewrite(int naddress, char nvalue)
+{
+  switch (naddress & 0x07)
+  {
+    case 0x00:
+      /*r1 status flags*/
+      break;
+    case 0x01:
+      /*r1 data*/
+      tube_r1 = nvalue;
+      tube_irq = TRUE;
+      break;
+    case 0x02:
+      /*r2 status flags*/
+      break;
+    case 0x03:
+      /*r2 data*/
+      break;
+    case 0x04:
+      /*r3 status flags*/
+      break;
+    case 0x05:
+      /*r3 data*/
+      break;
+    case 0x06:
+      /*r4 status flags*/
+      break;
+    case 0x07:
+      /*r4 data*/
+      break;
+  }
+}

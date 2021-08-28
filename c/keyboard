@@ -1,0 +1,109 @@
+/*>keyboard.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2004
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include "6522sysvia.h"
+#include "beebit.h"
+#include "kernel.h"
+#include "riscos.h"
+#include "swis.h"
+
+int lrowscan;
+
+int keyboard_rowscan;
+
+extern void keyboardload(char *filename);
+
+void keyboardreset(void)
+{
+  char cbuffer[128];
+  keyboard_rowscan = FALSE;
+  strcpy(cbuffer,"<BeebIt$Dir>.KeyMaps.");
+  strcat(cbuffer,beebit_keylayout);
+  keyboardload(cbuffer);
+  /*keymap[0x06] = 0xFF;*/ /*shift keyboard link*/
+}
+
+void keyboardload(char *filename)
+{
+  FILE * hfile;
+  hfile = fopen(filename,"rb");
+  if (hfile != NULL)
+  {
+    fread(&keylookup,1,0x100,hfile);
+    fclose(hfile);
+  }
+}
+
+void keyboardsetlinks(void)
+{
+  int i;
+  switch (beebit_machinetype)
+  {
+    case MACHINE_MODELB:
+    case MACHINE_MODELBPLUS:
+      for (i=0;i<8;i++)
+      {
+        if (beebit_links & (1 << (7-i)))
+          keystatus[0x02+i] = 0xFF;
+        else
+          keystatus[0x02+i] = 0x00;
+      }
+      break;
+    case MACHINE_MASTER128:
+    case MACHINE_COMPACT:
+      for (i=0;i<8;i++)
+        keystatus[0x02+i] = 0x00;
+      break;
+  }
+}
+
+char keyboardread(char ORA, char DDRA)
+{
+  int nkey, nrow, ncol, nr;
+  /*if (beebit_trace)
+    printf("KBR %X %X\n", ORA, DDRA);*/
+  nkey = (ORA & DDRA);
+
+  /*nkey = ORA;*/
+  if ((nkey & 0x0F) >= 0x0A)
+  {
+    if ((nkey & 0x0F) == 0x0F)
+      lrowscan = TRUE;
+  }
+  else
+  {
+    if (lrowscan)
+    {
+      ncol = (nkey & 0x0F); /*b0-3*/
+      nrow = ((nkey & 0x70)>>4); /*b4-6*/
+      nr = 0;
+      while (nr < 8 AND keystatus[ncol] == 0)
+      {
+        ncol += 0x10;
+        nr++;
+      }
+      if (nr < 8)
+        systemviakeyca2();
+      lrowscan = FALSE;
+    }
+    /*else
+    {*/
+      if (keystatus[nkey])
+        nkey = (0x80 & ~DDRA) | nkey;
+      /*else
+        nkey = (0x00 & ~DDRA) | nkey;*/
+      /*nkey |= 0x80;*/
+    /*}*/
+  }
+  /*fprintf(htrace,"KB &%X\n",nkey);*/
+  return (nkey);
+}
+

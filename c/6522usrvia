@@ -1,0 +1,720 @@
+/*>6522usrvia.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * Rockwell 6522 Versatile Interface Adapter (VIA) [1MHz]
+ *
+ * (C) Copyright Michael J Foot, 1998-2002
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/* 0xffff * 2 = 0x1fffe +2 = 0x20000 */
+
+/*ACR bits*/
+/*b7 = output enable*/
+/*b6 = free-run enable*/
+/*b5 = timer 2 control (0=timed interrupt,1=countdown with pulses)*/
+/*b1 = PB latching enabled*/
+/*b0 = PA latching enabled*/
+
+#include <stdio.h>
+#include "6502cpu.h"
+#include "6522usrvia.h"
+#include "beebit.h"
+#include "main.h"
+#include "kernel.h"
+#include "keyboard.h"
+#include "swis.h"
+#include "riscos.h"
+
+/*User VIA*/
+char r6522usrvia_orb; /*output register B*/
+char r6522usrvia_irb; /*input register B*/
+char r6522usrvia_ora; /*output register A*/
+char r6522usrvia_ira; /*input register A*/
+char r6522usrvia_ddrb;
+char r6522usrvia_ddra;
+char r6522usrvia_t1cl;
+char r6522usrvia_t1ch;
+char r6522usrvia_t1ll;
+char r6522usrvia_t1lh;
+char r6522usrvia_t2cl;
+char r6522usrvia_t2ch;
+char r6522usrvia_t2ll;
+char r6522usrvia_sr; /*status register*/
+char r6522usrvia_acr;
+char r6522usrvia_pcr;
+char r6522usrvia_ifr;
+char r6522usrvia_ier;
+/*these variables contain the actual values on the lines...*/
+char r6522usrvia_porta;
+char r6522usrvia_portb;
+int r6522usrvia_t1; /*timer 1 (used for speed)*/
+int r6522usrvia_t2; /*timer 2 (used for speed)*/
+int r6522usrvia_t1setint; /*set interrupt when timer1 reaches 0*/
+int r6522usrvia_t2setint; /*set interrupt when timer2 reaches 0*/
+/*int r6522usrvia_irq;*/ /*irq interrupt status*/
+int r6522usrvia_tick;
+
+int amx_timer; /*amx mouse timer*/
+int amx_buttons;
+int amx_currentx;
+int amx_currenty;
+int amx_targetx;
+int amx_targety;
+
+extern _kernel_swi_regs regs;
+
+void userviaamxmouse(void)
+{
+
+  amx_timer = -1;
+  if ((r6522usrvia_ifr & 0x18) == 0)
+  {
+    if ((amx_targetx != amx_currentx) || (amx_targety != amx_currenty))
+    {
+      if (amx_targetx != amx_currentx)
+      {
+        r6522usrvia_ifr |= 0x10;
+        if (amx_targetx < amx_currentx)
+        {
+          r6522usrvia_irb &= ~0x01;
+          r6522usrvia_portb &= ~0x01;
+          amx_currentx--;
+        }
+        else
+        {
+          r6522usrvia_irb |= 0x01;
+          r6522usrvia_portb |= 0x01;
+          amx_currentx++;
+        }
+      }
+
+      if (amx_targety != amx_currenty)
+      {
+        r6522usrvia_ifr |= 0x08;
+        if (amx_targety > amx_currenty)
+        {
+          r6522usrvia_irb |= 0x04;
+          r6522usrvia_portb |= 0x04;
+          amx_currenty++;
+        }
+        else
+        {
+          r6522usrvia_irb &= ~0x04;
+          r6522usrvia_portb &= ~0x04;
+          amx_currenty--;
+        }
+      }
+      userviasetirq();
+    }
+  }
+}
+
+void userviasetirq(void)
+{
+  /*if (beebit_trace)
+    fprintf(htrace,"UV E=&%X F=&%X\n",r6522usrvia_ier,r6522usrvia_ifr);*/
+  if (r6522usrvia_ifr & r6522usrvia_ier & 0x7F)
+  {
+    r6522usrvia_ifr |= 0x80;
+    /*r6522usrvia_irq = TRUE;*/
+    beebit_irq |= IRQ_6522USRVIA;
+  }
+  else
+  {
+    r6522usrvia_ifr &= 0x7F;
+    /*r6522usrvia_irq = FALSE;*/
+    beebit_irq &= IRQ_NOT6522USRVIA;
+  }
+}
+
+void userviasett1t2(int ncycles)
+{
+  /*we are dealing with a 1MHz device here*/
+  int lflag = FALSE;
+
+  r6522usrvia_t1 -= ncycles;
+
+  if (r6522usrvia_t1 < 0)
+  {
+    /*it takes 1 1Mhz cycle when the timer crosses the boundary*/
+    /*it takes 1 1MHz cycle to transfer the latches to the counter*/
+    switch (r6522usrvia_acr & 0xC0)
+    {
+      case 0x00:
+        /*output disabled and one-shot mode*/
+        /*timed interrupt each time T1 is loaded*/
+        if (r6522usrvia_t1setint)
+        {
+          /*r6522usrvia_orb ^= 0x80;
+          r6522usrvia_irb ^= 0x80;*/
+          /*T1 interrupt flag set*/
+          r6522usrvia_ifr |= 0x40;
+          r6522usrvia_t1setint = FALSE;
+        }
+        /*roll the timers over*/
+        r6522usrvia_t1 &= 0xFFFF;
+        break;
+      case 0x40:
+        /*output disabled and free-run mode*/
+        /*continuous interrupts*/
+        /*REVS, SKIRMISH AND RIG ATTACK USE THIS ONE!*/
+        if (r6522usrvia_t1setint)
+          /*T1 interrupt flag set*/
+          r6522usrvia_ifr |= 0x40;
+        r6522usrvia_t1 += ((r6522usrvia_t1lh<<8) | r6522usrvia_t1ll) + 2;
+        break;
+      case 0x80:
+        /*output enabled and one-shot mode*/
+        /*timed interrupt each time T1 is loaded*/
+        if (r6522usrvia_t1setint)
+        {
+          /*PB7 goes high*/
+          /*r6522usrvia_orb ^= 0x80;
+          r6522usrvia_irb ^= 0x80;*/
+          /*T1 interrupt flag set*/
+          r6522usrvia_ifr |= 0x40;
+          r6522usrvia_t1setint = FALSE;
+        }
+        /*if (r6522usrvia_ddrb & 0x80)*/
+          r6522usrvia_portb |= 0x80;
+        /*roll the timers over*/
+        r6522usrvia_t1 &= 0xFFFF;
+        break;
+      case 0xC0:
+        /*output enabled and free-run mode*/
+        /*continuous interrupts*/
+        /*squarewave output on PB7*/
+        /*if (r6522usrvia_ddrb & 0x80)*/
+          r6522usrvia_portb ^= 0x80;
+
+        if (r6522usrvia_t1setint)
+          /*T1 interrupt flag set*/
+          r6522usrvia_ifr |= 0x40;
+
+        r6522usrvia_t1 += ((r6522usrvia_t1lh<<8) | r6522usrvia_t1ll) + 2;
+        break;
+    }
+    #ifdef __DEBUG__
+      fprintf(htrace,"T1=&%X IFR=&%X IER=&%X",r6522usrvia_t1,r6522usrvia_ifr,r6522usrvia_ier);
+    #endif
+    lflag = TRUE;
+  }
+
+  if (!(r6522usrvia_acr & 0x20))
+  {
+    /*one shot mode only*/
+    /*decrement counter by 1MHz clock cycles*/
+    r6522usrvia_t2 -= ncycles;
+    if (r6522usrvia_t2 < 0)
+    {
+      r6522usrvia_t2 &= 0xFFFF;
+      #ifdef __DEBUG__
+        fprintf(htrace,"T2=&%X ",r6522usrvia_t2);
+      #endif
+
+      if (r6522usrvia_t2setint)
+      {
+        /*on completion of the timing interval,
+          T2 interrupt flag is set (IFR b5)*/
+        r6522usrvia_ifr |= 0x20;
+        r6522usrvia_t2setint = FALSE;
+      }
+      lflag = TRUE;
+    }
+  }
+  else
+  {
+    if (r6522usrvia_portb & 0x40)
+    {
+      /*decrement counter by 1MHz clock cycles*/
+      r6522usrvia_t2 -= ncycles;
+      if (r6522usrvia_t2 < 0)
+      {
+        r6522usrvia_t2 &= 0xFFFF;
+        /*r6502_cyclestogo -= 4;*/
+        if (r6522usrvia_t2setint)
+        {
+          /*on completion of the timing interval,
+            T2 interrupt flag is set (IFR b5)*/
+          r6522usrvia_ifr |= 0x20;
+          r6522usrvia_t2setint = FALSE;
+        }
+        lflag = TRUE;
+      }
+    }
+  }
+
+
+  if (beebit_mouseemulation == MOUSE_AMXMOUSE)
+  {
+    if (amx_timer > 0)
+    {
+      amx_timer -= ncycles;
+      if (amx_timer <= 0)
+      {
+        userviaamxmouse();
+        amx_timer = -1;
+      }
+    }
+  }
+
+  if (lflag)
+    userviasetirq();
+}
+
+void userviareset(int lfull)
+{
+  if (lfull)
+  {
+    r6522usrvia_ier = 0x80;
+  }
+  r6522usrvia_ifr = 0x00;
+  r6522usrvia_ddra = 0; /*input*/
+  r6522usrvia_ddrb = 0; /*input*/
+  r6522usrvia_t1ll = 0xFF;
+  r6522usrvia_t1lh = 0xFF;
+  r6522usrvia_t2ll = 0xFF;
+  r6522usrvia_acr = 0;
+  r6522usrvia_pcr = 0;
+  r6522usrvia_ora = 0xFF;
+  r6522usrvia_ira = 0xFF;
+  r6522usrvia_orb = 0xFF;
+  r6522usrvia_irb = 0xFF;
+  r6522usrvia_porta = 0xFF;
+  r6522usrvia_portb = 0xFF;
+
+  r6522usrvia_t1 = 0x10000; /*1FFFF;*/
+  r6522usrvia_t2 = 0x10000; /*1FFFF*/
+
+  r6522usrvia_t1setint = FALSE;
+  r6522usrvia_t2setint = FALSE;
+  userviasetirq();
+  r6522usrvia_tick = 0;
+  amx_timer = 0;
+  amx_buttons = 0;
+}
+
+/*extern int r6502_cyclecount;*/
+
+char userviaread(int naddress)
+{
+  int ntotal;
+  char nresult;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  switch (naddress & 0x0F)
+  {
+    case 0x00:
+      /*input/output reg b*/
+      /*PCR & 0x20 = CB2 input*/
+      /*PCR & 0x40 = CB2 active edge input*/
+      /*updatetimers();*/
+      /*independant mode*/
+      if ((r6522usrvia_pcr & 0xE0 == 0x20) OR (r6522usrvia_pcr & 0xE0 == 0x60))
+      {
+        /*clear b4 (CB1)*/
+        r6522usrvia_ifr &= 0xEF;
+      }
+      else
+      {
+        /*clear b4,b3 (CB1,CB2)*/
+        r6522usrvia_ifr &= 0xE7;
+      }
+      /*userviasetirq();*/
+      /*reads output register bit in orb. pin level has no effect*/
+      nresult = (r6522usrvia_orb & r6522usrvia_ddrb);
+      if (r6522usrvia_acr & 0x02)
+      {
+        /*input latching enabled*/
+        /*read input level on irb*/
+        nresult |= (r6522usrvia_irb & ~r6522usrvia_ddrb);
+      }
+      else
+      {
+        /*input latching disabled*/
+        /*read input level on PB pin*/
+        nresult |= (r6522usrvia_portb & ~r6522usrvia_ddrb);
+      }
+
+      if (beebit_mouseemulation == MOUSE_AMXMOUSE)
+      {
+        /*AMX mouse stuff*/
+        _kernel_swi(OS_Mouse,&regs,&regs);
+        amx_targetx = regs.r[0];
+        amx_targety = regs.r[1];
+        amx_buttons = ((regs.r[2] & 0x04) >> 2);
+        amx_buttons |= (regs.r[2] & 0x02);
+        amx_buttons |= ((regs.r[2] & 0x01) << 2);
+
+        nresult &= 0x1F;
+        nresult |= (amx_buttons ^ 7) << 5;
+        r6522usrvia_ifr &= 0xE7;
+
+        userviasetirq();
+
+        if ((amx_targetx != amx_currentx) OR (amx_targety != amx_currenty))
+          /*set trigger*/
+          amx_timer = 500;
+        else
+          /*clear trigger*/
+          amx_timer = 0;
+      }
+      break;
+    case 0x01:
+      /*input/output reg a*/
+      /*r6522usrvia_pcr & 0x02 = CA2 input*/
+      /*r6522usrvia_pcr & 0x04 = CA2 active edge input*/
+      updatetimers();
+      /*independant mode*/
+      if ((r6522usrvia_pcr & 0x0E == 0x02) OR (r6522usrvia_pcr & 0x0E == 0x06))
+      {
+        /*independant interrupt*/
+        /*clear b2 (CA1)*/
+        r6522usrvia_ifr &= 0xFD;
+      }
+      else
+      {
+        /*clear b2,b1 (CA1,CA2)*/
+        r6522usrvia_ifr &= 0xFC;
+      }
+      userviasetirq();
+      if (r6522usrvia_acr & 0x01)
+      {
+        /*input latching enabled*/
+        nresult = r6522usrvia_ira;
+      }
+      else
+      {
+        /*input latching disabled*/
+        nresult = r6522usrvia_porta;
+      }
+      break;
+    case 0x02:
+      nresult = r6522usrvia_ddrb;
+      break;
+    case 0x03:
+      nresult = r6522usrvia_ddra;
+      break;
+    case 0x04:
+      /*T1 low order counter*/
+      updatetimers();
+      if (r6522usrvia_t1 < 0)
+        r6522usrvia_t1cl = 0xFF;
+      else
+        r6522usrvia_t1cl = (r6522usrvia_t1 & 0xFF);
+      /*T1 interrupt flag is cleared (IFR b6)*/
+      r6522usrvia_ifr &= 0xBF;
+      userviasetirq();
+      nresult = r6522usrvia_t1cl;
+      break;
+    case 0x05:
+      /*T1 high order counter*/
+      updatetimers();
+      if (r6522usrvia_t1 < 0)
+        r6522usrvia_t1ch = 0xFF;
+      else
+        r6522usrvia_t1ch = ((r6522usrvia_t1 >> 8) & 0xFF);
+      nresult = r6522usrvia_t1ch;
+      break;
+    case 0x06:
+      /*T1 low order latch*/
+      nresult = r6522usrvia_t1ll;
+      break;
+    case 0x07:
+      /*T1 high order latch*/
+      nresult = r6522usrvia_t1lh;
+      break;
+    case 0x08:
+      /*T2 low order counter*/
+      updatetimers();
+      if (r6522usrvia_t2 < 0)
+        r6522usrvia_t2cl = 0xFF;
+      else
+        r6522usrvia_t2cl = (r6522usrvia_t2 & 0xFF);
+      /*T2 interrupt flag is cleared (IFR b5)*/
+      r6522usrvia_ifr &= 0xDF;
+      userviasetirq();
+      nresult = r6522usrvia_t2cl;
+      break;
+    case 0x09:
+      /*T2 high order counter*/
+      updatetimers();
+      if (r6522usrvia_t2 < 0)
+        r6522usrvia_t2ch = 0xFF;
+      else
+        r6522usrvia_t2ch = ((r6522usrvia_t2 >> 8) & 0xFF);
+      nresult = r6522usrvia_t2ch;
+      break;
+    case 0x0A:
+      /*shift register*/
+      /*SR interrupt flag is cleared (IFR b2)*/
+      updatetimers();
+      r6522usrvia_ifr &= 0xFB;
+      userviasetirq();
+      nresult = r6522usrvia_sr;
+      break;
+    case 0x0B:
+      /*auxilary control reg*/
+      nresult = r6522usrvia_acr;
+      break;
+    case 0x0C:
+      /*peripheral control reg*/
+      nresult = r6522usrvia_pcr;
+      break;
+    case 0x0D:
+      /*interrupt flag reg*/
+      /*b7 of this register will be read as a logic 1*/
+      /*when an interrupt exists within the chip*/
+      updatetimers();
+      userviasetirq();
+      nresult = r6522usrvia_ifr;
+      break;
+    case 0x0E:
+      /*interrupt enable reg*/
+      nresult = (r6522usrvia_ier | 0x80);
+      break;
+    case 0x0F:
+      /*output reg a*/
+      updatetimers();
+      if (r6522usrvia_acr & 0x01)
+      {
+        /*latching enabled*/
+        nresult = r6522usrvia_ira;
+      }
+      else
+      {
+        /*latching disabled*/
+        nresult = r6522usrvia_porta;
+      }
+      break;
+    default:
+      nresult = 0xFF;
+      break;
+  }
+  #ifdef __DEBUG__
+    fprintf(htrace,"UVREAD IER=&%X IFR=&%X ",r6522usrvia_ier,r6522usrvia_ifr);
+    fprintf(htrace,"ORA=&%X ",r6522usrvia_ora);
+  #endif
+
+  /*bbcvdu(85);
+  bbcvdu(32);
+  inttohex4(naddress);
+  bbcvdu(32);
+  inttohex4(nresult);
+  bbcvdu(13);
+  bbcvdu(10);*/
+
+  return (nresult);
+}
+
+void userviawrite(int naddress, char nvalue)
+{
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  switch (naddress & 0x0F)
+  {
+    case 0x00:
+      /*input/output reg b*/
+      updatetimers();
+      r6522usrvia_orb = nvalue;
+      r6522usrvia_portb = (r6522usrvia_orb & r6522usrvia_ddrb) | (r6522usrvia_portb & ~r6522usrvia_ddrb);
+      /*PCR & 0x20 = CB2 input*/
+      /*PCR & 0x40 = CB2 active edge input*/
+      /*independant mode*/
+      if ((r6522usrvia_pcr & 0xE0 == 0x20) OR (r6522usrvia_pcr & 0xE0 == 0x60))
+      {
+        /*clear b4 (CB1)*/
+        r6522usrvia_ifr &= 0xEF;
+      }
+      else
+      {
+        /*clear b4,b3 (CB1,CB2)*/
+        r6522usrvia_ifr &= 0xE7;
+      }
+      userviasetirq();
+      break;
+    case 0x01:
+      /*input/output reg a*/
+
+      /*VDU 21 writes &0D (%1101) only*/
+      /*VDU 2 writes &OD then character*/
+
+/*  inttohex4(nvalue);
+  bbcvdu(13);
+  bbcvdu(10);*/
+
+      updatetimers();
+      r6522usrvia_ora = nvalue;
+      r6522usrvia_porta = (r6522usrvia_ora & r6522usrvia_ddra) | (r6522usrvia_porta & ~r6522usrvia_ddra);
+      /*PCR & 0x02 = CA2 input*/
+      /*PCR & 0x04 = CA2 active edge input*/
+      if ((r6522usrvia_pcr & 0x0E == 0x02) OR (r6522usrvia_pcr & 0x0E == 0x06))
+      {
+        /*clear b2 (CA1)*/
+        r6522usrvia_ifr &= 0xFD;
+      }
+      else
+      {
+        /*clear b2,b1 (CA1,CA2)*/
+        r6522usrvia_ifr &= 0xFC;
+      }
+      if (beebit_printer)
+      {
+        regs.r[0] = r6522usrvia_porta;
+        _kernel_swi(OS_PrintChar,&regs,&regs);
+      }
+      /*clear b2 (CA1)*/
+      r6522usrvia_ifr |= 0x02; /*CA1*/
+      userviasetirq();
+      break;
+    case 0x02:
+      r6522usrvia_ddrb = nvalue;
+      break;
+    case 0x03:
+      r6522usrvia_ddra = nvalue;
+      break;
+    case 0x04:
+      /*T1 low order latch*/
+      r6522usrvia_t1ll = nvalue;
+      break;
+    case 0x05:
+      /*T1 high order counter*/
+      updatetimers();
+      /*no effect in one-shot mode?*/
+      r6522usrvia_t1lh = r6522usrvia_t1ch = nvalue;
+      /*copy latch to counter*/
+      r6522usrvia_t1cl = r6522usrvia_t1ll;
+      /*clear T1 interrupt flag (b6)*/
+      r6522usrvia_ifr &= 0xBF;
+      userviasetirq();
+      if ((r6522usrvia_acr & 0xC0) == 0x80)
+      {
+        /*output enabled (b7=1) and free-run disabled (b6=0)*/
+        /*one-shot mode*/
+        /*PB7 goes low, but goes high when timer 1 times out*/
+        /*r6522usrvia_orb &= 0x7F;
+        r6522usrvia_irb &= 0x7F;*/
+        r6522usrvia_portb &= 0x7F;
+      }
+      r6522usrvia_t1setint = TRUE;
+      /*fprintf(htrace,"UV 51=&%X &%X\n",r6522usrvia_t1ch,r6522usrvia_t1cl);*/
+      /*it takes 1 1MHz cycle to transfer the latches to the counter*/
+      r6522usrvia_t1 = ((r6522usrvia_t1ch<<8) | r6522usrvia_t1cl) + 1;
+      break;
+    case 0x06:
+      /*T1 low order latch*/
+      r6522usrvia_t1ll = nvalue;
+      break;
+    case 0x07:
+      /*T1 high order latch*/
+      /*if ((r6522usrvia_acr & 0xC0) != 0x80)
+      {*/
+        /*no effect in one-shot mode?*/
+        r6522usrvia_t1lh = nvalue;
+        /*clear t1 interrupt flag (bit 6) ??*/
+        r6522usrvia_ifr &= 0xBF;
+        userviasetirq();
+      /*}*/
+      break;
+    case 0x08:
+      /*T2 low order latch*/
+      /*fprintf(htrace,"T2LL=&%X\n",nvalue);*/
+      r6522usrvia_t2ll = nvalue;
+      break;
+    case 0x09:
+      /*T2 high order counter*/
+      updatetimers();
+      r6522usrvia_t2ch = nvalue;
+      r6522usrvia_t2cl = r6522usrvia_t2ll;
+      /*clear T2 interrupt flag (bit 5)*/
+      r6522usrvia_ifr &= 0xDF;
+      userviasetirq();
+      /*start the timer*/
+      /*it takes 1 1MHz cycle to transfer the latches to the counter*/
+      r6522usrvia_t2 = ((r6522usrvia_t2ch<<8) | r6522usrvia_t2cl) + 1;
+      /*provide a single interrupt*/
+      r6522usrvia_t2setint = TRUE;
+      break;
+    case 0x0A:
+      /*shift reg*/
+      r6522usrvia_sr = nvalue;
+      r6522usrvia_ifr &= 0xFB;
+      userviasetirq();
+      break;
+    case 0x0B:
+      /*auxiliary control reg*/
+      r6522usrvia_acr = nvalue;
+      break;
+    case 0x0C:
+      /*peripheral control reg*/
+      r6522usrvia_pcr = nvalue;
+      /*CA1 active edge*/
+      if (r6522usrvia_pcr & 0x01)
+      {
+        /*set b2 (CA1)*/
+        r6522usrvia_ifr |= 0x02;
+      }
+      /*CA2 active edge*/
+      if ((r6522usrvia_pcr & 0x0E) == 0x04)
+      {
+        /*set b1 (CA2)*/
+        r6522usrvia_ifr |= 0x01;
+      }
+      /*CB1 active edge*/
+      if (r6522usrvia_pcr & 0x10)
+      {
+        /*set b5 (CB1)*/
+        r6522usrvia_ifr |= 0x10;
+      }
+      /*CB2 active edge*/
+      if ((r6522usrvia_pcr & 0xE0) == 0x40)
+      {
+        /*set b4 (CB2)*/
+        r6522usrvia_ifr |= 0x08;
+      }
+      break;
+    case 0x0D:
+      /*interrupt flag reg*/
+      nvalue &= 0x7F; /*not really needed*/
+      r6522usrvia_ifr &= (~nvalue);
+      userviasetirq();
+      break;
+    case 0x0E:
+      /*interrupt enable reg*/
+      if (nvalue & 0x80)
+        r6522usrvia_ier |= nvalue;
+      else
+        r6522usrvia_ier &= (~nvalue);
+      r6522usrvia_ier &= 0x7F;
+      userviasetirq();
+      break;
+    case 0x0F:
+      /*output reg a*/
+      updatetimers();
+      r6522usrvia_ora = nvalue;
+      r6522usrvia_porta = (r6522usrvia_ora & r6522usrvia_ddra) +(r6522usrvia_porta & ~r6522usrvia_ddra);
+      break;
+  }
+  #ifdef __DEBUG__
+    fprintf(htrace,"UVWRITE IER=&%X IFR=&%X ",r6522usrvia_ier,r6522usrvia_ifr);
+    fprintf(htrace,"ORA=&%X ",r6522usrvia_ora);
+  #endif
+}

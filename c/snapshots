@@ -1,0 +1,554 @@
+#include <stdio.h>
+#include <string.h>
+
+#include "beebit.h"
+#include "snapshots.h"
+#include "6502cpu.h"
+#include "6522sysvia.h"
+#include "6522usrvia.h"
+#include "video.h"
+#include "6845crtc.h"
+#include "videoula.h"
+#include "sheila.h"
+
+
+
+void snapshotload(FILE *hfile)
+{
+  SNAPHDR readhdr;
+  void *pfile =&readhdr;
+  int r,p;
+  rewind(hfile);
+  fread(pfile,1,sizeof(SNAPHDR),hfile);
+      /*sheila*/
+      /*fread(sheila_b,1,0x100,hfile);*/
+      /*for (i=0;i<0x100;i++)
+      {
+        if (sheila_b[i] != 0xFE)
+          sheilawrite(0xFE00+i,sheila_b[i]);
+      }*/
+//      for (int i=0;i<0x100;i++)
+//      {
+//        if (readhdr.sheila[i] != 0xFE) sheilawrite(0xFE00+i,readhdr.sheila[i]);
+//      }
+
+      /*6502 a register*/
+//      fread(cbuffer,1,4,hfile); /*0*/
+//      r6502_a = cbuffer[3];
+  /*&FE00 - &FE07 (CRTC)*/
+  /*&FE08 - &FE0F (ACIA)*/
+  /*&FE10 - &FE17 (SERIALULA)*/
+  /*&FE18 - &FE1F (SERIALULA/ADC)*/
+  /*&FE20 - &FE23 (VIDEOULA)*/
+  /*&FE24 - &FE27 (VIDEOULA/FDC INTERFACE CONTROL REG)*/
+  /*&FE28 - &FE2F (VIDEOULA/FDC INTERFACE)*/
+  /*&FE30 - &FE33 (ROMSEL)*/
+  /*&FE34 - &FE37 (ACCCON)*/
+  //    beebit_acccon = cbuffer[0x34];
+  /*&FE38 - &FE3B (INTOFF)*/
+  /*&FE3C - &FE3F (INTON)*/
+  /*&FE40 - &FE5F (SYSTEMVIA)*/
+  r6522sysvia_orb =r6522sysvia_portb =readhdr.sheila[0x40];
+  r6522sysvia_ora =r6522sysvia_porta =readhdr.sheila[0x41];
+  r6522sysvia_ddrb =readhdr.sheila[0x42];
+  r6522sysvia_ddra =readhdr.sheila[0x43];
+  r6522sysvia_sr =readhdr.sheila[0x4A];
+  r6522sysvia_acr =readhdr.sheila[0x4B];
+  r6522sysvia_pcr =readhdr.sheila[0x4C];
+  /*&FE60 - &FE7F (USERVIA)*/
+  r6522usrvia_orb =r6522usrvia_portb =readhdr.sheila[0x60];
+  r6522usrvia_ora =r6522usrvia_porta =readhdr.sheila[0x61];
+  r6522usrvia_ddrb =readhdr.sheila[0x62];
+  r6522usrvia_ddra =readhdr.sheila[0x63];
+  r6522usrvia_sr =readhdr.sheila[0x6A];
+  r6522usrvia_acr =readhdr.sheila[0x6B];
+  r6522usrvia_pcr =readhdr.sheila[0x6C];
+  /*&FE80 - &FE9F (8271 or 1770)*/
+  /*&FEC0 - &FEDF (ADC)*/
+
+
+
+  r6502_a =readhdr.A;
+//      fread(cbuffer,1,4,hfile); /*4*/
+//      r6502_x = cbuffer[3];
+  r6502_x =readhdr.X;
+
+//      fread(cbuffer,1,4,hfile); /*8*/
+//      r6502_y = cbuffer[3];
+  r6502_y =readhdr.Y;
+
+//      fread(cbuffer,1,4,hfile); /*12*/
+      /*r6502_n = (cbuffer[0] & 0x80);
+      r6502_v = (cbuffer[0] & 0x40);
+      r6502_b = (cbuffer[0] & 0x10);
+      r6502_d = (cbuffer[0] & 0x08);
+      r6502_i = (cbuffer[0] & 0x04);
+      r6502_z = (cbuffer[0] & 0x02);
+      r6502_c = (cbuffer[0] & 0x01);*/
+//      r6502_ps = cbuffer[0];
+  r6502_ps =readhdr.P;
+
+//      fread(cbuffer,1,4,hfile); /*16*/
+//      r6502_sp = cbuffer[3] ;
+  r6502_sp =readhdr.S;
+      /*program counter*/
+//      fread(cbuffer,1,4,hfile); /*20*/
+//      r6502_pc = (cbuffer[1]<<8)+cbuffer[0];
+  r6502_pc =readhdr.PC;
+
+      /*timers*/
+//      fread(cbuffer,1,4,hfile); /*24*/
+//      r6522sysvia_t1setint = cbuffer[0];
+//      r6522sysvia_t2setint = cbuffer[1];
+//      r6522usrvia_t1setint = cbuffer[2];
+//      r6522usrvia_t2setint = cbuffer[3];
+  r6522sysvia_t1setint =readhdr.Tim1mode;
+  r6522sysvia_t2setint =readhdr.Tim2mode;
+  r6522usrvia_t1setint =readhdr.Tim3mode;
+  r6522usrvia_t1setint =readhdr.Tim4mode;
+   //in snapshots 1 =interupt, but beebit set them as TRUE(0xFF) however as
+   // beebit never compares with TRUE it seems to work
+      /*system via timer 1 counter*/
+//     fread(cbuffer,1,4,hfile); /*28*/
+//     r6522sysvia_t1ch = cbuffer[3];
+//     r6522sysvia_t1cl = cbuffer[2];
+//     r6522sysvia_t1 = (r6522sysvia_t1ch<<9)+(r6522sysvia_t1cl<<1);
+  r6522sysvia_t1 =(readhdr.Tim1)<<1;
+      /*system via timer 1 latches*/
+//      fread(cbuffer,1,4,hfile); /*32*/
+//      r6522sysvia_t1lh = cbuffer[3];
+//      r6522sysvia_t1ll = cbuffer[2];
+  r6522sysvia_t1lh =(readhdr.Tim1latch)>>8;
+  r6522sysvia_t1ll =(readhdr.Tim1latch) & 0xFF;
+      /*system via timer 2 counter*/
+//      fread(cbuffer,1,4,hfile); /*36*/
+//      r6522sysvia_t2ch = cbuffer[3];
+//      r6522sysvia_t2cl = cbuffer[2];
+//      r6522sysvia_t2 = (r6522sysvia_t2ch<<9)+(r6522sysvia_t2cl<<1);
+  r6522sysvia_t2 =(readhdr.Tim2)<<1;
+      /*system via timer 2 latches*/
+//      fread(cbuffer,1,4,hfile); /*40*/
+//      r6522sysvia_t2ll = cbuffer[3];
+  r6522sysvia_t2ll =(readhdr.Tim2latch) & 0xFF; //this wont work!
+
+      /*user via timer 1 counter*/
+//      fread(cbuffer,1,4,hfile); /*44*/
+//      r6522usrvia_t1ch = cbuffer[3];
+//      r6522usrvia_t1cl = cbuffer[2];
+//      r6522usrvia_t1 = (r6522usrvia_t1ch<<9)+(r6522usrvia_t1cl<<1);
+  r6522usrvia_t1 =(readhdr.Tim3)<<1;
+      /*user via timer 1 latches*/
+//      fread(cbuffer,1,4,hfile); /*48*/
+//      r6522usrvia_t1lh = cbuffer[3];
+//      r6522usrvia_t1ll = cbuffer[2];
+  r6522usrvia_t1lh =(readhdr.Tim3latch)>>8;
+  r6522usrvia_t1ll =(readhdr.Tim3latch) & 0xFF;
+      /*user via timer 2 counter*/
+//      fread(cbuffer,1,4,hfile); /*52*/
+//      r6522usrvia_t2ch = cbuffer[3];
+//      r6522usrvia_t2cl = cbuffer[2];
+//      r6522usrvia_t2 = (r6522usrvia_t2ch<<9)+(r6522usrvia_t2cl<<1);
+  r6522usrvia_t2 =(readhdr.Tim4)<<1;
+      /*user via timer 2 latches*/
+//      fread(cbuffer,1,4,hfile); /*56*/
+//      r6522usrvia_t2ll = cbuffer[3];
+  r6522usrvia_t2ll =(readhdr.Tim4latch) & 0xFF; //this wont work either!!
+
+      /*timer to vertical sync*/
+//      fread(cbuffer,1,4,hfile); /*60*/
+//      video_timer = getword(cbuffer);
+  video_timer =readhdr.Cvsync;
+
+      /*unused*/
+//      fread(cbuffer,1,4,hfile); /*64*/
+//      fread(cbuffer,1,4,hfile); /*68*/
+//      fread(cbuffer,1,4,hfile); /*72*/
+//      fread(cbuffer,1,4,hfile); /*76*/
+//      r6522sysvia_ifr = cbuffer[0];
+  r6522sysvia_ifr =readhdr.SysVIAIFR;
+//      r6522sysvia_ier = cbuffer[1];
+  r6522sysvia_ier =readhdr.SysVIAIER;
+      systemviasetirq();
+//      r6522usrvia_ifr = cbuffer[2];
+  r6522usrvia_ifr =readhdr.UserVIAIFR;
+//      r6522usrvia_ier = cbuffer[3];
+  r6522usrvia_ier =readhdr.UserVIAIER;
+      userviasetirq();
+
+      /*unused*/
+//     fread(cbuffer,1,4,hfile); /*80*/
+//      fread(cbuffer,1,4,hfile); /*84*/
+//      fread(cbuffer,1,4,hfile); /*88*/
+//      fread(cbuffer,1,4,hfile); /*92*/
+      /*roms*/
+//      fread(cbuffer,1,4,hfile); /*96*/
+//      beebit_romsel = cbuffer[0];
+  beebit_romsel =readhdr.ROMSEL;
+//      j = 0;
+//      for (i=0;i<=0x03;i++)
+//      {
+//        fread(cbuffer,1,4,hfile); /*100,104,108,112*/
+//        beebit_romwritable[j++] = cbuffer[0];
+//        beebit_romwritable[j++] = cbuffer[1];
+//        beebit_romwritable[j++] = cbuffer[2];
+//        beebit_romwritable[j++] = cbuffer[3];
+//      }
+  for (r=0;r<=0xf;r++) //beebit_romwritable[r] =readhdr.rom[r];
+  {
+    int transrom[] ={1,0,0}; //translate from RAM/ROM/empty to RAM/ROM
+    int read;
+
+    read =readhdr.rom[r];
+    if (read >2) read =2;
+
+    beebit_romwritable[r] =transrom[read];
+  }
+      /*&FE20 - ignore for now*/
+  videoulawrite(0,readhdr.Sheila20); //video control register
+//      fread(cbuffer,1,4,hfile); /*116*/
+      /*6845 crtc*/
+//      j = 0;
+//      for (i=0;i<=0x03;i++)
+//      {
+//        fread(cbuffer,1,4,hfile); /*120,124,128,132*/
+//        crtcwrite(0xFE00,j);
+//        crtcwrite(0xFE01,cbuffer[0]);
+//        j++;
+//        crtcwrite(0xFE00,j);
+//        crtcwrite(0xFE01,cbuffer[1]);
+//        j++;
+//        crtcwrite(0xFE00,j);
+//        crtcwrite(0xFE01,cbuffer[2]);
+//        j++;
+//        crtcwrite(0xFE00,j);
+//        crtcwrite(0xFE01,cbuffer[3]);
+//        j++;
+//      }
+  for (r =0; r<0x10; r++)
+  {
+    crtcwrite(0xFE00,r);
+    crtcwrite(0xFE01,readhdr.crtc[r]);
+  }
+
+//      fread(cbuffer,1,4,hfile); /*136*/
+//      m6845_r[0x10] = cbuffer[0];
+//      m6845_r[0x11] = cbuffer[1];
+  m6845_r[0x10] =readhdr.crtc[0x10];
+  m6845_r[0x11] =readhdr.crtc[0x11];
+      /*register 19*/
+//      video_startindex = cbuffer[2];
+  video_startindex =readhdr.crtc[0x12];
+      /*unused*/
+//      fread(cbuffer,1,4,hfile); /*140*/
+//      fread(cbuffer,1,4,hfile); /*144*/
+      /*video ula palette registers*/
+//      j = 0;
+//      for (i=0;i<=0x03;i++)
+//      {
+//        fread(cbuffer,1,4,hfile); /*148,152,156,160*/
+//        videoula_palette[j++] = cbuffer[0];
+//        videoula_palette[j++] = cbuffer[1];
+//        videoula_palette[j++] = cbuffer[2];
+//        videoula_palette[j++] = cbuffer[3];
+//      }
+  for (p=0;p<=15;p++)
+  {
+    int read;
+    read =readhdr.palette[p];
+    videoulawrite(1,(p<<4) +(read & 0xf));
+// videoula_palette[p] =readhdr.palette[p];
+  }
+
+      /*unused*/
+//      fread(cbuffer,1,4,hfile); /*164*/
+//      fread(cbuffer,1,4,hfile); /*168*/
+      /*acccon*/
+//      fread(cbuffer,1,4,hfile); /*172*/
+  beebit_acccon =readhdr.ACCCON;
+      /*&FE10 - ignore*/
+//      fread(cbuffer,1,4,hfile); /*176*/
+      /*unused*/
+//      fread(cbuffer,1,4,hfile); /*180*/
+//      fread(cbuffer,1,4,hfile); /*184*/
+//      fread(cbuffer,1,4,hfile); /*188*/
+      /*timer to vertical sync - ignore*/
+//      fread(cbuffer,1,4,hfile); /*192*/
+      /*unused*/
+//      fread(cbuffer,1,4,hfile); /*196*/
+      /*extra 56 bytes until we to &210*/
+//      for (i=0;i<=0x0D;i++)
+//      {
+//        fread(cbuffer,1,4,hfile);
+//      }
+
+  fseek(hfile,0x210 ,SEEK_SET);
+  fread(memory,1,0x8000,hfile);
+  fclose(hfile);
+}
+
+void snapheadersave(SNAPHDR *phdr)
+{
+//  void *clear =&phdr;
+  int s,r,p;
+
+  memset(phdr,0,sizeof(SNAPHDR));
+  strncpy(phdr ->tag,"BBC Snapshot101",0xf);
+  phdr ->tag[0x0f] =0xa;
+
+      switch (beebit_machinetype)
+      {
+        case MACHINE_MODELB:
+        {
+          for (s =0; s <0x100; s++)
+            phdr ->sheila[s] =sheilaread_b(s);
+        }
+        break;
+        case MACHINE_MODELBPLUS:
+        {
+          for (s =0; s <0x100; s++)
+            phdr ->sheila[s] =sheilaread_bp(s);
+        }
+        break;
+        case MACHINE_MASTER128:
+        case MACHINE_COMPACT:
+        {
+          for (s =0; s <0x100; s++)
+            phdr ->sheila[s] =sheilaread_m(s);
+        }
+        break;
+      }
+
+//  strncpy(phdr ->sheila,memory+0xFE00,0x100);
+
+
+//  for (int l=0; l<sizeof(phdr); l++)
+//  clear+l =0;
+//  int i,j;
+//  /*0=low/first byte*/
+//  /*3=high/last byte*/
+//  cbuffer[0] = 0;
+//  cbuffer[1] = 0;
+//  cbuffer[2] = 0;
+//  cbuffer[3] = 0;
+//  /* fprintf(hfile,"BBC Snapshot101"); */
+//  wimpwrite("BBC Snapshot101",15,1);
+//  /* fputc(0x0A,hfile);*/
+//  wimpputc(0x0A);
+//  /*sheila*/
+////  fwrite(sheila_b,1,0x100,hfile);
+//  wimpwrite(memory+0xFE00,1,0x100);
+//
+//  /*6502 a register*/
+//  cbuffer[3] = r6502_a;
+//  wimpwrite(cbuffer,1,4); /*0*/
+  phdr ->A =r6502_a;
+
+//  cbuffer[3] = r6502_x;
+//  wimpwrite(cbuffer,1,4); /*4*/
+  phdr ->X =r6502_x;
+//  cbuffer[3] = r6502_y;
+//  wimpwrite(cbuffer,1,4); /*8*/
+  phdr ->Y =r6502_y;
+
+//  cbuffer[3] = 0;
+//  /*cbuffer[0] = r6502processorstatus(TRUE);*/
+//  cbuffer[0] = r6502_ps; /*12*/
+//  wimpwrite(cbuffer,1,4);
+  phdr ->P =r6502_ps;
+//  cbuffer[3] = r6502_sp;
+//  /*cbuffer[0] = 1;*/
+//  wimpwrite(cbuffer,1,4); /*16*/
+  phdr ->S =r6502_sp;
+
+//  /*program counter*/
+//  setword(cbuffer,r6502_pc);
+//  wimpwrite(cbuffer,1,4); /*20*/
+  phdr ->PC =r6502_pc;
+//  /*timers*/
+//  cbuffer[0] = r6522sysvia_t1setint;
+//  cbuffer[1] = r6522sysvia_t2setint;
+//  cbuffer[2] = r6522usrvia_t1setint;
+//  cbuffer[3] = r6522usrvia_t2setint;
+//  wimpwrite(cbuffer,1,4); /*24*/
+  phdr ->Tim1mode =r6522sysvia_t1setint;
+  phdr ->Tim2mode =r6522sysvia_t2setint;
+  phdr ->Tim3mode =r6522usrvia_t1setint;
+  phdr ->Tim4mode =r6522usrvia_t2setint;
+//  setword(cbuffer,0);
+//  /*system via timer 1 counter*/
+//  r6522sysvia_t1ch = ((r6522sysvia_t1>>9) & 0xFF);
+//  r6522sysvia_t1cl = ((r6522sysvia_t1>>1) & 0xFF);
+//  cbuffer[3] = r6522sysvia_t1ch;
+//  cbuffer[2] = r6522sysvia_t1cl;
+//  wimpwrite(cbuffer,1,4); /*28*/
+  phdr ->Tim1 =r6522sysvia_t1 >>1;
+//  /*system via timer 1 latches*/
+//  cbuffer[3] = r6522sysvia_t1lh;
+//  cbuffer[2] = r6522sysvia_t1ll;
+//  wimpwrite(cbuffer,1,4); /*32*/
+  phdr ->Tim1latch =r6522sysvia_t1ll +(r6522sysvia_t1lh <<8);
+//  /*system via timer 2 counter*/
+//  r6522sysvia_t2ch = ((r6522sysvia_t2>>9) & 0xFF);
+//  r6522sysvia_t2cl = ((r6522sysvia_t2>>1) & 0xFF);
+//  cbuffer[3] = r6522sysvia_t2ch;
+//  cbuffer[2] = r6522sysvia_t2cl;
+//  wimpwrite(cbuffer,1,4); /*36*/
+  phdr ->Tim2 =r6522sysvia_t2 >>1;
+//  /*system via timer 2 latches*/
+//  cbuffer[3] = r6522sysvia_t2ll;
+//  cbuffer[2] = 0;
+//  wimpwrite(cbuffer,1,4); /*40*/
+  phdr ->Tim2latch =r6522sysvia_t2ll;
+
+//  /*user via timer 1 counter*/
+//  r6522usrvia_t1ch = ((r6522usrvia_t1>>9) & 0xFF);
+//  r6522usrvia_t1cl = ((r6522usrvia_t1>>1) & 0xFF);
+//  cbuffer[3] = r6522usrvia_t1ch;
+//  cbuffer[2] = r6522usrvia_t1cl;
+//  wimpwrite(cbuffer,1,4); /*44*/
+  phdr ->Tim3 =r6522usrvia_t1 >>1;
+
+//  /*user via timer 1 latches*/
+//  cbuffer[3] = r6522usrvia_t1lh;
+//  cbuffer[2] = r6522usrvia_t1ll;
+//  wimpwrite(cbuffer,1,4); /*48*/
+  phdr ->Tim3latch =r6522usrvia_t1ll +(r6522usrvia_t1lh <<8);
+//  /*user via timer 2 counter*/
+//  r6522usrvia_t2ch = ((r6522usrvia_t2>>9) & 0xFF);
+//  r6522usrvia_t2cl = ((r6522usrvia_t2>>1) & 0xFF);
+//  cbuffer[3] = r6522usrvia_t2ch;
+//  cbuffer[2] = r6522usrvia_t2cl;
+//  wimpwrite(cbuffer,1,4); /*52*/
+  phdr ->Tim4 =r6522usrvia_t2 >>1;
+//  /*user via timer 2 latches*/
+//  cbuffer[3] = r6522usrvia_t2ll;
+//  cbuffer[2] = 0;
+//  wimpwrite(cbuffer,1,4); /*56*/
+  phdr ->Tim4latch =r6522usrvia_t2ll;
+//  /*timer to vertical sync*/
+//  setword(cbuffer,video_timer);
+//  wimpwrite(cbuffer,1,4); /*60*/
+  phdr ->Cvsync =video_timer;
+//  /*unused*/
+//  setword(cbuffer,0);
+//  wimpwrite(cbuffer,1,4); /*64*/
+//  wimpwrite(cbuffer,1,4); /*68*/
+//  wimpwrite(cbuffer,1,4); /*72*/
+//  cbuffer[0] = r6522sysvia_ifr;
+//  cbuffer[1] = r6522sysvia_ier;
+//  cbuffer[2] = r6522usrvia_ifr;
+//  cbuffer[3] = r6522usrvia_ier;
+//  wimpwrite(cbuffer,1,4); /*76*/
+  phdr ->SysVIAIFR =r6522sysvia_ifr;
+  phdr ->SysVIAIER =r6522sysvia_ier;
+  phdr ->UserVIAIFR =r6522usrvia_ifr;
+  phdr ->UserVIAIER =r6522usrvia_ier;
+
+//  /*unused*/
+//  setword(cbuffer,0);
+//  wimpwrite(cbuffer,1,4); /*80*/
+//  wimpwrite(cbuffer,1,4);
+//  wimpwrite(cbuffer,1,4);
+//  wimpwrite(cbuffer,1,4); /*92*/
+//  /*roms*/
+//  cbuffer[0] = beebit_romsel;
+//  wimpwrite(cbuffer,1,4); /*96*/
+  phdr ->ROMSEL =beebit_romsel;
+//  j = 0;
+//  for (i=0;i<=0x0F;i++)
+//  {
+//    if (beebit_romwritable[i])
+//      cbuffer[j] = 0;    //wrong should be 0 for RAM!
+//    else
+//      cbuffer[j] = 1;
+//    j++;
+//    if (j > 3)
+//    {
+//      wimpwrite(cbuffer,1,4); /*100,104,108,112*/
+//      j = 0;
+//    }
+//  }
+  for (r =0; r<=0xf; r++)
+  {
+    phdr ->rom[r] =1;
+    if (beebit_romwritable[r]) phdr ->rom[r] =0;
+  }
+//  setword(cbuffer,0);
+//  /*&FE20*/
+//  /*cbuffer[0] = sheila_b[0x20];*/
+//  wimpwrite(cbuffer,1,4); /*116*/
+  phdr ->Sheila20 =videoularead(0);
+//  /*6845 crtc*/
+//  j = 0;
+//  for (i=0;i<=0x0F;i++)
+//  {
+//    cbuffer[j] = m6845_r[i];
+//    j++;
+//    if (j > 3)
+//    {
+//      wimpwrite(cbuffer,1,4); /*120,124,128,132*/
+//      j = 0;
+//    }
+//  }
+  for (r =0; r<0x12; r++)
+  {
+    phdr ->crtc[r] =m6845_r[r];
+  }
+
+//  cbuffer[0] = m6845_r[0x10];
+//  cbuffer[1] = m6845_r[0x11];
+
+//  /*register 19*/
+//  cbuffer[2] = video_startindex;
+//  cbuffer[3] = 0;
+//  wimpwrite(cbuffer,1,4); /*136*/
+    phdr ->crtc[0x12] =video_startindex;
+//  /*unused*/
+//  setword(cbuffer,0);
+//  wimpwrite(cbuffer,1,4); /*140*/
+//  wimpwrite(cbuffer,1,4); /*144*/
+//  /*video ula palette registers*/
+//  j = 0;
+//  for (i=0;i<=0x0F;i++)
+//  {
+//    cbuffer[j] = videoula_palette[i];
+//    j++;
+//    if (j > 3)
+//    {
+//      wimpwrite(cbuffer,1,4); /*148,152,156,160*/
+//      j = 0;
+//    }
+//  }
+  for (p =0; p<=15; p++)
+   phdr ->palette[p] =videoularead(p+1);
+
+//  /*unused*/
+//  setword(cbuffer,0);
+//  wimpwrite(cbuffer,1,4); /*164*/
+//  wimpwrite(cbuffer,1,4); /*168*/
+//  /*acccon*/
+//  wimpwrite(cbuffer,1,4); /*172*/
+//  /*&FE10*/
+//  /*cbuffer[3] = sheila_b[0x10];*/
+//  wimpwrite(cbuffer,1,4); /*176*/
+//  /*unused*/
+//  cbuffer[3] = 0;
+//  wimpwrite(cbuffer,1,4); /*180*/
+//  wimpwrite(cbuffer,1,4); /*184*/
+//  wimpwrite(cbuffer,1,4); /*188*/
+//  /*timer to vertical sync*/
+//  setword(cbuffer,video_timer);
+//  wimpwrite(cbuffer,1,4); /*192*/
+//  /*unused*/
+//  setword(cbuffer,0);
+//  wimpwrite(cbuffer,1,4); /*196*/
+//  /*fill up extra 56 bytes until we to &210*/
+//  for (i=0;i<=0x0D;i++)
+//  {
+//    wimpwrite(cbuffer,1,4);
+//  }
+//
+//
+//
+//}
+}

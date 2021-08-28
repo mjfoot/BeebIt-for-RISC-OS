@@ -1,0 +1,107 @@
+/*>snapshots.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998
+ *
+ * Email: <mikef@voyager.co.nz>
+ */
+
+/*sheila*/
+/*extern char sheila_b[0x100];*/
+
+typedef struct {
+  char tag[16]; /* ="BBC Snapshot101/n"*/
+  char sheila[0x100];
+  int unusedb:24;   /* } */
+  int A:8;          /* } In top 8bits*/
+  int unusedb1:24;
+  int X:8;
+  int unusedb2:24;
+  int Y:8;
+
+  int P:8;     /* in bottom 8bits*/
+  int unusedb3:24;
+  /* try in top 8 bits*/
+//  int unusedb3:24;
+//  int P:8;
+
+  int unusedb4:24;
+  int S:8;     /* in top 8bits*/
+
+  int unusedb5:16;
+  int PC:16;   /* in top 16bits*/
+
+  char Tim1mode;   /* (0=no further interrupts, one shot mode)*/
+  char Tim2mode;   /* (0=no further interrupts)*/
+  char Tim3mode;   /* (0=no further interrupts, one shot mode)*/
+  char Tim4mode;   /* (0=no further interrupts)*/
+
+  int unusedb6:16;     /* } NB top two bytes*/
+  int Tim1:16;         /* }                 */
+  int unusedb7:16;
+  int Tim1latch:16;
+  int unusedb8:16;
+  int Tim2:16;
+  int unusedb9:24;     /* timer2 &4 latch, top byte only*/
+  int Tim2latch:8;
+  int unusedb10:16;
+  int Tim3:16;
+  int unusedb11:16;
+  int Tim3latch:16;
+  int unusedb12:16;
+  int Tim4:16;
+  int unusedb13:24;
+  int Tim4latch:8;
+
+  int Cvsync;                  /*          }  NB bottom two bytes*/
+  int unused; /* (Latch for above, &9C40)  }                     */
+  int unused2; /* (time until next interrupt)*/
+  int unused3; /* (timer, used by sound code)*/
+  char SysVIAIFR;
+  char SysVIAIER;
+  char UserVIAIFR;
+  char UserVIAIER;
+  int unused4; /* (arc_screenstart)*/
+  int unused5; /* (tamper)*/
+  int unused6; /* (cursor_tamper)*/
+  int unused7; /* (romsel_on)*/
+  int ROMSEL; /* Sheila; &30*/
+
+  char rom[15]; /* one byte for each ROM socket - 0=ROM, 1=RAM, 2=unused*/
+  int Sheila20; /*                            NO! 0=RAM, 1=ROM, 2=unused*/
+
+  char crtc[0x13];
+/*Word }
+Word }
+Word }  6845 CRT's registers
+Word }  ("register 19" contains contents of addressable latch)
+Word }*/
+  int unused8;
+  int unused9;
+
+  char palette[15];
+/*Word }
+Word } Palette Registers (lower 4 bits of each byte)
+Word }
+Word }*/
+  int unused10; /* (palette_on)*/
+  int ACCCON;
+  char unused11; /* (patch_on)*/
+  char unused12; /* (vsync_fps_copy)*/
+  char unused13; /* (lastmode)*/
+  char Sheila10;
+  int unused14; /* (tapecount)*/
+  int unused15; /* (keyaddr)*/
+  char unused16; /* (scanlines_to_draw)*/
+  char unused17; /* (vsync_fps)*/
+  char unused18; /* (firstline 0 or 1)*/
+  char unused19; /* (vsync_fps_reset)*/
+  int vsync_timer; /* (time counting down from screen start, reaches
+       zero when vsync interrupt occurs)*/
+  int unused20; /* (speedR)*/
+
+} SNAPHDR;
+
+extern void snapheadersave(SNAPHDR *phdr);
+extern void snapshotload(FILE *hfile);

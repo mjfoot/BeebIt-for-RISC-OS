@@ -1,0 +1,23 @@
+/*main.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+extern int wimp_version;
+extern int hconfig, hoptions;
+extern int lquit;
+
+extern void setword(char *cblock,int nvalue);
+extern int getword(char *cblock);
+extern void wimperror(char *cerror);
+/*extern readicon(int nwindow,unsigned int nicon, char *cbuffer);*/
+extern int buttonset(int nwindow, int nicon);
+extern char *readicon(int nwindow,int nicon);
+extern void writeicon(int nwindow,int nicon,char *ctext,int neor,int nclear);
+extern int wimpwrite(const void *ptr,int size,int num);
+extern int wimpputc(char achar);
+extern void itoa(int nvalue,char *cbuffer);

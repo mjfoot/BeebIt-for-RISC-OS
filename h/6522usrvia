@@ -1,0 +1,56 @@
+/*>6522usrvia.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * Rockwell 6522 Versatile Interface Adapter (VIA)
+ *
+ * (C) Copyright Michael J Foot, 1998-2001
+ *
+ * Email: <mikef@voyager.co.nz>
+ */
+
+/*#define INITIALTIMERADDVALUE 2
+#define TIMERADDVALUE 4*/
+
+/*User VIA*/
+extern char r6522usrvia_orb; /*output register B*/
+extern char r6522usrvia_irb; /*input register B*/
+extern char r6522usrvia_ora; /*output register A*/
+extern char r6522usrvia_ira; /*input register A*/
+extern char r6522usrvia_ddrb;
+extern char r6522usrvia_ddra;
+extern char r6522usrvia_t1cl;
+extern char r6522usrvia_t1ch;
+extern char r6522usrvia_t1ll;
+extern char r6522usrvia_t1lh;
+extern char r6522usrvia_t2cl;
+extern char r6522usrvia_t2ch;
+extern char r6522usrvia_t2ll;
+extern char r6522usrvia_sr; /*status register*/
+extern char r6522usrvia_acr;
+extern char r6522usrvia_pcr;
+extern char r6522usrvia_ifr;
+extern char r6522usrvia_ier;
+extern char r6522usrvia_porta;
+extern char r6522usrvia_portb;
+extern int r6522usrvia_t1; /*timer 1 (used for speed)*/
+extern int r6522usrvia_t2; /*timer 2 (used for speed)*/
+extern int r6522usrvia_t1setint; /*set interrupt when timer1 reaches 0*/
+extern int r6522usrvia_t2setint; /*set interrupt when timer2 reaches 0*/
+/*extern int r6522usrvia_irq;*/ /*irq interrupt status*/
+extern int r6522usrvia_tick;
+
+extern int amx_timer; /*amx mouse timer*/
+extern int amx_buttons;
+extern int amx_currentx;
+extern int amx_currenty;
+extern int amx_targetx;
+extern int amx_targety;
+
+extern void userviaamxmouse(void);
+extern void userviareset(int lfull);
+extern void userviasetirq(void);
+extern void userviasett1t2(int);
+extern char userviaread(int);
+extern void userviawrite(int, char);
+extern int userviamintimer(void);

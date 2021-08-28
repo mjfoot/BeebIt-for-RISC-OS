@@ -1,0 +1,54 @@
+/*>video.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#define MODE12_X 320 /*mode 12 is 640 pixels x 4 bits wide */
+#define MODE12_Y 256
+#define MODE15_X 640 /*mode 15 is 640 pixels x 8 bits wide */
+#define MODE15_Y 256
+
+/*video*/
+/*extern int video_vsync0;*/ /*start of vertical sync scan line*/
+/*extern int video_vsync1;*/ /*end of vertical sync scan line*/
+extern int video_mode; /*screen mode*/
+extern int video_timer; /*scanline timer*/
+
+/*extern int video_phase;*/
+extern int video_currentrow; /*current row being drawn on local screen*/
+extern int video_synchold;
+
+extern int video_address; /*current address in bbc memory*/
+extern char video_charrowcounter; /*whole part of character row*/
+extern char video_scanlinecounter; /*fraction part of character row*/
+extern int video_offset;
+extern int video_width;
+extern int video_displaywidth;
+extern int video_scale; /*video scaling to screen*/
+extern int video_field;
+extern int video_drawline; /*draw a line on this pass*/
+extern int video_onscreen;
+extern int video_de;
+extern int video_scanline;
+extern int video_display;
+extern int video_framerate;
+extern int host_screenwidth; /*screen width of the screen mode on the host*/
+/*extern int host_mode1280x1024;
+extern int host_mode1600x1024;*/
+extern unsigned int cursor_bitmap;
+
+extern void videoinit(void);
+extern void videosetplot(void);
+extern void videoreset(int lfull);
+extern void videomodechange(void);
+/*extern void videoupdate(void);*/
+extern void videoscanline(void);
+extern void videoteletext4(void);
+extern void videoteletext8(void);
+extern void videoteletext8x2(void);
+
+extern void (*videoteletext)(void);

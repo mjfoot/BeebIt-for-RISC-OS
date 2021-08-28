@@ -1,0 +1,227 @@
+/*>scrsave.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*
+ * Ideas -on pressing F12 or PrintScrn, may be worth waiting until cursor
+ * flashes off before returning to desktop/printing screen
+ * -or forcing cursor off immediately
+ */
+
+#define Log2BPP 9
+#define XWindLimit 11
+#define YWindLimit 12
+#define ScreenStart 148
+
+#include <stdio.h>
+#include "main.h"
+#include "beebit.h"
+#include "swis.h"
+#include "kernel.h"
+
+static _kernel_swi_regs regs;
+
+static char sprite[80*8192];
+static int sprmode =12;
+static int wrspr_size =(80*8192);
+static int xsize =640;
+static int ysize =256;
+static int wrbits =4; /* current version always output as 16 colour sprite*/
+
+static unsigned int arSprFileHdr[46] ={1, /* number of sprites in area*/
+  0x10,                        /* offset of first sprite*/
+  -1,                          /* FILL LATER offset of first free word*/
+                               /* extension words (none)*/
+  -1,                          /* FILL LATER offset to next sprite*/
+  0x65726373,                  /* sprite name (12B) 'screen'*/
+  0x6e65,
+  0,
+  -1,                          /* FILL LATER width in words*/
+  -1,                          /* FILL LATER height in scan lines*/
+  0,                           /* first bit used*/
+  0x1f,                        /* last bit used*/
+  0xac,                        /* offset to sprite data*/
+  0xac,                        /* offset to mask (if used) or sprite*/
+  -1,                          /* FILL LATER mode 9/12*/
+  0x10,                        /* 16 palette entries*/
+  0x10,                        /* 16 palette entries*/
+  0x0000FF10,0x0000FF10,0x00FF0010,0x00FF0010, /*16 entries (32 words)*/
+  0x00FFFF10,0x00FFFF10,0xFF000010,0xFF000010,
+  0xFF00FF10,0xFF00FF10,0xFFFF0010,0xFFFF0010,
+  0xFFFFFF10,0xFFFFFF10,0x00000011,0xFFFFFF12,
+  0x0000FF11,0xFFFF0012,0x00FF0011,0xFF00FF12,
+  0x00FFFF11,0xFF000012,0xFF000011,0x00FFFF12,
+  0xFF00FF11,0x00FF0012,0xFFFF0011,0x0000FF12,
+  0xFFFFFF11,0x00000012
+  };
+
+void screentobuffer(void)
+{
+  int vduvars[5];
+  int rdbits,rdscr_size;
+  int *screen,*rdp;
+  int wro,readbits_remain,writebits_sofar,read,l,readpixel;
+  int nx, ny, naddradd;
+  unsigned char write;
+  unsigned int mask;
+
+  int *limit;
+
+  vduvars[0] =Log2BPP;
+  vduvars[1] =XWindLimit;
+  vduvars[2] =YWindLimit;
+  vduvars[3] =ScreenStart;
+  vduvars[4] =-1;
+
+  regs.r[0] =(int)vduvars;
+  regs.r[1] =(int)vduvars;
+  _kernel_swi(OS_ReadVduVariables,&regs,&regs);
+
+  _kernel_swi(OS_RemoveCursors,&regs,&regs);
+
+  xsize = vduvars[1] + 1;
+  ysize = vduvars[2] + 1;
+  if (xsize ==320)
+    sprmode =9;
+  else
+    sprmode =12;
+
+  /* Iyonix fix, apparently some don't have Mode 15 defined in the MDF.
+  If this is the case they default to ysize of 479 (instead of 255)*/
+  /*if (ysize >256)
+  {
+    if (ysize > 480)*/
+      /*skip every second line*/
+      /*naddradd = (xsize / 4);
+    else
+      naddradd = 0;*/
+    /*ysize = 256;*/
+  /*}
+  else*/
+    naddradd = 0;
+
+  rdbits =1 <<vduvars[0];
+  screen =(int *)vduvars[3];
+
+  rdscr_size =(xsize *ysize *rdbits) /8;
+  wrspr_size =(xsize *ysize *wrbits) /8;
+
+  rdp =screen;
+  wro =0;
+
+  readbits_remain =0;
+  writebits_sofar =0;
+  write =0;
+
+  mask =0;   /* mask =0xFF or 0xF*/
+  for (l =0;l <rdbits;l++)
+    mask =mask | ((1<<31) >>l);
+
+  mask =mask >>(32 -rdbits);
+
+  limit = screen +(rdscr_size>> 2); /* /4. screen is an int pointer*/
+
+  ny = 0;
+  while (ny < ysize)
+  {
+    nx = 0;
+    /*while (rdp <limit)*/
+    while (nx < xsize)
+    {
+      if (readbits_remain ==0) /* read another word from screen?*/
+      {
+        read =(*(rdp ++));
+        readbits_remain =32;
+      }
+
+      readpixel =read & mask;
+
+      /* translation for 256 colour modes*/
+      if (readpixel ==0x15) readpixel =1;
+      if (readpixel ==0x62) readpixel =2;
+      if (readpixel ==0x77) readpixel =3;
+      if (readpixel ==0x88) readpixel =4;
+      if (readpixel ==0x9D) readpixel =5;
+      if (readpixel ==0xEA) readpixel =6;
+      if (readpixel ==0xFF) readpixel =7;
+
+      write =write >>4;
+      write =write | (readpixel <<4);
+      read =(read >>rdbits); /* shift out used bits*/
+
+      readbits_remain =readbits_remain -rdbits;
+      writebits_sofar =writebits_sofar +wrbits;
+
+      if (writebits_sofar ==8)
+      {
+        sprite[wro] =write;
+        wro++;
+        writebits_sofar =0;
+      }
+      nx++;
+    }
+    ny++;
+    rdp += naddradd;
+  }
+  _kernel_swi(OS_RestoreCursors,&regs,&regs);
+}
+
+void spritecommon(void)
+{
+  arSprFileHdr[2] =wrspr_size +0xbc; /* offset of first free word*/
+  arSprFileHdr[3] =wrspr_size +0xac; /* offset to next sprite*/
+  arSprFileHdr[7] =((xsize *wrbits) /32) -1; /* width in words*/
+  arSprFileHdr[8] =(ysize -1); /* height in scan lines*/
+  arSprFileHdr[13] =sprmode; /* mode 9/12*/
+}
+
+int file_exists(char *obj_name)
+{
+  regs.r[0] =5;
+  regs.r[1] =(int)obj_name;
+  _kernel_swi(OS_File,&regs,&regs);
+  return (regs.r[0]>0);
+}
+
+void sprite_printscreen(void)
+{
+  FILE *prtscr_file;
+  static int count =0;
+  static char scrn_name[] ="<BeebIt$Dir>.^.BBC01234";
+
+  screentobuffer();
+  spritecommon();
+  do
+  {
+    count++;
+    sprintf(scrn_name +18,"%05d",count);
+  }
+  while (file_exists(scrn_name));
+
+  prtscr_file =fopen(scrn_name,"wb");
+  fwrite(arSprFileHdr,4,46,prtscr_file);
+  fwrite(sprite,1,wrspr_size,prtscr_file);
+  fclose(prtscr_file);
+
+  regs.r[0] =18; /* set filetype*/
+  regs.r[1] =(int)scrn_name;
+  regs.r[2] =0xFF9;
+  _kernel_swi(OS_File,&regs,&regs);
+}
+
+int spritesave(void)
+{
+  spritecommon();
+
+  wimpwrite(arSprFileHdr,46,4);
+  wimpwrite(sprite,wrspr_size,1);
+
+  return TRUE;
+}
+
+

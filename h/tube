@@ -1,0 +1,14 @@
+/*>tube.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * Acorn Tube ULA
+ *
+ * (C) Copyright Michael J Foot, 1998-2002
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+extern void tubereset(void);
+extern char tuberead(int naddress);
+extern void tubewrite(int naddress, char nvalue);

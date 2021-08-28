@@ -1,0 +1,23 @@
+/*adc.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2007
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*analog to digital converter*/
+extern int adc_channel;
+extern int adc_flag;
+extern int adc_resolution;
+extern int adc_status;
+extern int adc_highbyte;
+extern int adc_lowbyte;
+extern int adc_timer; /*adc timer*/
+
+extern void adcreset(void);
+extern void adcenter(void);
+extern void adcpoll(void);
+extern char adcread(int naddress);
+extern void adcwrite(int naddress,int nvalue);

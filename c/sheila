@@ -1,0 +1,1474 @@
+/*>sheila.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include "6502cpu.h"
+#include "6522sysvia.h"
+#include "6522usrvia.h"
+#include "6845crtc.h"
+#include "6850acia.h"
+#include "8271fdc.h"
+#include "adc.h"
+#include "beebit.h"
+/*#include "kernel.h"*/
+#include "main.h"
+#include "riscos.h"
+/*#include "swis.h"*/
+#include "tube.h"
+#include "videoula.h"
+#include "1770fdc.h"
+
+/*extern _kernel_swi_regs regs;*/
+
+/*extern int currentpagedrom;*/
+/*extern char opcode;*/
+
+/*sheila*/
+/*char sheila_b[0x100];*/
+
+void sheilareset(void)
+{
+  /*int i;
+  for (i=0;i<=0x100;i++)
+    sheila_b[i] = 0xFE;*/
+  setword(r6502readbpoffset+32, (int)r6502readbp8000);
+  setword(r6502readbpoffset+36, (int)r6502readbp8000);
+  setword(r6502readbpoffset+40, (int)r6502readbp8000);
+  setword(r6502writebpoffset+32, (int)r6502writebp8000);
+  setword(r6502writebpoffset+36, (int)r6502writebp8000);
+  setword(r6502writebpoffset+40, (int)r6502writebp8000);
+
+  setword(r6502readmoffset+12, (int)r6502readm3000);
+  setword(r6502readmoffset+16, (int)r6502readm3000);
+  setword(r6502readmoffset+20, (int)r6502readm3000);
+  setword(r6502readmoffset+24, (int)r6502readm3000);
+  setword(r6502readmoffset+28, (int)r6502readm3000);
+  setword(r6502writemoffset+12, (int)r6502writem3000);
+  setword(r6502writemoffset+16, (int)r6502writem3000);
+  setword(r6502writemoffset+20, (int)r6502writem3000);
+  setword(r6502writemoffset+24, (int)r6502writem3000);
+  setword(r6502writemoffset+28, (int)r6502writem3000);
+
+  setword(r6502readmoffset+32, (int)r6502readm8000);
+  setword(r6502writemoffset+32, (int)r6502writem8000);
+  setword(r6502readmoffset+48, (int)r6502readmC000);
+  setword(r6502readmoffset+52, (int)r6502readmC000);
+  setword(r6502writemoffset+48, (int)r6502writemC000);
+  setword(r6502writemoffset+52, (int)r6502writemC000);
+}
+
+char sheilaread_b(int naddress)
+{
+  char nresult;
+
+  #ifdef __DEBUG__
+    fprintf(htrace,"READsheila>&%X\n",naddress);
+    fprintf(htrace,"PC=&%X OP=&%X\n",r6502_pc-1,opcode);
+  #endif
+
+  switch (naddress & 0xFC)
+  {
+    case 0x00:
+    case 0x04:
+      /*&FE00 - &FE07 (CRTC)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readcrtc()");
+      #endif
+      nresult = crtcread(naddress);
+      break;
+    case 0x08:
+    case 0x0C:
+      /*&FE08 - &FE0F (ACIA)*/
+      nresult = aciaread(naddress);
+      break;
+    case 0x10:
+      /*&FE10 - &FE17 (SERIALULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readserialula()");
+      #endif
+      nresult = serialularead(naddress);
+      break;
+    case 0x18:
+    case 0x1C:
+      /*&FE18 - &FE1F (SERIALULA/ADC)*/
+      nresult = serialularead(naddress);
+      /*nresult = 0x00;*/
+      break;
+    case 0x20:
+      /*&FE20 - &FE23 (VIDEOULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readvideoula()");
+      #endif
+      nresult = 0xFE; /*videoularead(naddress);*/
+      break;
+    case 0x24:
+      /*&FE24 - &FE27 (VIDEOULA/FDC INTERFACE CONTROL REG)*/
+      nresult = 0xFE; /*videoularead(naddress);*/
+      break;
+    case 0x28:
+    case 0x2C:
+      /*&FE28 - &FE2F (VIDEOULA/FDC INTERFACE)*/
+      nresult = 0xFE; /*videoularead(naddress);*/
+      break;
+    case 0x30:
+      /*&FE30 - &FE33 (ROMSEL)*/
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"&%X ROMSEL=&%X\n",naddress,beebit_romsel);
+      #endif
+      nresult = 0xFE;
+      break;
+    case 0x34:
+      /*FE34-&FE37 (ACCCON)*/
+      #ifdef __DEVELOPXX__
+        fprintf(htrace," &%X ACCCON=&%X\n",naddress,beebit_acccon);
+      #endif
+      nresult = 0xFE;
+      break;
+    case 0x38:
+      /*FE38-&FE3B (INTOFF)*/
+      nresult = 0xFE;
+      break;
+    case 0x3C:
+      /*FE3C-&FE3F (INTON)*/
+      nresult = 0xFE;
+      break;
+    case 0x40:
+    case 0x44:
+    case 0x48:
+    case 0x4C:
+    case 0x50:
+    case 0x54:
+    case 0x58:
+    case 0x5C:
+      /*&FE40-&FE5F*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"systemviaread(%X)",(naddress & 0x0F));
+      #endif
+      nresult = systemviaread(naddress);
+      break;
+    case 0x60:
+    case 0x64:
+    case 0x68:
+    case 0x6C:
+    case 0x70:
+    case 0x74:
+    case 0x78:
+    case 0x7C:
+      /*&FE60-&FE7F*/
+      #ifdef __DEBUG__
+        if (beebit_trace)
+          fprintf(htrace,"readuservia(&%X)",(naddress & 0x0F));
+      #endif
+      nresult = userviaread(naddress);
+      break;
+    case 0x80:
+    case 0x84:
+    case 0x88:
+    case 0x8C:
+    case 0x90:
+    case 0x94:
+    case 0x98:
+    case 0x9C:
+      /*&FE80-&FE9F (8271 or 1770)*/
+      nresult = i8271read(naddress);
+      /*nresult = w1770read(naddress);*/
+      if (beebit_nmi AND !beebit_oldnmi)
+      {
+        #ifdef __RISCOS__
+          r6502nmi();
+        #else
+          r6502donmi();
+        #endif
+      }
+      beebit_oldnmi = beebit_nmi;
+      #ifdef __DEBUG__
+        fprintf(htrace,"read8271(&%X)=&%X\n",(naddress & 0x0F),nresult);
+      #endif
+      break;
+    case 0xA0:
+    case 0xA4:
+    case 0xA8:
+    case 0xAC:
+      /*&FEA0-&FEAF (ECONET)*/
+      nresult = 0xFE;
+      break;
+    case 0xB0:
+    case 0xB4:
+      /*&FEB0-&FEB7 (ECONET)*/
+      nresult = 0xFE;
+      break;
+    case 0xB8:
+    case 0xBC:
+      /*&FEB8-&FEBF (ECONET)*/
+      nresult = 0xFE;
+      break;
+    case 0xC0:
+    case 0xC4:
+    case 0xC8:
+    case 0xCC:
+    case 0xD0:
+    case 0xD4:
+    case 0xD8:
+    case 0xDC:
+      /*FEC0-&FEDF (ADC)*/
+      nresult = adcread(naddress);
+      #ifdef __DEBUG__
+        fprintf(htrace,"readadc()");
+      #endif
+      break;
+    case 0xE0:
+    case 0xE4:
+    case 0xE8:
+    case 0xEC:
+      /*&FEE0-&FEFF (TUBE)*/
+      nresult = 0xFE;
+      break;
+    case 0xF0:
+    case 0xF4:
+    case 0xF8:
+    case 0xFC:
+      /*&FEE0-&FEFF (TUBE)*/
+      nresult = 0xFE;
+      /*nresult = tuberead(naddress);*/
+      break;
+    default:
+      nresult = memory[naddress];
+      break;
+  }
+  return (nresult);
+}
+
+char sheilaread_bp(int naddress)
+{
+  char nresult;
+
+  #ifdef __DEBUG__
+    fprintf(htrace,"READsheila>&%X\n",naddress);
+    fprintf(htrace,"PC=&%X OP=&%X\n",r6502_pc-1,opcode);
+  #endif
+
+  switch (naddress & 0xFC)
+  {
+    case 0x00:
+    case 0x04:
+      /*&FE00 - &FE07 (CRTC)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readcrtc()");
+      #endif
+      nresult = crtcread(naddress);
+      break;
+    case 0x08:
+    case 0x0C:
+      /*&FE08 - &FE0F (ACIA)*/
+      nresult = aciaread(naddress);
+      /*nresult = 0x00;*/
+      break;
+    case 0x10:
+      /*&FE10 - &FE17 (SERIALULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readserialula()");
+      #endif
+      nresult = serialularead(naddress);
+      /*nresult = 0x00;*/
+      break;
+    case 0x18:
+    case 0x1C:
+      /*&FE18 - &FE1F (SERIALULA/ADC)*/
+      nresult = serialularead(naddress);
+      /*nresult = 0x00;*/
+      break;
+    case 0x20:
+      /*&FE20 - &FE23 (VIDEOULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readvideoula()");
+      #endif
+      nresult = 0xFE; /*videoularead(naddress);*/
+      break;
+    case 0x24:
+      /*&FE24 - &FE27 (VIDEOULA/FDC INTERFACE CONTROL REG)*/
+      nresult = 0xFE; /*videoularead(naddress);*/
+      break;
+    case 0x28:
+    case 0x2C:
+      /*&FE28 - &FE2F (VIDEOULA/FDC INTERFACE)*/
+      nresult = 0xFE; /*videoularead(naddress);*/
+      break;
+    case 0x30:
+      /*&FE30 - &FE33 (ROMSEL)*/
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"&%X ROMSEL=&%X\n",naddress,beebit_romsel);
+      #endif
+      nresult = beebit_romsel;
+      break;
+    case 0x34:
+      /*FE34-&FE37 (ACCCON)*/
+      #ifdef __DEVELOPXX__
+        fprintf(htrace," &%X ACCCON=&%X\n",naddress,beebit_acccon);
+      #endif
+      nresult = beebit_acccon;
+      break;
+    case 0x38:
+      /*FE38-&FE3B (INTOFF)*/
+      nresult = beebit_acccon;
+      break;
+    case 0x3C:
+      /*FE3C-&FE3F (INTON)*/
+      nresult = beebit_acccon;
+      break;
+    case 0x40:
+    case 0x44:
+    case 0x48:
+    case 0x4C:
+    case 0x50:
+    case 0x54:
+    case 0x58:
+    case 0x5C:
+      /*&FE40-&FE5F*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"systemviaread(%X)",(naddress & 0x0F));
+      #endif
+      nresult = systemviaread(naddress);
+      break;
+    case 0x60:
+    case 0x64:
+    case 0x68:
+    case 0x6C:
+    case 0x70:
+    case 0x74:
+    case 0x78:
+    case 0x7C:
+      /*&FE60-&FE7F*/
+      #ifdef __DEBUG__
+        if (beebit_trace)
+          fprintf(htrace,"readuservia(&%X)",(naddress & 0x0F));
+      #endif
+      nresult = userviaread(naddress);
+      break;
+    case 0x80:
+    case 0x84:
+    case 0x88:
+    case 0x8C:
+    case 0x90:
+    case 0x94:
+    case 0x98:
+    case 0x9C:
+      /*&FE80-&FE9F (8271 or 1770)*/
+      if ((naddress & 0xFF) == 0x80)
+        nresult = w1770controlread();
+      else if ((naddress & 0xFF) == 0x85 AND !w1770_initialised)
+      {
+        nresult = w1770controlread();
+        w1770_initialised = TRUE;
+      }
+      else
+        nresult = w1770read(naddress);
+      break;
+    case 0xA0:
+    case 0xA4:
+    case 0xA8:
+    case 0xAC:
+      /*&FEA0-&FEAF (ECONET)*/
+      nresult = 0xFE;
+      break;
+    case 0xB0:
+    case 0xB4:
+      /*&FEB0-&FEB7 (ECONET)*/
+      nresult = 0xFE;
+      break;
+    case 0xB8:
+    case 0xBC:
+      /*&FEB8-&FEBF (ECONET)*/
+      nresult = 0xFE;
+      break;
+    case 0xC0:
+    case 0xC4:
+    case 0xC8:
+    case 0xCC:
+    case 0xD0:
+    case 0xD4:
+    case 0xD8:
+    case 0xDC:
+      /*FEC0-&FEDF (ADC)*/
+      nresult = adcread(naddress);
+      #ifdef __DEBUG__
+        fprintf(htrace,"readadc()");
+      #endif
+      break;
+    case 0xE0:
+    case 0xE4:
+    case 0xE8:
+    case 0xEC:
+      /*&FEE0-&FEFF (TUBE)*/
+      nresult = 0xFE;
+      /*nresult = tuberead(naddress);*/
+      break;
+    case 0xF0:
+    case 0xF4:
+    case 0xF8:
+    case 0xFC:
+      /*&FEE0-&FEFF (TUBE)*/
+      nresult = 0xFE;
+      /*nresult = tuberead(naddress);*/
+      break;
+    default:
+      nresult = memory[naddress];
+      break;
+  }
+  return (nresult);
+}
+
+char sheilaread_m(int naddress)
+{
+  char nresult;
+
+  #ifdef __DEBUG__
+    fprintf(htrace,"READsheila>&%X\n",naddress);
+    fprintf(htrace,"PC=&%X OP=&%X\n",r6502_pc-1,opcode);
+  #endif
+  switch (naddress & 0xFC)
+  {
+    case 0x00:
+    case 0x04:
+      /*&FE00 - &FE07 (CRTC)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readcrtc()");
+      #endif
+      nresult = crtcread(naddress);
+      break;
+    case 0x08:
+    case 0x0C:
+      /*&FE08 - &FE0F (ACIA)*/
+      nresult = aciaread(naddress);
+      /*nresult = 0x00;*/
+      break;
+    case 0x10:
+      /*&FE10 - &FE17 (SERIALULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readserialula()");
+      #endif
+      nresult = serialularead(naddress);
+      /*nresult = 0x00;*/
+      break;
+    case 0x18:
+    case 0x1C:
+      /*&FE18 - &FE1F (SERIALULA/ADC)*/
+      nresult = adcread(naddress);
+      break;
+    case 0x20:
+      /*&FE20 - &FE23 (VIDEOULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"readvideoula()");
+      #endif
+      /*nresult = videoularead(naddress);*/
+      nresult = 0;
+      break;
+    case 0x24:
+      /*&FE24 - &FE27 (VIDEOULA/FDC INTERFACE CONTROL REG)*/
+      nresult = w1770controlread();
+      break;
+    case 0x28:
+    case 0x2C:
+      /*&FE28 - &FE2F (VIDEOULA/FDC INTERFACE)*/
+      nresult = w1770read(naddress);
+      break;
+    case 0x30:
+      /*&FE30 - &FE33 (ROMSEL)*/
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"&%X ROMSEL=&%X\n",naddress,beebit_romsel);
+      #endif
+      nresult = beebit_romsel;
+      /*bbcvdu(70);
+      bbcvdu(69);
+      bbcvdu(51);
+      bbcvdu(48);
+      bbcvdu(32);
+      inttohex4(r6502_pc);
+      bbcvdu(61);
+      inttohex4(nresult);
+      bbcvdu(13);*/
+      break;
+    case 0x34:
+      /*FE34-&FE37 (ACCCON)*/
+      #ifdef __DEVELOPXX__
+        fprintf(htrace," &%X ACCCON=&%X\n",naddress,beebit_acccon);
+      #endif
+      /*if (beebit_acccon == 0x0B)
+        beebit_acccon = 0x18;*/
+      nresult = beebit_acccon;
+      /*bbcvdu(65);
+      bbcvdu(67);
+      bbcvdu(61);
+      bbcvdu(32);
+      inttohex4(r6502_pc);
+      bbcvdu(32);
+      inttohex4(nresult);
+      bbcvdu(13);*/
+      break;
+    case 0x38:
+      /*FE38-&FE3B (INTOFF)*/
+      nresult = 0;
+      break;
+    case 0x3C:
+      /*FE3C-&FE3F (INTON)*/
+      nresult = 0;
+      break;
+    case 0x40:
+    case 0x44:
+    case 0x48:
+    case 0x4C:
+    case 0x50:
+    case 0x54:
+    case 0x58:
+    case 0x5C:
+      /*&FE40-&FE5F*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"systemviaread(%X)",(naddress & 0x0F));
+      #endif
+      nresult = systemviaread(naddress);
+      break;
+    case 0x60:
+    case 0x64:
+    case 0x68:
+    case 0x6C:
+    case 0x70:
+    case 0x74:
+    case 0x78:
+    case 0x7C:
+      /*&FE60-&FE7F*/
+      #ifdef __DEBUG__
+        if (beebit_trace)
+          fprintf(htrace,"readuservia(&%X)",(naddress & 0x0F));
+      #endif
+      nresult = userviaread(naddress);
+      break;
+    case 0x80:
+    case 0x84:
+    case 0x88:
+    case 0x8C:
+    case 0x90:
+    case 0x94:
+    case 0x98:
+    case 0x9C:
+      /*&FE80-&FE9F (8271 or 1770)*/
+      nresult = i8271read(naddress);
+      if (beebit_nmi AND !beebit_oldnmi)
+      {
+        #ifdef __RISCOS__
+          r6502nmi();
+        #else
+          r6502donmi();
+        #endif
+      }
+      beebit_oldnmi = beebit_nmi;
+      break;
+    case 0xA0:
+    case 0xA4:
+    case 0xA8:
+    case 0xAC:
+      /*&FEA0-&FEAF (ECONET)*/
+      nresult = 0xFE;
+      break;
+    case 0xB0:
+    case 0xB4:
+      /*&FEB0-&FEB7 (ECONET)*/
+      nresult = 0xFE;
+      break;
+    case 0xB8:
+    case 0xBC:
+      /*&FEB8-&FEBF (ECONET)*/
+      nresult = 0xFF;
+      break;
+    case 0xC0:
+    case 0xC4:
+    case 0xC8:
+    case 0xCC:
+    case 0xD0:
+    case 0xD4:
+    case 0xD8:
+    case 0xDC:
+      /*FEC0-&FEDF (ADC)*/
+      nresult = 0xFF;
+      break;
+    case 0xE0:
+    case 0xE4:
+    case 0xE8:
+    case 0xEC:
+      /*&FEE0-&FEFF (TUBE)*/
+      nresult = 0xFF;
+      /*nresult = tuberead(naddress);*/
+      break;
+    case 0xF0:
+    case 0xF4:
+    case 0xF8:
+    case 0xFC:
+      /*&FEE0-&FEFF (TUBE)*/
+      nresult = 0xFF;
+      /*nresult = tuberead(naddress);*/
+      break;
+    default:
+      nresult = memory[naddress];
+      break;
+  }
+  return (nresult);
+}
+
+void sheilawrite_b(int naddress, char nvalue)
+{
+  #ifdef __DEBUG__
+    fprintf(htrace,"WRITEsheila=&%X,&%X\n",naddress,nvalue);
+  #endif
+  /*sheila address space FE00-&FEFF*/
+  /*these values are only used for snapshots*/
+  /*sheila_b[naddress-0xFE00] = nvalue;*/
+
+  switch (naddress & 0xFC)
+  {
+    case 0x00:
+    case 0x04:
+      /*&FE00 - &FE07*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writecrtc(%X)",nvalue);
+      #endif
+      crtcwrite(naddress,nvalue);
+      break;
+    case 0x08:
+    case 0x0C:
+      /*&FE08 - &FE0F (ACIA)*/
+      aciawrite(naddress,nvalue);
+      break;
+    case 0x10:
+    case 0x14:
+      /*&FE10 - &FE17 (SERIALULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writeserialula()");
+      #endif
+      serialulawrite(naddress,nvalue);
+      break;
+    case 0x18:
+    case 0x1C:
+      /*&FE18 - &FE1F (SERIALULA/ADC)*/
+      serialulawrite(naddress,nvalue);
+      #ifdef __DEBUG__
+        fprintf(htrace,"writeserialula()");
+      #endif
+      break;
+    case 0x20:
+      /*&FE20 - &FE23 (VIDEOULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writevideoula(&%X,&%X)\n",naddress,nvalue);
+      #endif
+      videoulawrite(naddress, nvalue);
+      break;
+    case 0x24:
+      /*&FE24 - &FE27 (VIDEOULA/FDC INTERFACE CONTROL REG)*/
+      videoulawrite(naddress, nvalue);
+      break;
+    case 0x28:
+    case 0x2C:
+      /*&FE28 - &FE2F (VIDEOULA/FDC INTERFACE)*/
+      videoulawrite(naddress, nvalue);
+      break;
+    case 0x30:
+      /*&FE30 - &FE33 (ROMSEL)*/
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"ROMSEL(&%X,&%X)",naddress,nvalue);
+      #endif
+      if (beebit_romselected != nvalue)
+      {
+        beebit_romsel = nvalue;
+        pageinrom(beebit_romsel & 0x0F, FALSE);
+      }
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"=&%X\n",beebit_romsel);
+      #endif
+      break;
+    case 0x34:
+      /*&FE34 - &FE37 (ACCCON)*/
+      beebit_acccon = nvalue;
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"ACCCON(&%X,&%X)\n",naddress,nvalue);
+      #endif
+      break;
+    case 0x38:
+      /*&FE38 - &FE3B (INTOFF)*/
+      break;
+    case 0x3C:
+      /*&FE3C - &FE3F (INTON)*/
+      break;
+    case 0x40:
+    case 0x44:
+    case 0x48:
+    case 0x4C:
+    case 0x50:
+    case 0x54:
+    case 0x58:
+    case 0x5C:
+      /*&FE40 - &FE5F (SYSTEMVIA)*/
+      /*printf(" &FE40 ");*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"systemviawrite(%X,%X)",(naddress & 0x0F),nvalue);
+      #endif
+      systemviawrite(naddress,nvalue);
+      break;
+    case 0x60:
+    case 0x64:
+    case 0x68:
+    case 0x6C:
+    case 0x70:
+    case 0x74:
+    case 0x78:
+    case 0x7C:
+      /*&FE60 - &FE7F (USERVIA)*/
+      #ifdef __DEBUG__
+        if (beebit_trace)
+          fprintf(htrace,"writeuservia(&%X,&%X)",(naddress & 0x0F),nvalue);
+      #endif
+      userviawrite(naddress, nvalue);
+      break;
+    case 0x80:
+    case 0x84:
+    case 0x88:
+    case 0x8C:
+    case 0x90:
+    case 0x94:
+    case 0x98:
+    case 0x9C:
+      /*&FE80 - &FE9F (8271 or 1770)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"write8271(&%X,&%X)\n",(naddress & 0x0F),nvalue);
+      #endif
+      i8271write(naddress, nvalue);
+      /*w1770write(naddress, nvalue);*/
+      if (beebit_nmi AND !beebit_oldnmi)
+      {
+        #ifdef __RISCOS__
+          r6502nmi();
+        #else
+          r6502donmi();
+        #endif
+      }
+      beebit_oldnmi = beebit_nmi;
+      break;
+    case 0xC0:
+    case 0xC4:
+    case 0xC8:
+    case 0xCC:
+    case 0xD0:
+    case 0xD4:
+    case 0xD8:
+    case 0xDC:
+      /*&FEC0 - &FEDF (ADC)*/
+      adcwrite(naddress,nvalue);
+      #ifdef __DEBUG__
+        fprintf(htrace,"writeadc()");
+      #endif
+      break;
+    case 0xE0:
+    case 0xE4:
+    case 0xE8:
+    case 0xEC:
+      /*&FEE0-&FEFF (TUBE)*/
+      /*tubewrite(naddress,nvalue);*/
+      break;
+    case 0xF0:
+    case 0xF4:
+    case 0xF8:
+    case 0xFC:
+      /*FEE0-&FEFF (TUBE)*/
+      /*tubewrite(naddress,nvalue);*/
+      break;
+  }
+}
+
+void sheilawrite_bp(int naddress, char nvalue)
+{
+  #ifdef __DEBUG__
+    fprintf(htrace,"WRITEsheila=&%X,&%X\n",naddress,nvalue);
+  #endif
+  /*sheila address space FE00-&FEFF*/
+  /*these values are only used for snapshots*/
+  /*sheila_b[naddress-0xFE00] = nvalue;*/
+
+  switch (naddress & 0xFC)
+  {
+    case 0x00:
+    case 0x04:
+      /*&FE00 - &FE07*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writecrtc(%X)",nvalue);
+      #endif
+      crtcwrite(naddress,nvalue);
+      break;
+    case 0x08:
+    case 0x0C:
+      /*&FE08 - &FE0F (ACIA)*/
+      aciawrite(naddress,nvalue);
+      break;
+    case 0x10:
+    case 0x14:
+      /*&FE10 - &FE17 (SERIALULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writeserialula()");
+      #endif
+      serialulawrite(naddress,nvalue);
+      break;
+    case 0x18:
+    case 0x1C:
+      /*&FE18 - &FE1F (SERIALULA/ADC)*/
+      serialulawrite(naddress,nvalue);
+      #ifdef __DEBUG__
+        fprintf(htrace,"writeserialula()");
+      #endif
+      break;
+    case 0x20:
+      /*&FE20 - &FE23 (VIDEOULA)*/
+      /*fprintf(htrace,"UW:&%X,&%X - PC=&%x\n",naddress,nvalue,r6502_pc);*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writevideoula(&%X,&%X)\n",naddress,nvalue);
+      #endif
+      videoulawrite(naddress, nvalue);
+      break;
+    case 0x24:
+      /*&FE24 - &FE27 (VIDEOULA/FDC INTERFACE CONTROL REG)*/
+      videoulawrite(naddress, nvalue);
+      break;
+    case 0x28:
+    case 0x2C:
+      /*&FE28 - &FE2F (VIDEOULA/FDC INTERFACE)*/
+      videoulawrite(naddress, nvalue);
+      break;
+    case 0x30:
+      /*&FE30 - &FE33 (ROMSEL)*/
+      /*bbcvdu(82);
+      inttohex4(r6502_pc);
+      bbcvdu(32);
+      inttohex4(nvalue);
+      bbcvdu(13);
+      bbcvdu(10);*/
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"ROMSEL(&%X,&%X)",naddress,nvalue);
+      #endif
+      /*if ((nvalue & 0x0F) > 1)
+      {*/
+        /*&02 - &0F*/
+        /*beebit_romsel = (nvalue & 0x7F);*/
+        /*make rom F use rom E*/
+        /*if ((nvalue & 0x0F) == 0x0F)
+          nvalue &= 0xFE;
+        if (beebit_romselected != (nvalue & 0x0F))
+          pageinrom(nvalue & 0x0F, FALSE);
+      }*/
+      beebit_romsel = (nvalue & 0x0F);
+      if (beebit_romsel == 0x0F)
+        beebit_romsel = 0x0E;
+      /*if (beebit_romsel > 0)
+      {*/
+        if (beebit_romselected != beebit_romsel)
+          pageinrom(beebit_romsel, FALSE);
+      /*}*/
+
+      if (nvalue & 0x80)
+      {
+        /*ROMSEL b7 (RAM) (&8000-&AFFF)*/
+        setword(r6502readbpoffset+32, (int)r6502readbp8000_ram);
+        setword(r6502readbpoffset+36, (int)r6502readbp8000_ram);
+        setword(r6502readbpoffset+40, (int)r6502readbp8000_ram);
+        setword(r6502writebpoffset+32, (int)r6502writebp8000_ram);
+        setword(r6502writebpoffset+36, (int)r6502writebp8000_ram);
+        setword(r6502writebpoffset+40, (int)r6502writebp8000_ram);
+        /*setword(r6502opcodes+(0x85*4), (int)r6502opcode85_ram);
+        setword(r6502opcodes+(0x91*4), (int)r6502opcode91_ram);
+        setword(r6502opcodes+(0xA0*4), (int)r6502opcodeA0_ram);
+        setword(r6502opcodes+(0xA5*4), (int)r6502opcodeA5_ram);
+        setword(r6502opcodes+(0xA9*4), (int)r6502opcodeA9_ram);
+        setword(r6502opcodes+(0xB1*4), (int)r6502opcodeB1_ram);
+        setword(r6502opcodes+(0xC9*4), (int)r6502opcodeC9_ram);
+        setword(r6502opcodes+(0xD0*4), (int)r6502opcodeD0_ram);
+        setword(r6502opcodes+(0xE6*4), (int)r6502opcodeE6_ram);*/
+        /*cpu_execute = r6512execute_ram;*/
+      }
+      else
+      {
+        setword(r6502readbpoffset+32, (int)r6502readbp8000);
+        setword(r6502readbpoffset+36, (int)r6502readbp8000);
+        setword(r6502readbpoffset+40, (int)r6502readbp8000);
+        setword(r6502writebpoffset+32, (int)r6502writebp8000);
+        setword(r6502writebpoffset+36, (int)r6502writebp8000);
+        setword(r6502writebpoffset+40, (int)r6502writebp8000);
+        /*if (beebit_acccon & 0x80)
+        {*/
+          /*setword(r6502opcodes+(0x85*4), (int)r6502opcode85_ram);
+          setword(r6502opcodes+(0x91*4), (int)r6502opcode91_ram);
+          setword(r6502opcodes+(0xA0*4), (int)r6502opcodeA0_ram);
+          setword(r6502opcodes+(0xA5*4), (int)r6502opcodeA5_ram);
+          setword(r6502opcodes+(0xA9*4), (int)r6502opcodeA9_ram);
+          setword(r6502opcodes+(0xB1*4), (int)r6502opcodeB1_ram);
+          setword(r6502opcodes+(0xC9*4), (int)r6502opcodeC9_ram);
+          setword(r6502opcodes+(0xD0*4), (int)r6502opcodeD0_ram);
+          setword(r6502opcodes+(0xE6*4), (int)r6502opcodeE6_ram);*/
+          /*cpu_execute = r6512execute_ram;*/
+        /*}
+        else
+        {*/
+          /*setword(r6502opcodes+(0x85*4), (int)r6502opcode85);
+          setword(r6502opcodes+(0x91*4), (int)r6502opcode91);
+          setword(r6502opcodes+(0xA0*4), (int)r6502opcodeA0);
+          setword(r6502opcodes+(0xA5*4), (int)r6502opcodeA5);
+          setword(r6502opcodes+(0xA9*4), (int)r6502opcodeA9);
+          setword(r6502opcodes+(0xB1*4), (int)r6502opcodeB1);
+          setword(r6502opcodes+(0xC9*4), (int)r6502opcodeC9);
+          setword(r6502opcodes+(0xD0*4), (int)r6502opcodeD0);
+          setword(r6502opcodes+(0xE6*4), (int)r6502opcodeE6);*/
+          /*cpu_execute = r6512execute;
+        }*/
+      }
+
+      /*beebit_romsel |= (nvalue & 0x80);*/
+      beebit_romsel = nvalue;
+      /*else
+      {*/
+        /*&00 - &01*/
+        /*beebit_romsel &= 0x0F;
+        beebit_romsel |= (nvalue & 0xF0);
+        if (beebit_romsel & 0xF0)
+          blankrow(*shadow+0xB000,0x1000,0);
+      }*/
+      break;
+    case 0x34:
+      /*&FE34 - &FE37 (ACCCON)*/
+      /*bbcvdu(65);
+      inttohex4(r6502_pc);
+      bbcvdu(32);
+      inttohex4(nvalue);
+      bbcvdu(13);
+      bbcvdu(10);*/
+      if (nvalue & 0x80)
+      {
+        /*ACCCON b7 (VDUSEL) (&3000-&7FFF)*/
+        setword(r6502readbpoffset+12, (int)r6502readbp3000_ram);
+        setword(r6502readbpoffset+16, (int)r6502readbp3000_ram);
+        setword(r6502readbpoffset+20, (int)r6502readbp3000_ram);
+        setword(r6502readbpoffset+24, (int)r6502readbp3000_ram);
+        setword(r6502readbpoffset+28, (int)r6502readbp3000_ram);
+        setword(r6502writebpoffset+12, (int)r6502writebp3000_ram);
+        setword(r6502writebpoffset+16, (int)r6502writebp3000_ram);
+        setword(r6502writebpoffset+20, (int)r6502writebp3000_ram);
+        setword(r6502writebpoffset+24, (int)r6502writebp3000_ram);
+        setword(r6502writebpoffset+28, (int)r6502writebp3000_ram);
+        /*setword(r6512opcodes+(0x85*4), (int)r6512opcode85_ram);
+        setword(r6512opcodes+(0x91*4), (int)r6512opcode91_ram);
+        setword(r6512opcodes+(0xA0*4), (int)r6512opcodeA0_ram);
+        setword(r6512opcodes+(0xA5*4), (int)r6512opcodeA5_ram);
+        setword(r6512opcodes+(0xA9*4), (int)r6512opcodeA9_ram);
+        setword(r6512opcodes+(0xB1*4), (int)r6512opcodeB1_ram);
+        setword(r6512opcodes+(0xC9*4), (int)r6512opcodeC9_ram);
+        setword(r6512opcodes+(0xD0*4), (int)r6512opcodeD0_ram);
+        setword(r6512opcodes+(0xE6*4), (int)r6512opcodeE6_ram);*/
+        /*cpu_execute = r6512execute_ram;*/
+      }
+      else
+      {
+        setword(r6502readbpoffset+12, (int)r6502readbp3000);
+        setword(r6502readbpoffset+16, (int)r6502readbp3000);
+        setword(r6502readbpoffset+20, (int)r6502readbp3000);
+        setword(r6502readbpoffset+24, (int)r6502readbp3000);
+        setword(r6502readbpoffset+28, (int)r6502readbp3000);
+        setword(r6502writebpoffset+12, (int)r6502writebp3000);
+        setword(r6502writebpoffset+16, (int)r6502writebp3000);
+        setword(r6502writebpoffset+20, (int)r6502writebp3000);
+        setword(r6502writebpoffset+24, (int)r6502writebp3000);
+        setword(r6502writebpoffset+28, (int)r6502writebp3000);
+        /*if (beebit_romsel & 0x80)
+        {*/
+          /*setword(r6512opcodes+(0x85*4), (int)r6512opcode85_ram);
+          setword(r6512opcodes+(0x91*4), (int)r6512opcode91_ram);
+          setword(r6512opcodes+(0xA0*4), (int)r6512opcodeA0_ram);
+          setword(r6512opcodes+(0xA5*4), (int)r6512opcodeA5_ram);
+          setword(r6512opcodes+(0xA9*4), (int)r6512opcodeA9_ram);
+          setword(r6512opcodes+(0xB1*4), (int)r6512opcodeB1_ram);
+          setword(r6512opcodes+(0xC9*4), (int)r6512opcodeC9_ram);
+          setword(r6512opcodes+(0xD0*4), (int)r6512opcodeD0_ram);
+          setword(r6512opcodes+(0xE6*4), (int)r6512opcodeE6_ram);*/
+          /*cpu_execute = r6512execute_ram;*/
+        /*}
+        else
+        {*/
+          /*setword(r6512opcodes+(0x85*4), (int)r6512opcode85);
+          setword(r6512opcodes+(0x91*4), (int)r6512opcode91);
+          setword(r6512opcodes+(0xA0*4), (int)r6512opcodeA0);
+          setword(r6512opcodes+(0xA5*4), (int)r6512opcodeA5);
+          setword(r6512opcodes+(0xA9*4), (int)r6512opcodeA9);
+          setword(r6512opcodes+(0xB1*4), (int)r6512opcodeB1);
+          setword(r6512opcodes+(0xC9*4), (int)r6512opcodeC9);
+          setword(r6512opcodes+(0xD0*4), (int)r6512opcodeD0);
+          setword(r6512opcodes+(0xE6*4), (int)r6512opcodeE6);*/
+          /*cpu_execute = r6512execute;
+        }*/
+      }
+      beebit_acccon = nvalue;
+
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"ACCCON(&%X,&%X)\n",naddress,nvalue);
+      #endif
+      break;
+    case 0x38:
+      /*&FE38 - &FE3B (INTOFF)*/
+      break;
+    case 0x3C:
+      /*&FE3C - &FE3F (INTON)*/
+      break;
+    case 0x40:
+    case 0x44:
+    case 0x48:
+    case 0x4C:
+    case 0x50:
+    case 0x54:
+    case 0x58:
+    case 0x5C:
+      /*&FE40 - &FE5F (SYSTEMVIA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"systemviawrite(%X,%X)",(naddress & 0x0F),nvalue);
+      #endif
+      systemviawrite(naddress,nvalue);
+      break;
+    case 0x60:
+    case 0x64:
+    case 0x68:
+    case 0x6C:
+    case 0x70:
+    case 0x74:
+    case 0x78:
+    case 0x7C:
+      /*&FE60 - &FE7F (USERVIA)*/
+      #ifdef __DEBUG__
+        if (beebit_trace)
+          fprintf(htrace,"writeuservia(&%X,&%X)",(naddress & 0x0F),nvalue);
+      #endif
+      userviawrite(naddress, nvalue);
+      break;
+    case 0x80:
+    case 0x84:
+    case 0x88:
+    case 0x8C:
+    case 0x90:
+    case 0x94:
+    case 0x98:
+    case 0x9C:
+      /*&FE80 - &FE9F (8271 or 1770)*/
+      if ((naddress & 0xFF) == 0x80)
+        w1770controlwrite(nvalue);
+      else if ((naddress & 0xFF) == 0x85 AND !w1770_initialised)
+        w1770controlwrite(nvalue);
+      else
+        w1770write(naddress,nvalue);
+      break;
+    case 0xC0:
+    case 0xC4:
+    case 0xC8:
+    case 0xCC:
+    case 0xD0:
+    case 0xD4:
+    case 0xD8:
+    case 0xDC:
+      /*&FEC0 - &FEDF (ADC)*/
+      adcwrite(naddress,nvalue);
+      #ifdef __DEBUG__
+        fprintf(htrace,"writeadc()");
+      #endif
+      break;
+    case 0xE0:
+    case 0xE4:
+    case 0xE8:
+    case 0xEC:
+      /*&FEE0-&FEFF (TUBE)*/
+      /*tubewrite(naddress,nvalue);*/
+      break;
+    case 0xF0:
+    case 0xF4:
+    case 0xF8:
+    case 0xFC:
+      /*FEE0-&FEFF (TUBE)*/
+      /*tubewrite(naddress,nvalue);*/
+      break;
+  }
+}
+
+void sheilawrite_m(int naddress, char nvalue)
+{
+  /*int aaa;*/
+
+  #ifdef __DEBUG__
+    fprintf(htrace,"WRITEsheila=&%X,&%X\n",naddress,nvalue);
+  #endif
+  /*sheila address space FE00-&FEFF*/
+  /*these values are only used for snapshots*/
+  /*sheila_b[naddress-0xFE00] = nvalue;*/
+  switch (naddress & 0xFC)
+  {
+    case 0x00:
+    case 0x04:
+      /*&FE00 - &FE07*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writecrtc(%X)",nvalue);
+      #endif
+      crtcwrite(naddress,nvalue);
+      break;
+    case 0x08:
+    case 0x0C:
+      /*&FE08 - &FE0F (ACIA)*/
+      aciawrite(naddress,nvalue);
+      break;
+    case 0x10:
+    case 0x14:
+      /*&FE10 - &FE17 (SERIALULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writeserialula()");
+      #endif
+      serialulawrite(naddress,nvalue);
+      break;
+    case 0x18:
+    case 0x1C:
+      /*&FE18 - &FE1F (SERIALULA/ADC)*/
+      adcwrite(naddress,nvalue);
+      #ifdef __DEBUG__
+        fprintf(htrace,"writeserialula()");
+      #endif
+      break;
+    case 0x20:
+      /*&FE20 - &FE23 (VIDEOULA)*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"writevideoula(&%X,&%X)\n",naddress,nvalue);
+      #endif
+      videoulawrite(naddress, nvalue);
+      break;
+    case 0x24:
+      /*&FE24 - &FE27 (VIDEOULA/FDC INTERFACE CONTROL REG)*/
+      w1770controlwrite(nvalue);
+      break;
+    case 0x28:
+    case 0x2C:
+      /*&FE28 - &FE2F (VIDEOULA/FDC INTERFACE)*/
+      w1770write(naddress,nvalue);
+      break;
+    case 0x30:
+      /*&FE30 - &FE33 (ROMSEL)*/
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"ROMSEL(&%X,&%X)",naddress,nvalue);
+      #endif
+
+      /*bbcvdu(70);
+      bbcvdu(69);
+      bbcvdu(51);
+      bbcvdu(48);
+      bbcvdu(32);
+      inttohex4(r6502_pc);
+      bbcvdu(32);
+      inttohex4(nvalue);*/
+      /*bbcvdu(32);
+
+      aaa = memory[0xBA];
+      bbcvdu(77);
+      inttohex4(aaa);
+      aaa = memory[0xBB];
+      inttohex4(aaa);
+
+      bbcvdu(32);
+      aaa = shadow[0xBA];
+      bbcvdu(83);
+      inttohex4(aaa);
+      aaa = shadow[0xBB];
+      inttohex4(aaa);
+      bbcvdu(32);
+
+      aaa = memory[0x8008];
+      bbcvdu(78);
+      inttohex4(aaa);
+      aaa = shadow[0x8008];
+      bbcvdu(32);
+      inttohex4(aaa);*/
+      /*bbcvdu(10);
+      bbcvdu(13);*/
+
+      /*if private ram in, copy it out*/
+      /*if (beebit_romsel & 0x80)*/
+        /*ANDY (SRAM)*/
+        /*swapbanks(0x8000,0x1000);*/
+      /*don't do this check. if mosram set, rom won't get swapped in later*/
+      /*if (beebit_romselected != (nvalue & 0x0F))*/
+        pageinrom(nvalue & 0x0F,nvalue & 0x80);
+      /*if private ram out, copy it in*/
+      /*if (nvalue & 0x80)*/
+        /*ANDY (SRAM)*/
+        /*swapbanks(0x8000,0x1000);*/
+      if (nvalue & 0x80)
+      {
+        /*ROMSEL b7 (RAM)*/
+        setword(r6502readmoffset+32, (int)r6502readm8000_ram);
+        setword(r6502writemoffset+32, (int)r6502writem8000_ram);
+      }
+      else
+      {
+        setword(r6502readmoffset+32, (int)r6502readm8000);
+        setword(r6502writemoffset+32, (int)r6502writem8000);
+      }
+      beebit_romsel = nvalue;
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"=&%X\n",beebit_romsel);
+      #endif
+
+      /*aaa = memory[0xBA];
+      bbcvdu(77);
+      inttohex4(aaa);
+      aaa = memory[0xBB];
+      inttohex4(aaa);
+
+      bbcvdu(32);
+      aaa = shadow[0xBA];
+      bbcvdu(83);
+      inttohex4(aaa);
+      aaa = shadow[0xBB];
+      inttohex4(aaa);
+      bbcvdu(32);
+
+      aaa = memory[0x8008];
+      bbcvdu(78);
+      inttohex4(aaa);
+      aaa = shadow[0x8008];
+      bbcvdu(32);
+      inttohex4(aaa);
+      bbcvdu(13);*/
+
+      break;
+    case 0x34:
+      /*&FE34 - &FE37 (ACCCON)*/
+      /*nvalue = nvalue & 0xFC;*/
+
+      /*bbcvdu(65);
+      bbcvdu(67);
+      bbcvdu(87);
+      bbcvdu(32);
+      inttohex4(r6502_pc);
+      bbcvdu(32);
+      inttohex4(nvalue);
+      bbcvdu(13);*/
+
+      /*if ((nvalue & 0x06) AND !(beebit_acccon & 0x06))
+      {
+        lflag = 0;*/
+        /*LYNNE (E,X)*/
+        /*if (nvalue & 0x04)
+          lflag = 1;
+        else if (nvalue & 0x02)
+        {
+          if ((r6502_pc >= 0xC000) AND (r6502_pc < 0x8000))
+            lflag = 1;
+        }
+        if (lflag)
+          swapbanks(0x3000,0x5000);
+      }
+      else if (!(nvalue & 0x06) AND (beebit_acccon & 0x06))*/
+        /*swap shadow out*/
+        /*swapbanks(0x3000,0x5000);*/
+
+        /*bbcvdu(78);
+        inttohex(beebit_acccon);
+        bbcvdu(77);
+        inttohex(beebit_memorymap);*/
+      /*if ((nvalue & 0x04) != (beebit_acccon & 0x04))
+      {*/
+        /*LYNNE (X)*/
+        /*bbcvdu(79);
+        inttohex(beebit_romsel);
+        swapbanks(0x3000,0x5000);*/
+        /*set the memory map swap flag*/
+        /*0 = shadow is not swapped in*/
+        /*1 = shadow is swapped in*/
+        /*beebit_memorymap = (beebit_memorymap ^ 0x04);*/
+        /*beebit_memorymap = (nvalue & 0x04);*/
+        /*bbcvdu(79);
+        inttohex(beebit_memorymap);*/
+        /*regs.r[0] = 0x81;
+        regs.r[1] = 0x20;
+        regs.r[2] = 0x00;
+        _kernel_swi(OS_Byte,&regs,&regs);*/
+      /*}*/
+
+      /*if ((nvalue & 0x08) != (beebit_acccon & 0x08))*/
+        /*LYNNE (Y)*/
+        /*this is called all the time!*/
+        /*swapbanks(0xC000,0x2000);*/
+
+      switch (nvalue & 0x06)
+      {
+        case 0x00:
+          /*RAM*/
+          setword(r6502readmoffset+12, (int)r6502readm3000);
+          setword(r6502readmoffset+16, (int)r6502readm3000);
+          setword(r6502readmoffset+20, (int)r6502readm3000);
+          setword(r6502readmoffset+24, (int)r6502readm3000);
+          setword(r6502readmoffset+28, (int)r6502readm3000);
+          setword(r6502writemoffset+12, (int)r6502writem3000);
+          setword(r6502writemoffset+16, (int)r6502writem3000);
+          setword(r6502writemoffset+20, (int)r6502writem3000);
+          setword(r6502writemoffset+24, (int)r6502writem3000);
+          setword(r6502writemoffset+28, (int)r6502writem3000);
+          break;
+        case 0x02:
+          /*ACCCON b1 (E)*/
+          setword(r6502readmoffset+12, (int)r6502readm3000_e);
+          setword(r6502readmoffset+16, (int)r6502readm3000_e);
+          setword(r6502readmoffset+20, (int)r6502readm3000_e);
+          setword(r6502readmoffset+24, (int)r6502readm3000_e);
+          setword(r6502readmoffset+28, (int)r6502readm3000_e);
+          setword(r6502writemoffset+12, (int)r6502writem3000_e);
+          setword(r6502writemoffset+16, (int)r6502writem3000_e);
+          setword(r6502writemoffset+20, (int)r6502writem3000_e);
+          setword(r6502writemoffset+24, (int)r6502writem3000_e);
+          setword(r6502writemoffset+28, (int)r6502writem3000_e);
+          break;
+        case 0x04:
+        case 0x06:
+          /*ACCCON b2 (X)*/
+          setword(r6502readmoffset+12, (int)r6502readm3000_x);
+          setword(r6502readmoffset+16, (int)r6502readm3000_x);
+          setword(r6502readmoffset+20, (int)r6502readm3000_x);
+          setword(r6502readmoffset+24, (int)r6502readm3000_x);
+          setword(r6502readmoffset+28, (int)r6502readm3000_x);
+          setword(r6502writemoffset+12, (int)r6502writem3000_x);
+          setword(r6502writemoffset+16, (int)r6502writem3000_x);
+          setword(r6502writemoffset+20, (int)r6502writem3000_x);
+          setword(r6502writemoffset+24, (int)r6502writem3000_x);
+          setword(r6502writemoffset+28, (int)r6502writem3000_x);
+          break;
+      }
+
+      if (nvalue & 0x08)
+      {
+        /*ACCCON b3 (Y)*/
+        /*&C000-&DFFF*/
+        setword(r6502readmoffset+48, (int)r6502readmC000_y);
+        setword(r6502readmoffset+52, (int)r6502readmC000_y);
+        setword(r6502writemoffset+48, (int)r6502writemC000_y);
+        setword(r6502writemoffset+52, (int)r6502writemC000_y);
+        setword(r65c12opcodes+(0x91*4), (int)r65c12opcode91_ram);
+      }
+      else
+      {
+        /*&C000-&DFFF*/
+        setword(r6502readmoffset+48, (int)r6502readmC000);
+        setword(r6502readmoffset+52, (int)r6502readmC000);
+        setword(r6502writemoffset+48, (int)r6502writemC000);
+        setword(r6502writemoffset+52, (int)r6502writemC000);
+        setword(r65c12opcodes+(0x91*4), (int)r65c12opcode91);
+      }
+
+      if (nvalue & 0x80)
+      {
+        /*IRR*/
+        #ifdef __RISCOS__
+          r6502irq();
+        #else
+          r6502doirq();
+        #endif
+        nvalue &= 0x7F;
+      }
+      beebit_acccon = nvalue;
+
+      /*bbcvdu(32);
+      inttohex4(beebit_acccon);
+      bbcvdu(13);*/
+
+
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"ACCCON(&%X,&%X)\n",naddress,nvalue);
+      #endif
+      break;
+    case 0x38:
+      /*&FE38 - &FE3B (INTOFF)*/
+      break;
+    case 0x3C:
+      /*&FE3C - &FE3F (INTON)*/
+      break;
+    case 0x40:
+    case 0x44:
+    case 0x48:
+    case 0x4C:
+    case 0x50:
+    case 0x54:
+    case 0x58:
+    case 0x5C:
+      /*&FE40 - &FE5F (SYSTEMVIA)*/
+      /*printf(" &FE40 ");*/
+      #ifdef __DEBUG__
+        fprintf(htrace,"systemviawrite(%X,%X)",(naddress & 0x0F),nvalue);
+      #endif
+      systemviawrite(naddress,nvalue);
+      break;
+    case 0x60:
+    case 0x64:
+    case 0x68:
+    case 0x6C:
+    case 0x70:
+    case 0x74:
+    case 0x78:
+    case 0x7C:
+      /*&FE60 - &FE7F (USERVIA)*/
+      #ifdef __DEBUG__
+        if (beebit_trace)
+          fprintf(htrace,"writeuservia(&%X,&%X)",(naddress & 0x0F),nvalue);
+      #endif
+      userviawrite(naddress, nvalue);
+      break;
+    case 0x80:
+    case 0x84:
+    case 0x88:
+    case 0x8C:
+    case 0x90:
+    case 0x94:
+    case 0x98:
+    case 0x9C:
+      /*&FE80 - &FE9F (8271 or 1770)*/
+      i8271write(naddress, nvalue);
+      if (beebit_nmi AND !beebit_oldnmi)
+      {
+        #ifdef __RISCOS__
+          r6502nmi();
+        #else
+          r6502donmi();
+        #endif
+      }
+      beebit_oldnmi = beebit_nmi;
+      break;
+    case 0xC0:
+    case 0xC4:
+    case 0xC8:
+    case 0xCC:
+    case 0xD0:
+    case 0xD4:
+    case 0xD8:
+    case 0xDC:
+      /*&FEC0 - &FEDF (ADC)*/
+      break;
+    case 0xE0:
+    case 0xE4:
+    case 0xE8:
+    case 0xEC:
+      /*&FEE0-&FEFF (TUBE)*/
+      /*tubewrite(naddress,nvalue);*/
+      break;
+    case 0xF0:
+    case 0xF4:
+    case 0xF8:
+    case 0xFC:
+      /*FEE0-&FEFF (TUBE)*/
+      /*tubewrite(naddress,nvalue);*/
+      break;
+  }
+}

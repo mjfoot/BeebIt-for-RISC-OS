@@ -1,0 +1,25 @@
+/*76489sound.h
+ *
+ * Sound System
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998,1999
+ *
+ * Email: <mikef@voyager.co.nz>
+ */
+
+/*76489 sound generator*/
+extern int a76489_timer; /*sound timer*/
+extern int a76489_frequency[4]; /*sound frequency*/
+extern int a76489_volume[4]; /*sound volume*/
+extern int a76489_lastregister; /*last register updated*/
+
+extern void soundreset(void);
+extern void soundwrite(char nvalue);
+extern void soundprocess(void);
+extern void soundplay(int nchannel);
+
+/*beebsound*/
+extern void t76489initialise(void);
+extern void t76489closedown(void);

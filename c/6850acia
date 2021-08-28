@@ -1,0 +1,586 @@
+/*>6850acia.c
+ *
+ * 6850 Asynchronous Communications Interface Adaptor [1MHz]
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ *
+ * Anytime the IRQ output is low, the IRQ status bit will be high
+ *
+ * W FE08 0003
+ * W FE08 0056
+ * W FE10 0064
+ *
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include "6502cpu.h"
+#include "6850acia.h"
+#include "beebit.h"
+#include "kernel.h"
+#include "main.h"
+#include "swis.h"
+
+extern _kernel_swi_regs regs;
+
+extern void uefread(void);
+
+/*counter divide poll speed in 1MHz cycles (bits 0-15)*/
+int m6850_pollspeed01[0x10] = {0,52,105,156,208,260,312,365,417,469,521,573,625,677,729,781};
+int m6850_pollspeed16[0x10] = {0,833,1667,2500,3333,4167,5000,5833,6667,7500,8333,9167,10000,10833,11667,12500};
+int m6850_pollspeed64[0x10] = {0,3333,6667,10000,13333,16667,20000,23333,26667,30000,33333,36667,40000,43333,46667,50000};
+
+char m6850_controlreg;
+char m6850_rxdatareg; /*receive data reg*/
+char m6850_txdatareg; /*transmit data reg*/
+char m6850_rxdatashiftreg; /*receive data shift reg*/
+char m6850_txdatashiftreg; /*transmit data shift reg*/
+char m6850_statusreg;
+int m6850_CTS,m6850_RTS,m6850_DCD;
+int m6850_counterdivide;
+int m6850_bits, m6850_parity, m6850_stop;
+int m6850_transmittingRTS;
+int m6850_transmittingIRQ;
+int m6850_cleardcd;
+int m6850_firstreset;
+int m6850_timer;
+int m6850_timerreset;
+
+/*int serialula_baudrate[8] = {19200,1200,4800,150,9600,300,2400,75};*/
+
+char serialula_reg;
+int serialula_txbaud;
+int serialula_rxbaud;
+
+char uef_buffer[0xFF];
+int uef_version;
+long uef_filepointer;
+int uef_bufferpointer;
+int uef_chunk;
+int uef_chunklen;
+int uef_chunkstart;
+int uef_tone;
+char uef_data;
+
+void aciareset(void)
+{
+  m6850_controlreg = 0x00;
+  m6850_rxdatareg = 0x00;
+  m6850_txdatareg = 0x00;
+  m6850_rxdatashiftreg = 0x00;
+  m6850_txdatashiftreg = 0x00;
+
+  m6850_statusreg = 0x00;
+  m6850_CTS = m6850_RTS = m6850_DCD = FALSE;
+
+  m6850_counterdivide = 0x00;
+  m6850_bits = m6850_parity = m6850_stop = 0x00;
+  m6850_transmittingRTS = FALSE;
+  m6850_transmittingIRQ = FALSE;
+
+  m6850_cleardcd = 0;
+  m6850_timerreset = m6850_pollspeed64[9]; /*300 baud*/
+  m6850_timer = 0;
+
+  m6850_firstreset = TRUE;
+
+  serialula_reg = 0x00;
+  serialula_txbaud = 0x00;
+  serialula_rxbaud = 0x00;
+
+  uef_filepointer = 12;
+  uef_bufferpointer = 0;
+}
+
+void aciasetirq(void)
+{
+  if (m6850_statusreg & 0x80 AND m6850_controlreg & 0x80)
+    beebit_irq |= IRQ_6850ACIA;
+  else
+    beebit_irq &= IRQ_NOT6850ACIA;
+}
+
+void aciadcdhigh(void)
+{
+  m6850_statusreg |= 0x84; /*dcd, irq*/
+  aciasetirq();
+}
+
+void aciadcdlow(void)
+{
+  m6850_statusreg &= 0xFB; /*not dcd*/
+  m6850_statusreg |= 0x80; /*irq*/
+  aciasetirq();
+}
+
+void aciareceive(char nbyte)
+{
+  m6850_rxdatareg = nbyte;
+
+  m6850_statusreg |= 0x81; /*receive, irq*/
+  aciasetirq();
+}
+
+void aciapoll(void)
+{
+  if (serialula_reg & 0x80)
+  {
+    /*motor on*/
+    /*printf("MOTOR ON\n");*/
+
+    if (!(m6850_statusreg & 0x01))
+      uefread();
+  }
+}
+
+void aciaresettimer(void)
+{
+  int bits;
+
+  if (beebit_fasttape)
+    m6850_timerreset = 800; /*1000;*/
+  else
+  {
+    bits = m6850_bits + m6850_stop;
+    if (m6850_parity != PARITY_NONE)
+      bits++;
+    switch (m6850_controlreg & 0x03)
+    {
+      case 0x00:
+        /*19200 baud*/
+        m6850_timerreset = m6850_pollspeed01[bits]; /*19200 baud*/
+        break;
+      case 0x01:
+        /*1200 baud*/
+        m6850_timerreset = m6850_pollspeed16[bits]; /*1200 baud*/
+        break;
+      case 0x02:
+        /*300 baud*/
+        m6850_timerreset = m6850_pollspeed64[bits]; /*300 baud*/
+        break;
+    }
+  }
+}
+
+void aciacontrolwrite(void)
+{
+  if (!(m6850_controlreg & 0x10))
+  {
+    m6850_bits = 7;
+    m6850_parity = 2 - ((m6850_controlreg & 0x04) >> 2);
+    m6850_stop = 2 - ((m6850_controlreg & 0x08) >> 3);
+  }
+  else
+  {
+    m6850_bits = 8;
+    switch (m6850_controlreg & 0x0C)
+    {
+      case 0x00:
+        m6850_parity = PARITY_NONE;
+        m6850_stop = 2;
+        break;
+      case 0x04:
+        m6850_parity = PARITY_NONE;
+        m6850_stop = 1;
+        break;
+      case 0x08:
+        m6850_parity = PARITY_EVEN;
+        m6850_stop = 1;
+        break;
+      case 0x0C:
+        m6850_parity = PARITY_ODD;
+        m6850_stop = 2;
+        break;
+    }
+  }
+
+  switch (m6850_controlreg & 0x60)
+  {
+    case 0x00:
+      m6850_transmittingRTS = FALSE;
+      m6850_transmittingIRQ = FALSE;
+      break;
+    case 0x20:
+      m6850_transmittingRTS = FALSE;
+      m6850_transmittingIRQ = TRUE;
+      break;
+    case 0x40:
+      m6850_transmittingRTS = TRUE;
+      m6850_transmittingIRQ = FALSE;
+      break;
+    case 0x60:
+      m6850_transmittingRTS = FALSE;
+      m6850_transmittingIRQ = FALSE;
+      break;
+  }
+
+  switch (m6850_controlreg & 0x03)
+  {
+    case 0x00:
+      /*19200 baud*/
+      m6850_counterdivide = 1;
+      aciaresettimer();
+      break;
+    case 0x01:
+      /*1200 baud*/
+      m6850_counterdivide = 16;
+      aciaresettimer();
+      break;
+    case 0x02:
+      /*300 baud*/
+      m6850_counterdivide = 64;
+      aciaresettimer();
+      break;
+    case 0x03:
+      /*master reset*/
+      /*aciareset();*/
+      if (m6850_firstreset)
+      {
+        /*set IRQ to level 1*/
+        /*m6850_CTS = TRUE;*/
+        m6850_RTS = TRUE;
+        /*m6850_statusreg |= 0x08;*/ /*CTS*/
+        m6850_firstreset = FALSE;
+      }
+      else
+      {
+        m6850_RTS = m6850_transmittingRTS;
+      }
+      /*clear RDRF*/
+      m6850_statusreg &= 0xFE;
+      /*clear irq*/
+      m6850_statusreg &= 0x7F;
+      beebit_irq &= IRQ_NOT6850ACIA;
+      break;
+  }
+}
+
+char aciaread(int naddress)
+{
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  /*if ((naddress & 0x0F) != 0x08)
+  {
+  bbcvdu(82);*/
+  /*bbcvdu(32);
+  inttohex4(r6502_pc);*/
+  /*bbcvdu(32);
+  inttohex4(naddress);
+  bbcvdu(13); bbcvdu(10);
+  }*/
+
+  switch (naddress & 0x0F)
+  {
+    case 0x08:
+      if (m6850_statusreg & 0x02)
+      {
+        if (m6850_cleardcd > 0)
+          m6850_cleardcd = 2;
+        else
+        {
+          m6850_cleardcd--;
+          if (m6850_cleardcd == 0)
+            m6850_statusreg &= 0xFD; /*clear dcd*/
+        }
+      }
+      return (m6850_statusreg);
+      break;
+    case 0x09:
+      /*clear irq*/
+      /*regs.r[0] = 0x04;*/ /*read byte*/
+      /*_kernel_swi(OS_SerialOp,&regs,&regs);
+
+      m6850_rxdatareg = (regs.r[1] & 0xFF);*/
+
+      m6850_statusreg &= 0xFE;
+
+      m6850_statusreg &= 0x7F;
+      beebit_irq &= IRQ_NOT6850ACIA;
+
+      return (m6850_rxdatareg);
+      break;
+    default:
+      return (0x00);
+  }
+}
+
+void aciawrite(int naddress,int nvalue)
+{
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  switch (naddress & 0x0F)
+  {
+    case 0x08:
+      m6850_controlreg = nvalue;
+      aciacontrolwrite();
+      break;
+    case 0x09:
+      /*transmit data register*/
+      m6850_txdatareg = nvalue;
+      m6850_statusreg &= 0xFD; /*TDRE*/
+      /*clear irq*/
+      m6850_statusreg &= 0x7F;
+      beebit_irq &= IRQ_NOT6850ACIA;
+      break;
+  }
+}
+
+/*-- SERIAL ULA --*/
+
+char serialularead(int naddress)
+{
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  return (serialula_reg);
+}
+
+void serialulawrite(int naddress,int nvalue)
+{
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  serialula_reg = nvalue;
+
+  serialula_txbaud = (serialula_reg & 0x07);
+  serialula_rxbaud = ((serialula_reg & 0x38) >> 3);
+
+  if (serialula_reg & 0x40)
+  {
+    /*RS423*/
+    /*clear DCD*/
+    m6850_statusreg &= 0xFB;
+  }
+  else
+  {
+    /*TAPE*/
+    /*clear CTS*/
+    m6850_statusreg &= 0xF7;
+  }
+
+  if (serialula_reg & 0x80)
+  {
+    /*TAPE*/
+    if (m6850_timer == 0)
+      m6850_timer = m6850_timerreset;
+  }
+  else
+    /*RS423*/
+    m6850_timer = 0;
+}
+
+/*-- UEF --*/
+
+int uefvalidate(FILE *hfile)
+{
+  int nreturn;
+  if (hfile == NULL)
+    nreturn = FALSE;
+  else
+  {
+    /*reset file pointer*/
+    fseek(hfile,0,SEEK_SET);
+    /*check header*/
+    if (fread(uef_buffer,1,10,hfile))
+    {
+      if (strcmp(uef_buffer, "UEF File!") == 0)
+        nreturn = TRUE;
+      else
+        nreturn = FALSE;
+    }
+    else
+      nreturn = FALSE;
+  }
+  return (nreturn);
+}
+
+int uefopen(void)
+{
+  int nreturn;
+
+  uef_chunk = -1;
+  uef_chunklen = 0;
+  uef_chunkstart = FALSE;
+  uef_tone = 0;
+
+  beebit_tapeimage = fopen(beebit_uefimage, "rb");
+
+  nreturn = uefvalidate(beebit_tapeimage);
+
+  if (nreturn)
+  {
+    fread(uef_buffer, 1, 2, beebit_tapeimage);
+    uef_version = (getword(uef_buffer) & 0xFFFF);
+    fseek(beebit_tapeimage,uef_filepointer,SEEK_SET);
+  }
+  else
+    fclose(beebit_tapeimage);
+
+  return (nreturn);
+}
+
+void uefclose(void)
+{
+  if (beebit_tapeimage != NULL)
+  {
+    uef_filepointer = ftell(beebit_tapeimage);
+    fclose(beebit_tapeimage);
+  }
+}
+
+void uefrewind(void)
+{
+  uef_filepointer = 12;
+  if (beebit_tapeimage != NULL)
+    fseek(beebit_tapeimage,12,SEEK_SET);
+}
+
+void uefread(void)
+{
+  if (beebit_tapeimage == NULL)
+    return;
+
+  if (uef_chunk == -1)
+  {
+    /*no chunk definied*/
+    fread(uef_buffer, 1, 2, beebit_tapeimage);
+    uef_chunk = (getword(uef_buffer) & 0xFFFF);
+    fread(uef_buffer, 1, 4, beebit_tapeimage);
+    uef_chunklen = getword(uef_buffer);
+    uef_chunkstart = TRUE;
+  }
+
+  switch (uef_chunk)
+  {
+    case 0x00:
+      /*origin information chunk*/
+      fseek(beebit_tapeimage, uef_chunklen, SEEK_CUR);
+      uef_chunk = -1;
+      break;
+    case 0x01:
+      /*game information/manual*/
+      fseek(beebit_tapeimage, uef_chunklen, SEEK_CUR);
+      uef_chunk = -1;
+      break;
+    case 0x100:
+      /*implicit start/stop bit tape data block*/
+      if (uef_chunkstart)
+      {
+        /*start of chunk*/
+        if (uef_chunklen < sizeof(uef_buffer))
+          fread(uef_buffer, 1, uef_chunklen, beebit_tapeimage);
+        else
+          fread(uef_buffer, 1, sizeof(uef_buffer), beebit_tapeimage);
+        uef_bufferpointer = 0;
+
+        aciadcdlow();
+        uef_chunkstart = FALSE;
+      }
+      /*fread(&uef_data, 1, 1, beebit_tapeimage);*/
+      uef_data = uef_buffer[uef_bufferpointer];
+
+      uef_chunklen--;
+      if (uef_chunklen == 0)
+        uef_chunk = -1;
+      else
+      {
+        if (uef_bufferpointer == sizeof(uef_buffer)-1)
+        {
+          if (uef_chunklen < sizeof(uef_buffer))
+            fread(uef_buffer, 1, uef_chunklen, beebit_tapeimage);
+          else
+            fread(uef_buffer, 1, sizeof(uef_buffer), beebit_tapeimage);
+          uef_bufferpointer = 0;
+        }
+        else
+          uef_bufferpointer++;
+      }
+
+      aciareceive(uef_data);
+      break;
+    case 0x101:
+      /*multiplexed implicit start/stop bit data block*/
+      uef_chunk = -1;
+      break;
+    case 0x110:
+      /*high tone*/
+      if (uef_tone == 0)
+      {
+        aciadcdhigh();
+        uef_tone = 7; /*8 bits*/
+      }
+      else
+      {
+        uef_tone--;
+        if (uef_tone == 0)
+        {
+          /*running length*/
+          fseek(beebit_tapeimage, 2, SEEK_CUR);
+          uef_chunk = -1;
+        }
+      }
+      break;
+    case 0x112:
+      /*gap*/
+      if (uef_tone == 0)
+      {
+        aciadcdhigh();
+        uef_tone = 7; /*8 bits*/
+      }
+      else
+      {
+        uef_tone--;
+        if (uef_tone == 0)
+        {
+          /*running length*/
+          fseek(beebit_tapeimage, 2, SEEK_CUR);
+          uef_chunk = -1;
+        }
+      }
+      break;
+    /*case 0x113:*/
+      /*baud rate*/
+      /*fread(uef_buffer, 1, 2, beebit_tapeimage);
+      uef_baud = (uef_buffer[1] << 8) | uef_buffer[0]*/
+      /*break;*/
+    default:
+      /*printf("bad chunk &%X &%X\n",uef_chunk, uef_chunklen);*/
+      fseek(beebit_tapeimage, uef_chunklen, SEEK_CUR);
+      uef_chunk = -1;
+      break;
+  }
+}

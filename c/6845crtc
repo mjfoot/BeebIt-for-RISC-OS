@@ -1,0 +1,536 @@
+/*>6845crtc.c
+ *
+ * Motorola Cathode Ray Tube Controller [1MHz]
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "6502cpu.h"
+#include "6845crtc.h"
+#include "beebit.h"
+#include "main.h"
+#include "video.h"
+#include "videoula.h"
+/*#include <time.h>*/
+/*#include "riscos.h"*/
+
+/*extern int nlocalscreen;*/
+
+/*Motorola 6845 CRTC*/
+char m6845_r[18]; /*18 registers*/
+int m6845_vt;
+int m6845_sl;
+int m6845_vd;
+int m6845_hsp;
+int m6845_vsp;
+int m6845_adj;
+int m6845_hsw;
+int m6845_vsw;
+int m6845_horizontaltotal;
+int m6845_fastextra; /*extra pixels for fast clock modes*/
+int m6845_slowextra; /*extra pixels for slow clock modes*/
+int m6845_widthextra; /*extra pixels*/
+int m6845_interlaceon;
+int m6845_displayskew;
+int m6845_cursorskew;
+int m6845_addressreg;
+int m6845_vc; /*vertical counter*/
+int m6845_sc; /*scanline counter*/
+int m6845_screenwidth; /*screen width in charcters*/
+
+/*video*/
+int video_storeaddress;
+int video_startaddress;
+int video_display0; /*vc start of drawing*/
+int video_display1; /*vc end of drawing*/
+int video_totalend; /*vertical total + adjustment*/
+
+/*cursor*/
+int cursor_startaddress;
+int cursor_start,cursor_end;
+int cursor_x,cursor_y0,cursor_y1;
+int cursor_nondisplay;
+int cursor_blink;
+int cursor_width;
+int cursor_show;
+int cursor_timer;
+int cursor_on;
+int cursor_blinktime;
+
+/*int xxx;*/
+
+extern int lteletextmode;
+
+void crtcreset(void)
+{
+  int i;
+  /*m6845_r[0]=127;
+  m6845_r[1]=80;
+  m6845_r[2]=98;
+  m6845_r[3]=0x28;
+  m6845_r[4]=38;
+  m6845_r[5]=0;
+  m6845_r[6]=32;
+  m6845_r[7]=34;*/
+
+  for (i=0;i<18;i++)
+    m6845_r[i] = 0;
+
+  m6845_vsp = 0;
+
+  video_storeaddress = 0;
+  video_startaddress = 0;
+  video_display0 = 0; /*vc start of drawing*/
+  video_display1 = 0; /*vc end of drawing*/
+  video_totalend = 0; /*vertical total + adjustment*/
+  cursor_show = TRUE;
+
+  /*xxx = 0;*/
+}
+
+char crtcread(int naddress)
+{
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  naddress &= 1;
+  if (naddress == 0)
+    return (0); /*m6845_addressreg;*/
+  else
+  {
+    /*cannot read R0-R11*/
+    if (m6845_addressreg < 12)
+      return (0);
+    else
+      return (m6845_r[m6845_addressreg]);
+  }
+}
+
+void crtcwrite(int naddress,int nvalue)
+{
+  int ntotal;
+  /*read/write to slow 1MHz device takes 2 cycles instead of one*/
+  /*but it may be out of synchronisaton with the CPU,*/
+  /*so a single cycle is used to synchronise instead*/
+  ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
+  if (ntotal & 1)
+    r6502_cyclestogo -= 1;
+  else
+    r6502_cyclestogo -= 2;
+
+  #ifdef __DEVELOPxx__
+    int i;
+  #endif
+  /*bbcvdu(67);
+  inttohex4(naddress);
+  bbcvdu(32);
+  inttohex4(nvalue);
+  bbcvdu(13);
+  bbcvdu(10);*/
+
+  /*fprintf(htrace,"CRTCWRITE(&%X,&%X)\n",naddress,nvalue);*/
+  naddress &= 0x01;
+  if (naddress == 0)
+  {
+    m6845_addressreg = nvalue;
+    return;
+  }
+  if (m6845_addressreg < 16)
+    /*cannot write R16-R17*/
+    m6845_r[m6845_addressreg] = nvalue;
+
+  #ifdef __DEVELOPxx__
+    if (m6845_addressreg < 12)
+    {
+      for (i=0;i<12;i++)
+      {
+        if (i == m6845_addressreg)
+          fprintf(htrace,"(%u) ",m6845_r[i]);
+        else
+          fprintf(htrace,"%u ",m6845_r[i]);
+      }
+      fprintf(htrace,"\n");
+    }
+  #endif
+  /*if (m6845_addressreg < 14)
+  {
+    inttohex4(video_scanline);
+    bbcvdu(32);
+    for (i=0;i<14;i++)
+    {
+      if (i == m6845_addressreg)
+      {
+        bbcvdu(40);
+        inttohex4(m6845_r[i]);
+        bbcvdu(41);
+      }
+      else
+        inttohex4(m6845_r[i]);
+      bbcvdu(32);
+    }
+    bbcvdu(13);
+    bbcvdu(10);
+  }*/
+
+  switch (m6845_addressreg)
+  {
+    case 0:
+      /*8 bit*/
+      /*total of displayed and non-displayed characters,*/
+      /*minus 1, per horizontal line in milliseconds*/
+      /*frequency of HSYNC is determined by this register*/
+      crtchorizontal();
+      break;
+    case 1:
+      /*8 bit*/
+      /*number of characters displayed per horizontal line*/
+      /*mode 0,1,2,3 = 80 (fast clock)*/
+      /*mode 4,5,6,7 = 40 (slow clock)*/
+      m6845_screenwidth = nvalue;
+      video_width = m6845_screenwidth << 3; /*multiply by 8*/
+      m6845_fastextra = (80-m6845_screenwidth) >> 1;
+      m6845_slowextra = (40-m6845_screenwidth) >> 1;
+      /*BOFFIN needs this check to work*/
+      if (m6845_fastextra < 0)
+        m6845_fastextra = 0;
+      if (m6845_slowextra < 0)
+        m6845_slowextra = 0;
+      crtcwidthextra();
+      break;
+    case 2:
+      /*8 bit*/
+      /*position of the HSYNC on the horizonal line*/
+      /*in terms of the character location number on the line*/
+      /*determines the left-to-right location of the displayed text*/
+      m6845_hsp = nvalue;
+      break;
+    case 3:
+      /*8 bit*/
+      /*width of HSYNC = b0-b3*/
+      /*width of VSYNC = b4-b7*/
+      m6845_hsw = (nvalue & 0x0F);
+      m6845_vsw = (nvalue>>4);
+      if (m6845_vsw == 0)
+        m6845_vsw = 0x10;
+      break;
+    case 4:
+      /*total vertical size of the screen*/
+      m6845_vt = (nvalue+1);
+      crtcvertical();
+      break;
+    case 5:
+      m6845_adj = (nvalue & 31);
+      crtcvertical();
+      break;
+    case 6:
+      m6845_vd = nvalue;
+      crtcvertical();
+      break;
+    case 7:
+      /*for character lines video*/
+      m6845_vsp = nvalue;
+      crtcvertical();
+      break;
+    case 8:
+      /*interlace mode and skew*/
+      /*b1+b0*/
+      /* 0  0=normal sync mode (non-interlace)*/
+      /* 1  0=normal sync mode (non-interlace)*/
+      /* 0  1=interlace sync mode*/
+      /* 1  1=normal sync and video mode*/
+      /*b5+b4 (display skew)*/
+      /* 0  0=No delay*/
+      /* 0  1=One character delay*/
+      /* 1  0=Two character delay*/
+      /* 1  1=Disable video output*/
+      /*b7+b6 (cursor skew)*/
+      /* 0  0=No delay*/
+      /* 0  1=One character delay*/
+      /* 1  0=Two character delay*/
+      /* 1  1=Disable cursor output*/
+      m6845_interlaceon = (nvalue & 0x01);
+      m6845_displayskew = (nvalue & 0x30)>>4;
+      m6845_cursorskew = (nvalue & 0xC0)>>6;
+      /*if (!m6845_interlaceon)
+        video_field = 0;*/
+      video_display = (video_de AND m6845_displayskew != 3);
+      /*video_display = video_de;*/
+      /*printf(htrace,"DS &%X\n",m6845_displayskew);
+      fprintf(htrace,"CS &%X\n",m6845_cursorskew);*/
+      /*bbcvdu(67);
+      bbcvdu(83);
+      inttohex4(m6845_cursorskew);
+      bbcvdu(32);
+      bbcvdu(32);*/
+      /*printf("DS &%X\n",m6845_displayskew);
+      printf("CS &%X\n",m6845_cursorskew);*/
+      /*cursor_show = (m6845_cursorskew = 3);*/
+      cursor_show = (!cursor_nondisplay AND cursor_width > 0) AND (m6845_cursorskew != 3);
+      break;
+    case 9:
+      /*5 bit*/
+      /*number of scan lines per character row*/
+      m6845_sl = (nvalue & 0x1F)+1;
+      crtcvertical();
+      break;
+    case 10:
+      /*bit 6 enables cursor blinking*/
+      /*bit 5 =0 blink every 16 v blanks*/
+      /*      =1 blink every 32 v blanks*/
+      /*bits 4-0 = cursor start line*/
+      cursor_nondisplay = ((nvalue & 0x60) == 0x20);
+      /*fprintf(htrace,"CUR B:&%X-&%X\n",(nvalue & 0x60),cursor_nondisplay);*/
+      cursor_blink = (nvalue & 0x40);
+      if (lteletextmode)
+        cursor_blinktime = 25;
+      else
+      {
+        if (nvalue & 0x20)
+          cursor_blinktime = 15; /*32 (16-1)*/
+        else
+          cursor_blinktime = 7; /*16 (8-1)*/
+      }
+      cursor_start = (nvalue & 31);
+      cursor_show = (!cursor_nondisplay AND cursor_width > 0);
+      /*cursor_show = !(cursor_nondisplay);*/
+      break;
+    case 11:
+      cursor_end = (nvalue & 31);
+      /*fprintf(htrace,"Cend=&%X\n",cursor_end);*/
+      break;
+    case 12:
+      /*screen start address hi (b0-b6)*/
+      m6845_r[12] = (nvalue & 0x3F);
+      crtcscreen();
+      crtccursor();
+      break;
+    case 13:
+      /*screen start address lo*/
+      crtcscreen();
+      crtccursor();
+      break;
+    case 14:
+    case 15:
+      /*cursor stuff*/
+      crtccursor();
+      break;
+    case 16:
+    case 17:
+      /*cannot write R16-R17*/
+      break;
+  }
+}
+
+void crtcwidthextra(void)
+{
+  if (videoula_clockrate)
+  {
+    switch (beebit_graphicsmode)
+    {
+      case 12:
+        m6845_widthextra = (m6845_fastextra<<2);
+        video_displaywidth = (m6845_screenwidth<<2);
+        break;
+      case 15:
+        m6845_widthextra = (m6845_fastextra<<3);
+        video_displaywidth = (m6845_screenwidth<<3);
+        break;
+      case 21:
+        m6845_widthextra = (m6845_fastextra<<3);
+        video_displaywidth = (m6845_screenwidth<<3);
+        break;
+      case 12801024:
+      case 16001024:
+        m6845_widthextra = (m6845_fastextra<<3);
+        video_displaywidth = (m6845_screenwidth<<3);
+        break;
+    }
+  }
+  else
+  {
+    switch (beebit_graphicsmode)
+    {
+      case 12:
+        m6845_widthextra = (m6845_slowextra<<3);
+        video_displaywidth = (m6845_screenwidth<<3);
+        break;
+      case 15:
+        m6845_widthextra = (m6845_slowextra<<4);
+        video_displaywidth = (m6845_screenwidth<<4);
+        break;
+      case 21:
+        m6845_widthextra = (m6845_slowextra<<4);
+        video_displaywidth = (m6845_screenwidth<<4);
+        break;
+      case 12801024:
+      case 16001024:
+        m6845_widthextra = (m6845_slowextra<<4);
+        video_displaywidth = (m6845_screenwidth<<4);
+        break;
+    }
+  }
+}
+
+void crtchorizontal(void)
+{
+  if (videoula_clockrate OR lteletextmode)
+    /*fast clock mode (2MHz cycles) */
+    m6845_horizontaltotal = (m6845_r[0x00] + 1);
+  else
+    /*slow clock mode (milliseconds)*/
+    m6845_horizontaltotal = ((m6845_r[0x00] + 1) << 1);
+}
+
+void crtcvertical(void)
+{
+  if ((m6845_vd*m6845_sl) == MODE12_Y)
+    video_display0 = ((m6845_vt-m6845_vsp)*m6845_sl)+m6845_adj/*-m6845_vsw*/;
+  else
+  {
+    /*MODES 3,6*/
+    if ((m6845_vd*m6845_sl) == 250)
+      /*Botch for Master Compact Modes 3 and 6*/
+      video_display0 = ((m6845_vt-m6845_vsp)*m6845_sl)+m6845_adj/*-m6845_vsw*/;
+    else
+      video_display0 = 32;
+    /*video_display0 = 32+((MODE12_Y-(m6845_vd*m6845_sl)+m6845_adj)/2);*/
+  }
+  video_display1 = video_display0+MODE12_Y; /*(m6845_vd*m6845_sl)+m6845_adj;*/
+  video_totalend = ((m6845_vt << 8) | m6845_adj);
+
+/*    bbcvdu(32);
+    bbcvdu(47);
+    inttohex4(video_display0);
+    bbcvdu(32);
+    inttohex4(video_display1);
+    bbcvdu(47);
+    bbcvdu(13);
+    bbcvdu(10);
+    bbcvdu(32);*/
+}
+
+void crtcscreen(void)
+{
+  /*in M128 mode, the level 9 graphical adventures set video_storeaddress to less than &3000. The graphics that should be on screen are located in shadow memory location &C000-&DFFF*/
+
+  /*inttohex4(m6845_r[12]);
+  bbcvdu(32);
+  inttohex4(m6845_r[13]);
+  bbcvdu(32);*/
+
+  video_storeaddress = (m6845_r[12] << 8) | m6845_r[13];
+  if (lteletextmode)
+  {
+    video_storeaddress ^= 0x2000;
+    video_storeaddress = (video_storeaddress+0x7400);
+  }
+  else
+    /*the screen address must be multiplied by 8 since there are 8 lines per character*/
+    video_storeaddress <<= 3;
+
+  #ifdef __DEBUG__
+    fprintf(htrace,"screen start address = %X\n",video_storeaddress);
+  #endif
+}
+
+void crtccursor(void)
+{
+  int n,y;
+  /*fprintf(htrace,"&%X &%X &%X &%X\n",cursor_start,cursor_end,m6845_r[14],m6845_r[15]);*/
+  cursor_startaddress = (m6845_r[14]<<8)+m6845_r[15];
+  if (lteletextmode)
+  {
+    /*this calculates the BBC memory address of where the cursor is*/
+    cursor_startaddress ^= 0x2000;
+    cursor_startaddress = (cursor_startaddress+0x7400);
+
+    if (m6845_screenwidth > 0)
+    {
+      n = (cursor_startaddress-video_storeaddress);
+      cursor_x = (n % m6845_screenwidth);
+      cursor_y0 = cursor_y1 = (n / m6845_screenwidth);
+    }
+    /*n = (cursor_startaddress-video_startaddress);
+    cursor_x = (n%m6845_screenwidth);
+    cursor_y0 = (n/m6845_screenwidth);
+    cursor_x = (cursor_x<<2);
+    cursor_y0 = (cursor_y0*5);
+    cursor_y1 = cursor_y0+((cursor_end/4));
+    cursor_y0 = cursor_y0+((cursor_start/4));*/
+    /*fprintf(htrace,"cur=%X scr=%X &%X %X-%X &%X\n",cursor_startaddress,video_startaddress,m6845_screenwidth,cursor_start,cursor_end,ScanLinesInACharacterRow);*/
+  }
+  else
+  {
+    cursor_startaddress <<= 3;
+    /*if (cursor_startaddress >= 0x8000)
+      cursor_startaddress = video_startaddress+(cursor_startaddress & 0x7FFF);*/
+    if (m6845_screenwidth > 0)
+    {
+      n = ((cursor_startaddress-video_storeaddress)>>3);
+      if (videoula_clockrate)
+      {
+        switch (beebit_graphicsmode)
+        {
+          case 12:
+            cursor_x = ((n%m6845_screenwidth)<<2);
+            break;
+          case 15:
+            cursor_x = ((n%m6845_screenwidth)<<3);
+            break;
+          case 21:
+            cursor_x = ((n%m6845_screenwidth)<<3);
+            break;
+          case 12801024:
+          case 16001024:
+            cursor_x = ((n%m6845_screenwidth)<<4);
+            break;
+        }
+      }
+      else
+      {
+        switch (beebit_graphicsmode)
+        {
+          case 12:
+            cursor_x = ((n%m6845_screenwidth)<<3);
+            break;
+          case 15:
+            cursor_x = ((n%m6845_screenwidth)<<4);
+            break;
+          case 21:
+            cursor_x = ((n%m6845_screenwidth)<<4);
+            break;
+          case 12801024:
+          case 16001024:
+            cursor_x = ((n%m6845_screenwidth)<<5);
+            break;
+        }
+      }
+      cursor_y0 = ((n/m6845_screenwidth)<<3);
+      if (m6845_sl > 8)
+      {
+        n = (m6845_sl-8);
+        y = (cursor_y0>>3); /*divide by 8*/
+        cursor_y0 = (cursor_y0+(n*y)+1);
+      /*fprintf(htrace,">>&%X &%X &%X %u %u\n",cursor_x,cursor_y0,ScanLinesInACharacterRow,n,y);*/
+      }
+      cursor_y1 = cursor_y0+(cursor_end-1);
+      cursor_y0 = cursor_y0+(cursor_start-1);
+    }
+  }
+  #ifdef __DEBUG__
+    fprintf(htrace,"cursor start address = %X\n",cursor_startaddress);
+  #endif
+}

@@ -1,0 +1,60 @@
+/*>6845crtc.h
+ *
+ * Motorola Cathode Ray Tube Controller
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2000
+ *
+ * Email: <mikef@voyager.co.nz>
+ */
+
+/*Motorola 6845 CRTC*/
+extern char m6845_r[18]; /*18 registers*/
+extern int m6845_vt;
+extern int m6845_sl;
+extern int m6845_vd;
+extern int m6845_hsp;
+extern int m6845_vsp;
+extern int m6845_adj;
+extern int m6845_hsw;
+extern int m6845_vsw;
+extern int m6845_horizontaltotal;
+extern int m6845_fastextra; /*extra pixels for fast clock modes*/
+extern int m6845_slowextra; /*extra pixels for slow clock modes*/
+extern int m6845_widthextra; /*extra pixels*/
+extern int m6845_interlaceon;
+extern int m6845_displayskew;
+extern int m6845_cursorskew;
+extern int m6845_addressreg;
+extern int m6845_vc; /*vertical counter*/
+extern int m6845_sc; /*scanline counter*/
+extern int m6845_screenwidth; /*screen width in charcters*/
+
+/*video*/
+extern int video_storeaddress;
+extern int video_startaddress;
+extern int video_display0; /*vc start of drawing*/
+extern int video_display1; /*vc end of drawing*/
+extern int video_totalend; /*vertical total + adjustment*/
+
+/*cursor*/
+extern int cursor_startaddress;
+extern int cursor_start,cursor_end;
+extern int cursor_x,cursor_y0,cursor_y1;
+extern int cursor_nondisplay;
+extern int cursor_blink;
+extern int cursor_width;
+extern int cursor_show;
+extern int cursor_timer;
+extern int cursor_on;
+extern int cursor_blinktime;
+
+void crtcreset(void);
+char crtcread(int Address);
+void crtcwrite(int Address,int Value);
+void crtcwidthextra(void);
+void crtchorizontal(void);
+void crtcvertical(void);
+void crtcscreen(void);
+void crtccursor(void);

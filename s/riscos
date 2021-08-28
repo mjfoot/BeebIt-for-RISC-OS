@@ -1,0 +1,546 @@
+;>riscos.s
+;
+; BeebIt - BBC Micro Model B Emulator
+;
+; (C) Copyright Michael J Foot, 1998-2003
+;
+; Email: <mjfoot@paradise.net.nz>
+;
+; Use the GET directive to include register definitions as if typed here
+
+  GET     h.RegNames
+
+; Use the GET directive to include a list of SWI names as if typed here
+
+  GET     h.SWInames
+
+; Area name C$$code advisable as wanted to link with C output
+
+  AREA    |C$$code|, CODE, READONLY
+
+; Import global symbols
+
+  IMPORT |lbreak|
+  IMPORT |lexit|
+  IMPORT |lprintscreen|
+  IMPORT |beebit_trace|
+  IMPORT |memory|
+  IMPORT |shadow|
+  IMPORT |r6502_cyclesmonotonic|
+
+  IMPORT |systemviasetca2|
+
+  IMPORT |nwimpmode| ;jdl** from c.main, so we can restore screen on crash
+
+; Export global symbols
+
+  EXPORT |inttohex4|
+  EXPORT |inttohex8|
+  EXPORT |bbcvdu|
+  EXPORT |getword|
+  EXPORT |setword|
+  EXPORT |breakdisable|
+  EXPORT |breakenable|
+  EXPORT |escapedisable|
+  EXPORT |escapeenable|
+  EXPORT |cursordisable|
+  EXPORT |cursorenable|
+  EXPORT |zeribeepattach|
+  EXPORT |zeribeepwrite|
+  EXPORT |zeribeepdetach|
+
+  EXPORT |keyupdown|
+  EXPORT |keyclaim|
+  EXPORT |keyrelease|
+
+  ;EXPORT |quit|
+  EXPORT |keylookup|
+  EXPORT |keystatus|
+  ;EXPORT |lastkey|
+
+ScreenBlanker_Control EQU &43100
+ZeriBeep_Attach EQU &55E40
+ZeriBeep_Detach EQU &55E41
+XZeriBeep_Attach EQU &75E40
+XZeriBeep_Detach EQU &75E41
+
+;
+;RISC OS
+;
+|bbcvdu|
+  ;STMFD sp!,{lr}
+  SWI OS_WriteC
+  MOV pc,lr
+  ;LDMFD sp!,{pc}
+
+|inttohex4|
+  STMFD sp!,{r0-r2,lr}
+  LDR r1,=inttohexb
+  MOV r2,#16
+  SWI OS_ConvertHex4 ;BinaryToDecimal
+  SWI OS_Write0
+  LDMFD sp!,{r0-r2,pc}
+
+|inttohex8|
+  STMFD sp!,{r0-r2,lr}
+  LDR r1,=inttohexb
+  MOV r2,#16
+  SWI OS_ConvertHex8 ;BinaryToDecimal
+  SWI OS_Write0
+  LDMFD sp!,{r0-r2,pc}
+
+inttohexb
+  DCD 0
+  DCD 0
+  DCD 0
+  DCD 0
+
+|getword|
+  ;r0=address
+  ;r0=value
+  LDR r0,[r0]
+  MOV pc,lr
+
+|setword|
+  ;r0=address
+  ;r1=value
+  STR r1,[r0]
+  MOV pc,lr
+
+|breakdisable|
+ ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  MOV r0,#&F7
+  MOV r1,#&FF
+  MOV r2,#&00
+  SWI OS_Byte
+  LDR r12,=nbreakstatus
+  STR r1,[r12] ;save the existing break status
+  ;LDMFD sp!,{pc}
+  LDR pc, [sp], #4
+
+|breakenable|
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  LDR r12,=nbreakstatus
+  MOV r0,#&F7
+  LDR r1,[r12]
+  MOV r2,#&00
+  SWI OS_Byte
+  ;LDMFD sp!,{pc}
+  LDR pc, [sp], #4
+
+|escapedisable|
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  MOV r0,#&E5
+  MOV r1,#&FF
+  MOV r2,#&00
+  SWI OS_Byte
+  LDR r12,=nescapestatus
+  STR r1,[r12] ;save the existing break status
+  ;LDMFD sp!,{pc}
+  LDR pc, [sp], #4
+
+|escapeenable|
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  LDR r12,=nescapestatus
+  MOV r0,#&E5
+  LDR r1,[r12]
+  MOV r2,#&00
+  SWI OS_Byte
+  ;LDMFD sp!,{pc}
+  LDR pc, [sp], #4
+
+|cursordisable|
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  SWI OS_RemoveCursors
+  ;LDMFD sp!,{pc}
+  LDR pc, [sp], #4
+
+|cursorenable|
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  SWI OS_RestoreCursors
+  ;LDMFD sp!,{pc}
+  LDR pc, [sp], #4
+
+|zeribeepattach|
+  STMFD sp!,{r0-r12,lr}
+  SWI XZeriBeep_Attach
+  LDMVSFD sp!,{r0-r12,pc} ;error
+  LDR r12,=zeribeep_writebyte
+  STR r0,[r12]
+  LDR r12,=zeribeep_workspace
+  STR r1,[r12]
+  LDMFD sp!,{r0-r12,pc}
+
+|zeribeepwrite|
+  ;r0=byte to write to SN76489
+  ;r1=6502 cycle count
+  STMFD sp!,{r1,r2,r12,lr}
+  ;STMFD sp!,{r1,r2,r12,lr}
+  ;MOV r10,r0
+  ;BL inttohex4
+  ;MOV r0,#13
+  ;SWI OS_WriteC
+  ;MOV r0,#10
+  ;SWI OS_WriteC
+  ;MOV r0,r10
+
+  LDR r1,=zeribeep_writebyte
+  LDR r2,[r1]
+  CMP r2,#0
+  LDMEQFD sp!,{r1,r2,r12,pc} ;error
+
+  LDR r1,=r6502_cyclesmonotonic
+  LDR r1,[r1]
+  LDR r12,=zeribeep_workspace
+  LDR r12,[r12]
+  ;STMFD sp!,{lr}
+  MOV lr,pc
+  MOV pc,r2
+  ;LDMFD sp!,{lr}
+  ;LDMFD sp!,{r1,r2,r12,pc}
+  LDMFD sp!,{r1,r2,r12,pc}
+
+|zeribeepdetach|
+  SWI XZeriBeep_Detach
+  MOV pc,lr
+
+zeribeep_writebyte
+  DCD 0
+zeribeep_workspace
+  DCD 0
+
+|keyupdown|
+  ;r0=event number (&0B)
+  ;r1=0 for up, 1 for down
+  ;r2=keyboard code
+
+  CMP r0,#&0B
+  ;LDMNEFD sp!,{r10-r12,pc} ;exit
+  ;LDMNEFD r13!,{pc}
+  MOVNE pc,r14  ;jdl** changed for 32bit
+
+  STMFD sp!,{r0-r3,r8-r12}
+  ;LDR r12,=lastkey
+  ;STRB r2,[r12]
+  ;STRB r2,[r12,#1]
+
+  ;CMP r1,#1
+  ;LDREQ r0,=keydown
+  ;SWIEQ OS_Write0
+  ;CMP r1,#0
+  ;LDREQ r0,=keyup
+  ;SWIEQ OS_Write0
+
+  ;CMP r2,#&0B ;F11
+  ;MOVEQ r9,#&FF
+  ;LDREQ r10,=ltrace
+  ;STREQ r9,[r10]
+  ;LDMEQFD sp!,{r0-r2,r10-r12,pc} ;exit
+
+  ;check for <Break>
+  CMP r2,#&0F ;Break
+  BNE keyupdownF12
+
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  MOV r0,#129 ;scan kbd for single key
+  MOV r1,#&F7 ;(8 EOR &FF) right alt
+  MOV r2,#&FF
+  SWI OS_Byte
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+
+  TEQ r1,#&FF ;pressed?
+  LDMEQFD sp!,{r0-r3,r8-r12} ;yes pass event on for watchdog.
+  MOVEQ pc,lr
+
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  MOV r0,#129 ;scan kbd for single key
+  MOV r1,#&FA ;(5 EOR &FF) right alt
+  MOV r2,#&FF
+  SWI OS_Byte
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+
+  TEQ r1,#&FF ;pressed?
+  LDMEQFD sp!,{r0-r3,r8-r12} ;yes pass event on for watchdog.
+  MOVEQ pc,lr
+
+  MOV r9,#&FF
+  LDR r11,=lbreak
+  STR r9,[r11]
+  LDMFD sp!,{r0-r3,r8-r12,pc} ;exit
+
+keyupdownF12
+  ;check for <F12> (quit)
+  CMP r2,#&0C ;F12
+  BNE keyupdownIns
+  MOV r9,#&FF
+  LDR r11,=lexit ;quit
+  STR r9,[r11]
+  LDMFD sp!,{r0-r3,r8-r12,pc} ;exit
+
+keyupdownIns
+  ;check for <Ins> (trace on/off)
+  CMP r2,#&1F ;Ins
+  BNE keyupdownPrn
+  CMP r1,#&00 ;if key is up
+  BEQ keyupdownPrn
+  LDR r11,=beebit_trace ;quit
+  LDR r9,[r11]
+  EOR r9,r9,#&FF
+  STR r9,[r11]
+  LDMFD sp!,{r0-r3,r8-r12,pc} ;exit
+
+keyupdownPrn
+  ;check for <Pr> (screen save)
+  CMP r2,#&0D ;Print Screen
+  BNE keyupdown3
+  CMP r1,#00  ;if key is up
+  BEQ keyupdown3
+
+  ;LDR r0,=do_screendump
+  ;SWI XOS_AddCallBack
+  MOV r9,#&FF
+  LDR r11,=lprintscreen
+  STR r9,[r11]
+  LDMFD sp!,{r0-r3,r8-r12,pc} ;exit
+
+keyupdown3
+  ;write key code to screen
+  ;MOV r0,r2
+  ;LDR r1,=vduvar2
+  ;MOV r2,#8
+  ;SWI OS_BinaryToDecimal
+  ;MOV r0,r1
+  ;MOV r1,r2
+  ;SWI OS_WriteN
+
+  ;stop the screen blanker from kicking in
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  CMP r1,#1
+  MOVEQ r0,#1
+  SWIEQ ScreenBlanker_Control
+  ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
+
+  LDR r11,=keylookup
+  LDRB r9,[r11,r2] ;get bbc key code
+
+  ;LDR r12,=lastkey
+  ;STRB r11,[r12,#1]
+
+  LDR r11,=keystatus
+
+  CMP r1,#&00 ;if key is up
+  MOVEQ r8,#&00
+  STREQB r8,[r11,r9] ;set status to 0
+  ;BLEQ systemviasetca2
+  LDMEQFD sp!,{r0-r3,r8-r12,pc} ;exit
+
+  LDRB r8,[r11,r9] ;get key status
+  CMP r8,#&00 ;see if it's aleady been pressed down
+  ;BLNE systemviasetca2
+  LDMNEFD sp!,{r0-r3,r8-r12,pc} ;if it has, exit
+
+  MOV r8,#&FF
+  STRB r8,[r11,r9] ;set status to &FF
+
+  ;CMP r9,#&50 ;shift lock
+  ;BNE keyupdown4
+
+  ;MOV r0,#202
+  ;MOV r1,#0
+  ;MOV r2,#&FF
+  ;SWI OS_Byte
+  ;ANDS r2,r1,#2 ;scroll lock on?
+  ;ORREQ r1,r1,#&2 ;shift on
+  ;ORREQ r1,r1,#16 ;caps off
+  ;ANDNE r1,r1,#&FD ;shift off
+  ;ANDNE r1,r1,#&EF ;caps on
+  ;MOV r2,#0
+  ;SWI OS_Byte
+  ;MOV r0,#118
+  ;SWI OS_Byte
+
+keyupdown4
+  ;MOV r0,r9
+  ;BL inttohex
+  ;MOV r0,#32
+  ;SWI OS_WriteC
+
+  ;AND r10,r11,#&70
+  ;MOV r11,r11,LSR #&04 ;bbc row
+  ;AND r9,r11,#&0F ;bbc col
+
+  BL systemviasetca2
+  LDMFD sp!,{r0-r3,r8-r12,pc}
+  ;MOVS pc,r14
+
+;do_screendump
+;  STMFD sp!,{r0-r3,r14}
+;  LDR r0,=screendump
+;  MOV r0,#&2
+;  MOV r1,#0
+;  LDR r2,=screendump
+;  MOV r3,#1
+;  SWI XOS_SpriteOp
+;  LDMFD sp!,{r0-r3,pc}
+
+;screendump
+;  DCB "<Beebit$Dir>.BBCScreen",0
+;  ALIGN
+
+|keyclaim|
+  STMFD sp!,{r0-r2,lr}
+;  MOV r0,#&C9 ;201
+;  MOV r1,#&0
+;  MOV r2,#&FF
+;  SWI OS_Byte
+;  LDR r2,=nkeyboarddisable
+;  STR r1,[r2]
+;  MOV r0,#&C9 ;201
+;  MOV r1,#&FF
+;  MOV r2,#0
+;  SWI OS_Byte
+
+  MOV r0,#&0b ;exit handler
+  LDR r1,=tidy_exit
+  MOV r2,#0
+  MOV r3,#0
+  SWI XOS_ChangeEnvironment
+
+  LDR r3,=old_exit
+  STR r1,[r3]
+  LDR r3,=old_r12
+  STR r2,[r3]
+
+  MOV r0,#&10
+  LDR r1,=keyupdown
+  MOV r2,r1 ;#0
+  SWI OS_Claim ;claim event
+  MOV r0,#&0E ;enable event
+  MOV r1,#&0B
+  SWI OS_Byte
+  LDMFD sp!,{r0-r2,pc}
+
+Wimp_SetMode EQU &400e3
+
+tidy_exit
+  BL keyrelease
+  LDR r1,=nwimpmode
+  LDR r0,[r1]
+
+  SWI Wimp_SetMode
+  SWI OS_Exit
+
+|keyrelease|
+  STMFD sp!,{r0-r2,lr}
+keyrelease1
+  MOV r0,#&81 ;129
+  MOV r1,#&7F ;127
+  MOV r2,#&FF ;255
+  SWI OS_Byte
+  CMP r1,#&FF
+  BNE keyrelease1
+
+  MOV r0,#21
+  MOV r0,#0
+  SWI OS_Byte
+
+  MOV r0,#&0D ;disable event
+  MOV r1,#&0B
+  SWI OS_Byte
+  MOV r0,#&10
+  LDR r1,=keyupdown
+  MOV r2,r1 ;#0
+  SWI OS_Release ;release event
+
+
+  MOV r0,#&0b ;exit handler
+  LDR r3,=old_exit
+  LDR r1,[r3]
+  LDR r3,=old_r12
+  LDR r2,[r3]
+  MOV r3,#0
+  SWI XOS_ChangeEnvironment
+
+  MOV r0,#21 ;flush buffer
+  MOV r1,#0  ;keyboard
+  SWI OS_Byte
+
+;  MOV r0,#&C9 ;201
+;  LDR r2,=nkeyboarddisable
+;  LDR r1,[r2]
+;  MOV r2,#&0
+;  SWI OS_Byte
+  LDMFD sp!,{r0-r2,pc}
+
+;Data Area
+
+  AREA    |C$$data|, DATA
+
+nbreakstatus
+  DCD 0
+  ALIGN
+
+nescapestatus
+  DCD 0
+  ALIGN
+
+;|quit|
+;  DCD 0
+;  ALIGN
+
+|keylookup|
+  DCB &70,&71,&72,&73,&14,&74,&75,&16,&76,&77,&20,&20,&20,0,0,&80 ;00-0E <Esc><F1>..<F12><Pr><SL><Break>
+  DCB &47,&30,&31,&11,&12,&13,&34,&24,&15,&26,&27,&17,&18,&48,&59,0 ;10-1E '1234567890'=.<Rgt><Ins>
+  DCB 0,0,0,&68,&48,&17,&60,&10,&21,&22,&33,&23,&44,&35,&25,&36 ;20-2F <Hme><PgUp><NL>/*#<Tab>
+  DCB &37,&38,&28,&58,&59,&69,0,&24,&15,&26,&17,&01,&41,&51,&32,&43 ;30-3F P[]#<Del><Cpy><PgD>789,<CrL>ASDF
+  DCB &53,&54,&45,&46,&56,&57,&48,&49,&12,&13,&34,&57,0,&78,&61,&42 ;40-4F GHJKL:'<Ret>456+<ShL>
+  DCB &52,&63,&64,&55,&65,&66,&67,&68,0,&39,&30,&31,&11,&40,&50,&62 ;50-5F CVBNM,./<ShR><Up>123<CapL><AltL><Spc>
+  DCB 0,&01,&19,&29,&79,0,&67,&49,0,0,0,0,0,0,0,0 ;60-6F <AltR><CtlR>
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+old_exit DCD 0
+old_r12 DCD 0
+
+|keystatus|
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+;|lastkey|
+;  DCB 0,0
+;  ALIGN
+
+  END

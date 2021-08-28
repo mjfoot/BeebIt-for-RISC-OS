@@ -1,0 +1,3402 @@
+/*>video.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2002
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*on the 3dpool disc is a demo called BBoing! It uses an extra wide screen mode which does not get emulated here properly*/
+/*boffin does this too*/
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include "6522sysvia.h"
+#include "6845crtc.h"
+#include "beebit.h"
+#include "kernel.h"
+#include "main.h"
+#include "riscos.h"
+#include "swis.h"
+#include "video.h"
+#include "videoula.h"
+
+extern _kernel_swi_regs regs;
+
+#define TIME_25HZ 4 /*CLK_TCK/25*/ /*25 times per second*/
+#define TIME_50HZ 2 /*CLK_TCK/50*/ /*50 times per second*/
+/*#define VIDEO_DRAWWAIT 0
+#define VIDEO_DRAWBLANK0 1
+#define VIDEO_DRAWLINE 2
+#define VIDEO_DRAWBLANK1 3*/
+#define TELETEXT_ALPHA 0
+#define TELETEXT_GRAPHICS 1
+#define TELETEXT_CONCEAL 2
+#define TELETEXT_ALPHA_NORMAL 0
+#define TELETEXT_ALPHA_DOUBLETOP 1
+#define TELETEXT_ALPHA_DOUBLEBOTTOM 2
+#define TELETEXT_GRAPHICS_CONTIGUOUS 0
+#define TELETEXT_GRAPHICS_SEPARATED 1
+
+extern void videodrawline0(void);
+extern void videoteletext4(void);
+extern void videoteletext8(void);
+extern void sprite_printscreen(void);
+
+extern int ncurrentmode, lteletextmode, llargecursor;
+extern int lprintscreen;
+
+/*teletext*/
+char teletext_alpha[8*10*224];
+char teletext_alphad1[8*10*224];
+char teletext_alphad2[8*10*224];
+char teletext_graphics[8*10*224];
+unsigned int teletext_colourmap8[0x08] = {
+  0x00000000,0x15151515,0x62626262,0x77777777,0x88888888,0x9D9D9D9D,0xEAEAEAEA,0xFFFFFFFF};
+int teletext_alphacolour;
+int teletext_alphacolourmask;
+int teletext_graphiccolour;
+int teletext_graphiccolourmask;
+int teletext_backcolourmask;
+int teletext_character;
+int teletext_style;
+int teletext_doubleheight;
+int teletext_doubleheightstyle;
+int teletext_graphicstyle;
+int teletext_holdgraphics;
+int teletext_steady;
+int teletext_timer; /*flashing timer*/
+
+/*video*/
+/*int video_vsync0;*/ /*start of vertical sync scan line*/
+/*int video_vsync1;*/ /*end of vertical sync scan line*/
+int video_mode; /*screen mode*/
+int video_timer; /*scanline timer*/
+
+/*int video_phase;*/
+int video_currentrow; /*current row being drawn on local screen*/
+int video_synchold;
+
+int video_address; /*current address in bbc memory*/
+int video_offset;
+int video_width;
+int video_displaywidth;
+int video_scale; /*video scaling to screen*/
+int video_field;
+int video_drawline; /*when = 0 a line can be drawn on the screen*/
+/*int video_onscreen;*/
+int video_de;
+int video_scanline; /*internal scanline counter. set to 0 when m6845_vsp*/
+int video_display;
+int video_framerate; /*frames rate (0-255)*/
+char video_n1,video_n2;
+int host_screenwidth; /*screen width of the screen mode on the host*/
+int host_screenwidth2; /*screen width of the screen mode on the host x 2*/
+unsigned int cursor_bitmap;
+
+clock_t nclock;
+int nx,ny,nxend;
+char video_n;
+int nscreen;
+
+void (*videoplot)(void);
+void (*mode0plot)(int screenaddress, int displaywidth);
+void (*mode1plot)(int screenaddress, int displaywidth);
+void (*mode2plot)(int screenaddress, int displaywidth);
+void (*mode3plot)(int screenaddress, int displaywidth);
+void (*mode4plot)(int screenaddress, int displaywidth);
+void (*mode5plot)(int screenaddress, int displaywidth);
+void (*mode6plot)(int screenaddress, int displaywidth);
+void (*mode8plot)(int screenaddress, int displaywidth);
+void (*videoteletext)(void);
+/*void (*video_plot[7])(void);*/
+
+void videoinit(void)
+{
+  FILE *hfile;
+
+  hfile = fopen("<BeebIt$Dir>.Resources.MODE7A","rb");
+  if (hfile != NULL)
+  {
+    fread(teletext_alpha,1,sizeof(teletext_alpha),hfile);
+    fclose(hfile);
+  }
+  hfile = fopen("<BeebIt$Dir>.Resources.MODE7D1","rb");
+  if (hfile != NULL)
+  {
+    fread(teletext_alphad1,1,sizeof(teletext_alphad1),hfile);
+    fclose(hfile);
+  }
+  hfile = fopen("<BeebIt$Dir>.Resources.MODE7D2","rb");
+  if (hfile != NULL)
+  {
+    fread(teletext_alphad2,1,sizeof(teletext_alphad2),hfile);
+    fclose(hfile);
+  }
+  hfile = fopen("<BeebIt$Dir>.Resources.MODE7G","rb");
+  if (hfile != NULL)
+  {
+    fread(teletext_graphics,1,sizeof(teletext_graphics),hfile);
+    fclose(hfile);
+  }
+}
+
+void videosetplot(void)
+{
+  /*video_plot[0] = videodrawline0;
+  video_plot[1] = videodrawline1;
+  video_plot[2] = videodrawline2;
+  video_plot[3] = videodrawline3;
+  video_plot[4] = videodrawline4;
+  video_plot[5] = videodrawline5;
+  video_plot[6] = videodrawline6;*/
+  videoplot = videodrawline0;
+
+  switch (beebit_graphicsmode)
+  {
+    case 12:
+      mode0plot = mode0plot4;
+      mode1plot = mode1plot4;
+      mode2plot = mode2plot4;
+      mode3plot = mode0plot4;
+      mode4plot = mode4plot4;
+      mode5plot = mode5plot4;
+      mode6plot = mode4plot4;
+      mode8plot = mode8plot4;
+      host_screenwidth = MODE12_X;
+      video_scale = 1;
+      cursor_bitmap = 0x77777777;
+      break;
+    case 15:
+    case 21:
+      mode0plot = mode0plot8;
+      mode1plot = mode1plot8;
+      mode2plot = mode2plot8;
+      mode3plot = mode0plot8;
+      mode4plot = mode4plot8;
+      mode5plot = mode5plot8;
+      mode6plot = mode4plot8;
+      mode8plot = mode8plot8;
+      host_screenwidth = MODE15_X;
+      video_scale = 1;
+      cursor_bitmap = 0xFFFFFFFF;
+      break;
+    case 12801024:
+      mode0plot = mode0plot8x2;
+      mode1plot = mode1plot8x2;
+      mode2plot = mode2plot8x2;
+      mode3plot = mode0plot8x2;
+      mode4plot = mode4plot8x2;
+      mode5plot = mode5plot8x2;
+      mode6plot = mode4plot8x2;
+      mode8plot = mode8plot8x2;
+      host_screenwidth = 1280;
+      video_scale = 2;
+      cursor_bitmap = 0xFFFFFFFF;
+      break;
+    case 16001024:
+      mode0plot = mode0plot8x2;
+      mode1plot = mode1plot8x2;
+      mode2plot = mode2plot8x2;
+      mode3plot = mode0plot8x2;
+      mode4plot = mode4plot8x2;
+      mode5plot = mode5plot8x2;
+      mode6plot = mode4plot8x2;
+      mode8plot = mode8plot8x2;
+      host_screenwidth = 1600;
+      video_scale = 2;
+      cursor_bitmap = 0xFFFFFFFF;
+      break;
+
+  }
+  host_screenwidth2 = (host_screenwidth * video_scale);
+  switch (beebit_teletextmode)
+  {
+    case 7:
+      videoteletext = videoteletext4;
+      break;
+    case 15:
+      videoteletext = videoteletext8;
+      break;
+    case 21:
+      videoteletext = videoteletext8;
+      break;
+    case 12801024:
+    case 16001024:
+      videoteletext = videoteletext8;
+      break;
+  }
+}
+
+void videorecalc(void)
+{
+  video_offset = 0;
+  video_synchold = 0;
+}
+
+void videoreset(int lfull)
+{
+  /*video_phase = VIDEO_DRAWWAIT;*/
+  video_field = 0;
+  video_drawline = 0;
+  nclock = clock()+TIME_50HZ;
+  m6845_vc = 0; /*m6845_vsp;*/
+  m6845_sc = video_currentrow = 0;
+  video_scanline = 0;
+  /*video_onscreen = FALSE;*/
+  video_de = FALSE;
+  video_display = FALSE;
+  video_scale = 1;
+  teletext_alphacolour = 0x07;
+  teletext_alphacolourmask= teletext_colourmap8[0x07];
+  teletext_graphiccolour = 0x07;
+  teletext_graphiccolourmask = teletext_colourmap8[0x07];
+  teletext_backcolourmask = teletext_colourmap8[0x00];
+  teletext_character = 0x20;
+  teletext_style = TELETEXT_ALPHA;
+  teletext_doubleheight = FALSE;
+  teletext_doubleheightstyle = TELETEXT_ALPHA_NORMAL;
+  /*teletext_alphastyle = TELETEXT_ALPHA_NORMAL;*/
+  teletext_graphicstyle = TELETEXT_GRAPHICS_CONTIGUOUS;
+  teletext_holdgraphics = FALSE;
+  teletext_steady = TRUE;
+  teletext_timer = 0;
+  if (lfull)
+  {
+    switch (beebit_machinetype)
+    {
+      case MACHINE_MODELB:
+      case MACHINE_MODELBPLUS:
+        video_timer = 600000;
+        break;
+      case MACHINE_MASTER128:
+        video_timer = 1400000;
+        break;
+      case MACHINE_COMPACT:
+        video_timer = 2000000;
+        break;
+      default:
+        video_timer = 600000;
+        break;
+    }
+    video_framerate = 0;
+  }
+  cursor_timer = cursor_blinktime;
+  cursor_on = TRUE;
+  videorecalc();
+}
+
+void videoblankline(void)
+{
+  /*blank rows until end of screen - mode 12,15 has 256 lines*/
+  if (video_currentrow < 256)
+  {
+    #ifdef __RISCOS__
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      while (nx < host_screenwidth)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videodrawline0(void)
+{
+  /*
+   *mode 0 - 80x32, 640x256, 1 bpp, 20k
+   */
+  int i, nscreen_temp;
+
+  /*draw leading blank area on this line*/
+  if (m6845_sc & 0x08)
+  {
+    /*blank lines > 8*/
+    #ifdef __RISCOS__
+      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      blankrow(nscreen,nx,0);*/
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      while (nx < nxend) /*80*/
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+  else
+  {
+    #ifdef __RISCOS__
+      /*blankrow(nscreen,m6845_widthextra,0);*/
+      nscreen_temp = nscreen;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+      nx = (m6845_widthextra*video_scale);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+    /*draw displayed data*/
+    #ifdef __RISCOS__
+      mode0plot(nscreen+nx,video_displaywidth);
+      nx += (video_displaywidth*video_scale);
+    #else
+      /*nxend = nx+(int m6854_screenwidth<<2);*/
+      nxend = nx+video_displaywidth;
+      while (nx < nxend) /*80*/
+      {
+        video_n = memory[video_address];
+        /*&01 &02*/
+        video_n1 = videoula_palette[((video_n & 0x80)>>7)];
+        video_n2 = videoula_palette[((video_n & 0x40)>>6)];
+        cscreen[nx++] = (video_n2<<4) | video_n1;
+        /*&04 &08*/
+        video_n1 = videoula_palette[((video_n & 0x20)>>5)];
+        video_n2 = videoula_palette[((video_n & 0x10)>>4)];
+        cscreen[nx++] = (video_n2<<4) | video_n1;
+        /*&10 &20*/
+        video_n1 = videoula_palette[((video_n & 0x08)>>3)];
+        video_n2 = videoula_palette[((video_n & 0x04)>>2)];
+        cscreen[nx++] = (video_n2<<4) | video_n1;
+        /*&40 &80*/
+        video_n1 = videoula_palette[((video_n & 0x02)>>1)];
+        video_n2 = videoula_palette[(video_n & 0x01)];
+        cscreen[nx++] = (video_n2<<4) | video_n1;
+        video_address += 8;
+        if (video_address >= 0x8000)
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+      }
+    #endif
+    /*draw trailing blank area on this line*/
+    #ifdef __RISCOS__
+      nscreen_temp = nscreen+nx;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+    #else
+      nxend = nx+m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videodrawline1(void)
+{
+  /*
+   *mode 1 - 40x32, 320x256, 2 bpp, 20k
+   */
+  int i, nscreen_temp;
+
+  if (m6845_sc & 0x08)
+  {
+    /*blank lines > 8*/
+    #ifdef __RISCOS__
+      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      blankrow(nscreen,nx,0);*/
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      while (nx < nxend) /*80*/
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+  else
+  {
+    #ifdef __RISCOS__
+      /*blankrow(nscreen,m6845_widthextra,0);*/
+      nscreen_temp = nscreen;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+      nx = (m6845_widthextra*video_scale);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+    #ifdef __RISCOS__
+      mode1plot(nscreen+nx,video_displaywidth);
+      nx += (video_displaywidth*video_scale);
+    #else
+      /*nxend = nx+(m6845_screenwidth<<2);*/
+      nxend = nx+video_displaywidth;
+      while (nx < nxend)
+      {
+        video_n = memory[video_address];
+        /*&02 &01*/
+        video_n1 = ((video_n & 0x80)>>6) | ((video_n & 0x08)>>3);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        /*&08 &04*/
+        video_n1 = ((video_n & 0x40)>>5) | ((video_n & 0x04)>>2);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        /*&20 &10*/
+        video_n1 = ((video_n & 0x20)>>4) | ((video_n & 0x02)>>1);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        /*&80 &40*/
+        video_n1 = ((video_n & 0x10)>>3) | (video_n & 0x01);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        video_address += 8;
+        if (video_address >= 0x8000)
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
+      nscreen_temp = nscreen+nx;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+    #else
+      nxend = nx+m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videodrawline2(void)
+{
+  /*
+   *mode 2 - 20x32, 160x256, 4 bpp, 40k
+   */
+  int i, nscreen_temp;
+
+  if (m6845_sc & 0x08)
+  {
+    /*blank lines > 8*/
+    #ifdef __RISCOS__
+      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      blankrow(nscreen,nx,0);*/
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      while (nx < nxend) /*80*/
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+  else
+  {
+    #ifdef __RISCOS__
+      /*blankrow(nscreen,m6845_widthextra,0);*/
+      nscreen_temp = nscreen;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+      nx = (m6845_widthextra*video_scale);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+    #ifdef __RISCOS__
+      mode2plot(nscreen+nx,video_displaywidth);
+      nx += (video_displaywidth*video_scale);
+    #else
+      /*nxend = nx+(m6845_screenwidth<<2);*/
+      nxend = nx+video_displaywidth;
+      while (nx < nxend)
+      {
+        video_n = memory[video_address];
+        /*&08 &04 &02 &01*/
+        video_n1 = ((video_n & 0x80)>>4) | ((video_n & 0x20)>>3) | ((video_n & 0x08)>>2) | ((video_n & 0x02)>>1);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        /*&08 &04 &02 &01*/
+        video_n1 = ((video_n & 0x40)>>3) | ((video_n & 0x10)>>2) | ((video_n & 0x04)>>1) | (video_n & 0x01);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        video_address += 8;
+        if (video_address >= 0x8000)
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
+      nscreen_temp = nscreen+nx;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+    #else
+      nxend = nx+m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videodrawline3(void)
+{
+  /*int nscreentemp, i;*/
+  /*
+   *mode 3 - 80x25, Text only, 1 bpp, 40k
+   */
+  int i, nscreen_temp;
+
+  if (m6845_sc & 0x08)
+  {
+    /*blank lines > 8*/
+    #ifdef __RISCOS__
+      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      blankrow(nscreen,nx,0);*/
+      /*nscreentemp = nscreen;
+      for (i=0;i < video_scale; i++)
+      {
+        blankrow(nscreentemp,host_screenwidth,0);
+        nscreentemp += host_screenwidth;
+      }*/
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      while (nx < nxend) /*80*/
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+  else
+  {
+    #ifdef __RISCOS__
+      /*blankrow(nscreen,m6845_widthextra,0);*/
+      nscreen_temp = nscreen;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+      nx = (m6845_widthextra*video_scale);
+    #else
+      nx = 0;
+      nxend = m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*screen code is the same as mode 0*/
+      mode0plot(nscreen+nx,video_displaywidth);
+      nx += (video_displaywidth*video_scale);
+    #else
+      /*nxend = nx+(m6845_screenwidth<<2);*/
+      nxend = nx+video_displaywidth;
+      while (nx < nxend)
+      {
+        video_n = memory[video_address];
+        /*&01 &02*/
+        video_n1 = videoula_palette[((video_n & 0x80)>>7)];
+        video_n2 = videoula_palette[((video_n & 0x40)>>6)];
+        cscreen[nx++] = (video_n2<<4) | video_n1;
+        /*&04 &08*/
+        video_n1 = videoula_palette[((video_n & 0x20)>>5)];
+        video_n2 = videoula_palette[((video_n & 0x10)>>4)];
+        cscreen[nx++] = (video_n2<<4) | video_n1;
+        /*&10 &20*/
+        video_n1 = videoula_palette[((video_n & 0x08)>>3)];
+        video_n2 = videoula_palette[((video_n & 0x04)>>2)];
+        cscreen[nx++] = (video_n2<<4) | video_n1;
+        /*&40 &80*/
+        video_n1 = videoula_palette[((video_n & 0x02)>>1)];
+        video_n2 = videoula_palette[(video_n & 0x01)];
+        cscreen[nx++] = (video_n2<<4) | video_n1;
+        video_address += 8;
+        if (video_address >= 0x8000)
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
+      nscreen_temp = nscreen+nx;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+    #else
+      nxend = nx+m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videodrawline4(void)
+{
+  /*
+   *mode 4 - 40x32, 320x256, 1 bpp, 20k
+   */
+  int i, nscreen_temp;
+
+  if (m6845_sc & 0x08)
+  {
+    /*blank lines > 8*/
+    #ifdef __RISCOS__
+      /*nx = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      blankrow(nscreen,nx,0);*/
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      while (nx < nxend) /*80*/
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+  else
+  {
+    #ifdef __RISCOS__
+      /*blankrow(nscreen,m6845_widthextra,0);*/
+      nscreen_temp = nscreen;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+      nx = (m6845_widthextra*video_scale);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+    #ifdef __RISCOS__
+      mode4plot(nscreen+nx,video_displaywidth);
+      nx += (video_displaywidth*video_scale);
+    #else
+      /*nxend = nx+(m6845_screenwidth<<3);*/
+      nxend = nx+video_displaywidth;
+      while (nx < nxend) /*80*/
+      {
+        video_n = memory[video_address];
+        /*&01 &01*/
+        video_n1 = videoula_palette[((video_n & 0x80)>>7)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&02 &02*/
+        video_n1 = videoula_palette[((video_n & 0x40)>>6)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&04 &04*/
+        video_n1 = videoula_palette[((video_n & 0x20)>>5)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&08 &08*/
+        video_n1 = videoula_palette[((video_n & 0x10)>>4)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&10 &10*/
+        video_n1 = videoula_palette[((video_n & 0x08)>>3)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&20 &20*/
+        video_n1 = videoula_palette[((video_n & 0x04)>>2)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&40 &40*/
+        video_n1 = videoula_palette[((video_n & 0x02)>>1)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&80 &80*/
+        video_n1 = videoula_palette[(video_n & 0x01)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        video_address += 8;
+        if (video_address >= 0x8000)
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
+      nscreen_temp = nscreen+nx;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+    #else
+      nxend = nx+m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videodrawline5(void)
+{
+  /*
+   *mode 5 - 20x32, 160x256, 2 bpp, 20k
+   */
+  int i, nscreen_temp;
+
+  if (m6845_sc & 0x08)
+  {
+    /*blank lines > 8*/
+    #ifdef __RISCOS__
+      /*nx = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      blankrow(nscreen,nx,0);*/
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      while (nx < nxend) /*80*/
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+  else
+  {
+    #ifdef __RISCOS__
+      /*blankrow(nscreen,m6845_widthextra,0);
+      nx = m6845_widthextra;*/
+      nscreen_temp = nscreen;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+      nx = (m6845_widthextra*video_scale);
+
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+    #ifdef __RISCOS__
+      mode5plot(nscreen+nx,video_displaywidth);
+      nx += (video_displaywidth*video_scale);
+    #else
+      /*nxend = nx+(m6845_screenwidth<<3);*/
+      nxend = nx+video_displaywidth;
+      while (nx < nxend)
+      {
+        video_n = memory[video_address];
+        /*&02 &01*/
+        video_n1 = ((video_n & 0x80)>>6) | ((video_n & 0x08)>>3);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        /*&08 &04*/
+        video_n1 = ((video_n & 0x40)>>5) | ((video_n & 0x04)>>2);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        /*&20 &10*/
+        video_n1 = ((video_n & 0x20)>>4) | ((video_n & 0x02)>>1);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        /*&80 &40*/
+        video_n1 = ((video_n & 0x10)>>3) | (video_n & 0x01);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        video_address += 8;
+        if (video_address >= 0x8000)
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
+      nscreen_temp = nscreen+nx;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+    #else
+      nxend = nx+m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videodrawline6(void)
+{
+  /*
+   *mode 6 - 40x25, Text only, 1 bpp, 20k
+   */
+  int i, nscreen_temp;
+
+  if (m6845_sc & 0x08)
+  {
+    /*blank lines > 8*/
+    #ifdef __RISCOS__
+      /*nx = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      blankrow(nscreen,nx,0);*/
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      while (nx < nxend) /*80*/
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+  else
+  {
+    #ifdef __RISCOS__
+      /*blankrow(nscreen,m6845_widthextra,0);*/
+      nscreen_temp = nscreen;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+      nx = (m6845_widthextra*video_scale);
+    #else
+      nx = 0;
+      nxend = m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*screen code is the same as mode 4*/
+      mode4plot(nscreen+nx,video_displaywidth);
+      nx += (video_displaywidth*video_scale);
+    #else
+      /*nxend = nx+(m6845_screenwidth<<3);*/
+      nxend = nx+video_displaywidth;
+      while (nx < nxend)
+      {
+        video_n = memory[video_address];
+        /*&01 &01*/
+        video_n1 = videoula_palette[((video_n & 0x80)>>7)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&02 &02*/
+        video_n1 = videoula_palette[((video_n & 0x40)>>6)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&04 &04*/
+        video_n1 = videoula_palette[((video_n & 0x20)>>5)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&08 &08*/
+        video_n1 = videoula_palette[((video_n & 0x10)>>4)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&10 &10*/
+        video_n1 = videoula_palette[((video_n & 0x08)>>3)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&20 &20*/
+        video_n1 = videoula_palette[((video_n & 0x04)>>2)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&40 &40*/
+        video_n1 = videoula_palette[((video_n & 0x02)>>1)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        /*&80 &80*/
+        video_n1 = videoula_palette[(video_n & 0x01)];
+        cscreen[nx++] = (video_n1<<4) | video_n1;
+        video_address += 8;
+        if (video_address >= 0x8000)
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
+      nscreen_temp = nscreen+nx;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+    #else
+      nxend = nx+m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videodrawline8(void)
+{
+  /*
+   *mode 8 - 10x32, 80x256, 4 bpp, 20k
+   */
+  int i, nscreen_temp;
+
+  if (m6845_sc & 0x08)
+  {
+    /*blank lines > 8*/
+    #ifdef __RISCOS__
+      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      blankrow(nscreen,nx,0);*/
+      blankrow(nscreen,host_screenwidth2,0);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      while (nx < nxend) /*80*/
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+  else
+  {
+    #ifdef __RISCOS__
+      nscreen_temp = nscreen;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+      nx = (m6845_widthextra*video_scale);
+    #else
+      cscreen = (char *)nscreen;
+      nx = 0;
+      nxend = m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+    #ifdef __RISCOS__
+      mode8plot(nscreen+nx,video_displaywidth);
+      nx += (video_displaywidth*video_scale);
+    #else
+      /*nxend = nx+(m6845_screenwidth<<2);*/
+      nxend = nx+video_displaywidth;
+      while (nx < nxend)
+      {
+        video_n = memory[video_address];
+        /*&08 &04 &02 &01*/
+        video_n1 = ((video_n & 0x80)>>4) | ((video_n & 0x20)>>3) | ((video_n & 0x08)>>2) | ((video_n & 0x02)>>1);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        /*&08 &04 &02 &01*/
+        video_n1 = ((video_n & 0x40)>>3) | ((video_n & 0x10)>>2) | ((video_n & 0x04)>>1) | (video_n & 0x01);
+        video_n2 = videoula_palette[video_n1];
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        cscreen[nx++] = (video_n2<<4) | video_n2;
+        video_address += 8;
+        if (video_address >= 0x8000)
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+      }
+    #endif
+    #ifdef __RISCOS__
+      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
+      nscreen_temp = nscreen+nx;
+      for (i=0; i<video_scale; i++)
+      {
+        blankrow(nscreen_temp,(m6845_widthextra*video_scale),0x00);
+        nscreen_temp = nscreen_temp + host_screenwidth;
+      }
+    #else
+      nxend = nx+m6845_widthextra;
+      while (nx < nxend)
+      {
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+        cscreen[nx++] = 0;
+      }
+    #endif
+  }
+}
+
+void videoteletext4(void)
+{
+  /*
+   *mode 7 - 40x25, 640x256, 4 bpp, 1k (TELETEXT)
+   */
+  ny = m6845_vc; /*video_currentrow>>3;*/ /* divide by 8*/
+  nx = 0;
+  video_address = video_startaddress+(ny*m6845_screenwidth);
+  if (video_address >= 0x7FFF)
+    video_address -= 0x400;
+  bbcvdu(31);
+  bbcvdu(nx);
+  bbcvdu(ny);
+  if (m6845_screenwidth > 40)
+    nx = 40;
+  else
+    nx = m6845_screenwidth;
+  /*while (nx < m6845_screenwidth)*/
+  switch (beebit_machinetype)
+  {
+    case MACHINE_MODELB:
+      while (nx > 0)
+      {
+        bbcvdu(memory[video_address] | 0x80);
+        if (video_address >= 0x7FFF)
+          video_address = 0x7C00;
+        else
+          video_address++;
+        /*nx++;*/
+        nx--;
+      }
+      break;
+    case MACHINE_MODELBPLUS:
+      if (beebit_acccon & 0x80)
+      {
+        while (nx > 0)
+        {
+          bbcvdu(shadow[video_address] | 0x80);
+          if (video_address >= 0x7FFF)
+            video_address = 0x7C00;
+          else
+            video_address++;
+          /*nx++;*/
+          nx--;
+        }
+      }
+      else
+      {
+        while (nx > 0)
+        {
+          bbcvdu(memory[video_address] | 0x80);
+          if (video_address >= 0x7FFF)
+            video_address = 0x7C00;
+          else
+            video_address++;
+          /*nx++;*/
+          nx--;
+        }
+      }
+      break;
+    case MACHINE_MASTER128:
+    case MACHINE_COMPACT:
+      if (beebit_acccon & 0x01)
+      {
+        /*LYNNE (D)*/
+        while (nx > 0)
+        {
+          bbcvdu(shadow[video_address] | 0x80);
+          if (video_address >= 0x7FFF)
+            video_address = 0x7C00;
+          else
+            video_address++;
+          /*nx++;*/
+          nx--;
+        }
+      }
+      else
+      {
+        while (nx > 0)
+        {
+          bbcvdu(memory[video_address] | 0x80);
+          if (video_address >= 0x7FFF)
+            video_address = 0x7C00;
+          else
+            video_address++;
+          /*nx++;*/
+          nx--;
+        }
+      }
+      break;
+  }
+
+  /*if (beebit_cursor AND cursor_show)
+  {
+    if (video_currentrow > cursor_y0 AND !lcursordone)
+    {
+      nscreen = nlocalscreen+(cursor_y0*320)+cursor_x;
+      #ifdef __RISCOS__
+        blankrow(nscreen,4,0x77777777);
+      #else
+        cscreen = (char *)nscreen;
+        cscreen[0] = 0x77;
+        cscreen[1] = 0x77;
+        cscreen[2] = 0x77;
+        cscreen[3] = 0x77;
+      #endif
+      lcursordone=TRUE;
+    }
+  }*/
+  /*end of display*/
+  /*video_displayrow += 8;*/
+
+   /*draw cursor*/
+  if (beebit_cursor AND cursor_show AND cursor_on)
+  {
+    if (m6845_vc == cursor_y0)
+    {
+      nscreen = nlocalscreen+(m6845_vc * 0x640) + 0x5A0;
+      nscreen += (cursor_x << 2);
+      #ifdef __RISCOS__
+        blankrow(nscreen,cursor_width,cursor_bitmap);
+      #else
+        cscreen = (char *)nscreen;
+        cscreen[0] = 0x77;
+        cscreen[1] = 0x77;
+        cscreen[2] = 0x77;
+        cscreen[3] = 0x77;
+        cscreen[4] = 0x77;
+        cscreen[5] = 0x77;
+        cscreen[6] = 0x77;
+        cscreen[7] = 0x77;
+      #endif
+    }
+  }
+}
+
+void teletextblankchar1(int address, int scale)
+{
+  int i;
+  char *cscreen;
+
+  for (i = 0; i < scale; i++)
+  {
+    address = address + (16*i);
+    cscreen = (char *)address;
+    setword(cscreen,teletext_backcolourmask);
+    cscreen = (char *)address+4;
+    setword(cscreen,teletext_backcolourmask);
+    cscreen = (char *)address+8;
+    setword(cscreen,teletext_backcolourmask);
+    cscreen = (char *)address+12;
+    setword(cscreen,teletext_backcolourmask);
+  }
+}
+
+void teletextblankchar(void)
+{
+  int address;
+  int row;
+
+  address = nscreen;
+
+  switch (beebit_teletextmode)
+  {
+    case 15:
+      for (row = 0; row <= 9; row++)
+      {
+        /*10 lines of 8 pixels*/
+        teletextblankchar1(address, 1);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 21:
+      for (row = 0; row <= 9; row++)
+      {
+        /*20 lines of 8 pixels*/
+        teletextblankchar1(address, video_scale);
+        address = address + host_screenwidth;
+        teletextblankchar1(address, video_scale);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 12801024:
+    case 16001024:
+      for (row = 0; row <= 9; row++)
+      {
+        /*40 lines of 8 pixels*/
+        teletextblankchar1(address, video_scale);
+        address = address + host_screenwidth /* 2*/;
+        teletextblankchar1(address, video_scale);
+        address = address + host_screenwidth /* 2*/;
+        teletextblankchar1(address, video_scale);
+        address = address + host_screenwidth /* 2*/;
+        teletextblankchar1(address, video_scale);
+        address = address + host_screenwidth /* 2*/;
+      }
+      break;
+  }
+}
+
+/*single width, single height*/
+void teletextalphanormal1(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1,data2;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address;
+  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+4;
+  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
+  setword(cscreen,data2);
+
+  cscreen = (char *)pointer + ((row << 3) + 4);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address+8;
+  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+12;
+  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
+  setword(cscreen,data2);
+}
+
+/*double width, single height*/
+void teletextalphanormal2(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1,data2;
+  char *cscreen, *cscreen2;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address;
+  cscreen2 = (char *)(address + host_screenwidth);
+  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+  cscreen = (char *)address + 4;
+  cscreen2 = (char *)(address + 4 + host_screenwidth);
+  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address + 8;
+  cscreen2 = (char *)(address + 8 + host_screenwidth);
+  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+  cscreen = (char *)address + 12;
+  cscreen2 = (char *)(address + 12 + host_screenwidth);
+  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+
+  cscreen = (char *)pointer + ((row << 3) + 4);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address + 16;
+  cscreen2 = (char *)(address + 16 + host_screenwidth);
+  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+  cscreen = (char *)address + 20;
+  cscreen2 = (char *)(address + 20 + host_screenwidth);
+  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address + 24;
+  cscreen2 = (char *)(address + 24 + host_screenwidth);
+  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+  cscreen = (char *)address + 28;
+  cscreen2 = (char *)(address + 28 + host_screenwidth);
+  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+}
+
+void teletextalphanormal(void)
+{
+  int row;
+  int pointer, address;
+
+  pointer = (int)teletext_alpha + (((teletext_character | 0x80) - 0x20) * 80);
+  address = nscreen;
+
+  switch (beebit_teletextmode)
+  {
+    case 15:
+      for (row = 0; row <= 9; row++)
+      {
+        /*10 lines of 8 pixels*/
+        teletextalphanormal1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 21:
+      for (row = 0; row <= 9; row++)
+      {
+        /*20 lines of 8 pixels*/
+        teletextalphanormal1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextalphanormal1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 12801024:
+    case 16001024:
+      for (row = 0; row <= 9; row++)
+      {
+        /*40 lines of 8 pixels*/
+        teletextalphanormal2(address, pointer, row);
+        address = address + host_screenwidth2; /* * 2;*/
+        teletextalphanormal2(address, pointer, row);
+        address = address + host_screenwidth2; /* * 2;*/
+      }
+      break;
+  }
+}
+
+/*single width, single height*/
+void teletextalphadoubletop1(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1, data2;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address;
+  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+4;
+  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
+  setword(cscreen,data2);
+
+  cscreen = (char *)pointer + ((row << 3) + 4);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address+8;
+  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+12;
+  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
+  setword(cscreen,data2);
+}
+
+/*double width, single height*/
+void teletextalphadoubletop2(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1, data2;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address;
+  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  cscreen = (char *)address+4;
+  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
+  setword(cscreen,data2);
+
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+8;
+  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
+  setword(cscreen,data2);
+  cscreen = (char *)address+12;
+  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
+  setword(cscreen,data2);
+
+  cscreen = (char *)pointer + ((row << 3) + 4);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address+16;
+  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  cscreen = (char *)address+20;
+  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
+  setword(cscreen,data2);
+
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+24;
+  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
+  setword(cscreen,data2);
+  cscreen = (char *)address+28;
+  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
+  setword(cscreen,data2);
+}
+
+void teletextalphadoubletop(void)
+{
+  int row;
+  int pointer, address;
+
+  pointer = (int)teletext_alphad1 + (((teletext_character | 0x80) - 0x20) * 80);
+  address = nscreen;
+
+  switch (beebit_teletextmode)
+  {
+    case 15:
+      for (row = 0; row <= 9; row++)
+      {
+        /*10 lines of 8 pixels*/
+        teletextalphadoubletop1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 21:
+      for (row = 0; row <= 9; row++)
+      {
+        /*20 lines of 8 pixels*/
+        teletextalphadoubletop1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextalphadoubletop1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 12801024:
+    case 16001024:
+      for (row = 0; row <= 9; row++)
+      {
+        /*40 lines of 8 pixels*/
+        teletextalphadoubletop2(address, pointer, row);
+        address = address + host_screenwidth; /* *2;*/
+        teletextalphadoubletop2(address, pointer, row);
+        address = address + host_screenwidth; /* *2;*/
+        teletextalphadoubletop2(address, pointer, row);
+        address = address + host_screenwidth; /* *2;*/
+        teletextalphadoubletop2(address, pointer, row);
+        address = address + host_screenwidth; /* *2;*/
+      }
+      break;
+  }
+}
+
+/*single width, single height*/
+void teletextalphadoublebottom1(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1, data2;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address;
+  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+4;
+  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
+  setword(cscreen,data2);
+
+  cscreen = (char *)pointer + ((row << 3) + 4);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address+8;
+  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+12;
+  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
+  setword(cscreen,data2);
+}
+
+/*double width, double height*/
+void teletextalphadoublebottom2(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1, data2;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address;
+  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  cscreen = (char *)address+4;
+  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
+  setword(cscreen,data2);
+
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+8;
+  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
+  setword(cscreen,data2);
+  cscreen = (char *)address+12;
+  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
+  setword(cscreen,data2);
+
+  cscreen = (char *)pointer + ((row << 3) + 4);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_alphacolourmask | data1);
+
+  data1 = (data & 0xFF00);
+  data0 = (data & 0x00FF);
+  cscreen = (char *)address+16;
+  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
+  setword(cscreen,data2);
+  cscreen = (char *)address+20;
+  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
+  setword(cscreen,data2);
+
+  data1 = (data & 0xFF000000);
+  data0 = (data & 0x00FF0000);
+  cscreen = (char *)address+24;
+  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
+  setword(cscreen,data2);
+  cscreen = (char *)address+28;
+  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
+  setword(cscreen,data2);
+}
+
+void teletextalphadoublebottom(void)
+{
+  int row;
+  int pointer, address;
+
+  pointer = (int)teletext_alphad2 + (((teletext_character | 0x80) - 0x20) * 80);
+  address = nscreen;
+
+  switch (beebit_teletextmode)
+  {
+    case 15:
+      for (row = 0; row <= 9; row++)
+      {
+        /*10 lines of 8 pixels*/
+        teletextalphadoublebottom1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 21:
+      for (row = 0; row <= 9; row++)
+      {
+        /*20 lines of 8 pixels*/
+        teletextalphadoublebottom1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextalphadoublebottom1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 12801024:
+    case 16001024:
+      for (row = 0; row <= 9; row++)
+      {
+        /*40 lines of 8 pixels*/
+        teletextalphadoublebottom2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextalphadoublebottom2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextalphadoublebottom2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextalphadoublebottom2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+      }
+      break;
+  }
+}
+
+void teletextgraphicscontiguous1(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_graphiccolourmask | data1);
+  cscreen = (char *)address;
+  setword(cscreen,data);
+  cscreen = (char *)address+4;
+  setword(cscreen,data);
+
+  cscreen = (char *)pointer + (row << 3) + 4;
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_graphiccolourmask | data1);
+  cscreen = (char *)address+8;
+  setword(cscreen,data);
+  cscreen = (char *)address+12;
+  setword(cscreen,data);
+}
+
+/*double width, single height*/
+void teletextgraphicscontiguous2(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_graphiccolourmask | data1);
+  cscreen = (char *)address;
+  setword(cscreen,data);
+  cscreen = (char *)address+4;
+  setword(cscreen,data);
+  cscreen = (char *)address+8;
+  setword(cscreen,data);
+  cscreen = (char *)address+12;
+  setword(cscreen,data);
+
+  cscreen = (char *)pointer + (row << 3) + 4;
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_graphiccolourmask | data1);
+  cscreen = (char *)address+16;
+  setword(cscreen,data);
+  cscreen = (char *)address+20;
+  setword(cscreen,data);
+  cscreen = (char *)address+24;
+  setword(cscreen,data);
+  cscreen = (char *)address+28;
+  setword(cscreen,data);
+}
+
+void teletextgraphicscontiguous(void)
+{
+  int row;
+  int pointer, address;
+
+  pointer = (int)teletext_graphics + (((teletext_character | 0x80) - 0x20) * 80);
+  address = nscreen;
+
+  switch (beebit_teletextmode)
+  {
+    case 15:
+      for (row = 0; row <= 9; row++)
+      {
+        /*10 lines of 8 pixels*/
+        teletextgraphicscontiguous1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 21:
+      for (row = 0; row <= 9; row++)
+      {
+        /*20 lines of 8 pixels*/
+        teletextgraphicscontiguous1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextgraphicscontiguous1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      break;
+    case 12801024:
+    case 16001024:
+      for (row = 0; row <= 9; row++)
+      {
+        /*20 lines of 8 pixels*/
+        teletextgraphicscontiguous2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicscontiguous2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicscontiguous2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicscontiguous2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+      }
+      break;
+  }
+}
+
+void teletextgraphicsseparated1(int address, int pointer, int row)
+{
+  unsigned int data;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data = getword(cscreen);
+  /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
+  data = (data & teletext_graphiccolourmask);
+  cscreen = (char *)address;
+  /*0xFFFF0000 is used to blank out half of the first block*/
+  setword(cscreen,(data & 0xFFFF0000));
+  cscreen = (char *)address+4;
+  setword(cscreen,data);
+
+  cscreen = (char *)pointer + (row << 3) + 4;
+  data = getword(cscreen);
+  /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
+  data = (data & teletext_graphiccolourmask);
+  cscreen = (char *)address+8;
+  setword(cscreen,(data & 0xFFFF0000));
+  cscreen = (char *)address+12;
+  setword(cscreen,data);
+}
+
+/*double width, single height*/
+void teletextgraphicsseparated2(int address, int pointer, int row)
+{
+  unsigned int data;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data = getword(cscreen);
+  /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
+  data = (data & teletext_graphiccolourmask);
+  /*data0 = data0 | (data0 >> 16);
+  data1 = data | (data << 16);*/
+  cscreen = (char *)address;
+  /*0x00 is used to blank out half of the first block*/
+  setword(cscreen,0x00);
+  cscreen = (char *)address+0x04;
+  setword(cscreen,data);
+  cscreen = (char *)address+0x08;
+  setword(cscreen,data);
+  cscreen = (char *)address+0x0C;
+  setword(cscreen,data);
+
+  cscreen = (char *)pointer + (row << 3) + 4;
+  data = getword(cscreen);
+  /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
+  data = (data & teletext_graphiccolourmask);
+  /*data0 = data0 | (data0 >> 16);
+  data1 = data | (data << 16);*/
+  cscreen = (char *)address+0x10;
+  /*0x00 is used to blank out half of the first block*/
+  setword(cscreen,0x00);
+  cscreen = (char *)address+0x14;
+  setword(cscreen,data);
+  cscreen = (char *)address+0x18;
+  setword(cscreen,data);
+  cscreen = (char *)address+0x1C;
+  setword(cscreen,data);
+}
+
+/*double width, double height - not working*/
+void teletextgraphicsseparated2x2(int address, int pointer, int row)
+{
+  unsigned int data;
+  char *cscreen, *cscreen1;
+
+  cscreen = (char *)pointer + (row << 3);
+  data = getword(cscreen);
+  /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
+  data = (data & teletext_graphiccolourmask);
+  /*data0 = data0 | (data0 >> 16);
+  data1 = data | (data << 16);*/
+  cscreen = (char *)address;
+  cscreen1 = (char *)address + host_screenwidth;
+  /*0x00 is used to blank out half of the first block*/
+  setword(cscreen,0x00);
+  setword(cscreen1,0x00);
+  cscreen = (char *)address+4;
+  cscreen1 += 4;
+  setword(cscreen,data);
+  setword(cscreen1,data);
+  cscreen = (char *)address+8;
+  cscreen1 += 4;
+  setword(cscreen,data);
+  setword(cscreen1,data);
+  cscreen = (char *)address+12;
+  cscreen1 += 4;
+  setword(cscreen,data);
+  setword(cscreen1,data);
+
+  cscreen = (char *)pointer + (row << 3) + 4;
+  data = getword(cscreen);
+  /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
+  data = (data & teletext_graphiccolourmask);
+  /*data0 = data0 | (data0 >> 16);
+  data1 = data | (data << 16);*/
+  cscreen = (char *)address+16;
+  cscreen1 = cscreen + host_screenwidth;
+  setword(cscreen,0x00);
+  setword(cscreen1,data);
+  cscreen = (char *)address+20;
+  cscreen1 = cscreen + host_screenwidth;
+  setword(cscreen,data);
+  setword(cscreen1,data);
+  cscreen = (char *)address+24;
+  cscreen1 = cscreen + host_screenwidth;
+  setword(cscreen,data);
+  setword(cscreen1,data);
+  cscreen = (char *)address+28;
+  cscreen1 = cscreen + host_screenwidth;
+  setword(cscreen,data);
+  setword(cscreen1,data);
+}
+
+void teletextgraphicsseparated(void)
+{
+  unsigned int row;
+  unsigned int pointer, address;
+  char *cscreen;
+
+  pointer = (int)teletext_graphics + (((teletext_character | 0x80) - 0x20) * 80);
+  address = nscreen;
+
+  switch (beebit_teletextmode)
+  {
+    case 15:
+      for (row = 0; row <= 1; row++)
+      {
+        /*2 lines of 8 pixels*/
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      for (row = 3; row <= 5; row++)
+      {
+        /*3 lines of 8 pixels*/
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      for (row = 7; row <= 8; row++)
+      {
+        /*2 lines of 8 pixels*/
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      break;
+    case 21:
+      for (row = 0; row <= 1; row++)
+      {
+        /*2 lines of 8 pixels*/
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      for (row = 3; row <= 5; row++)
+      {
+        /*3 lines of 8 pixels*/
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      for (row = 7; row <= 8; row++)
+      {
+        /*2 lines of 8 pixels*/
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextgraphicsseparated1(address, pointer, row);
+        address = address + host_screenwidth;
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      break;
+    case 12801024:
+    case 16001024:
+      for (row = 0; row <= 1; row++)
+      {
+        /*4 lines of 8 pixels*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      /*cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;*/
+      for (row = 3; row <= 5; row++)
+      {
+        /*3 lines of 8 pixels*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      /*cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;
+      cscreen = (char *)address;
+      setword(cscreen,0x00000000);
+      setword(cscreen+0x04,0x00000000);
+      setword(cscreen+0x08,0x00000000);
+      setword(cscreen+0x0C,0x00000000);
+      address = address + host_screenwidth;*/
+      for (row = 7; row <= 8; row++)
+      {
+        /*2 lines of 8 pixels*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+        teletextgraphicsseparated2(address, pointer, row);
+        address = address + host_screenwidth; /* * 2;*/
+      }
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      address = address + host_screenwidth; /* * 2;*/
+      cscreen = (char *)address;
+      setword(cscreen,0x00);
+      setword(cscreen+0x04,0x00);
+      setword(cscreen+0x08,0x00);
+      setword(cscreen+0x0C,0x00);
+      setword(cscreen+0x10,0x00);
+      setword(cscreen+0x14,0x00);
+      setword(cscreen+0x18,0x00);
+      setword(cscreen+0x1C,0x00);
+      break;
+  }
+}
+
+void videoteletext8(void)
+{
+  /*
+   *mode 7 - 40x25, 640x256, 4 bpp, 1k (TELETEXT)
+   */
+  int teletext_oldcolour;
+  int teletext_oldcolourmask;
+
+  video_address = video_startaddress+(m6845_vc*m6845_screenwidth);
+  if (video_address >= 0x7FFF)
+    video_address -= 0x400;
+
+  switch (beebit_teletextmode)
+  {
+    case 15:
+      if (m6845_vc == 0)
+      {
+        /*host machine screen memory address*/
+        nscreen = nlocalscreen;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+      }
+      else
+      {
+        /*host machine screen memory address*/
+        nscreen = nlocalscreen+(((m6845_vc * 10) + 3) * host_screenwidth);
+      }
+      break;
+    case 21:
+      if (m6845_vc == 0)
+      {
+        /*host machine screen memory address*/
+        nscreen = nlocalscreen;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+      }
+     else
+      {
+        /*host machine screen memory address*/
+        nscreen = nlocalscreen+(((m6845_vc * 20) + 6) * host_screenwidth);
+      }
+      break;
+    case 12801024:
+    case 16001024:
+      if (m6845_vc == 0)
+      {
+        /*host machine screen memory address*/
+        nscreen = nlocalscreen;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+      }
+      else
+      {
+        /*host machine screen memory address*/
+        nscreen = nlocalscreen+(((m6845_vc * 40) + 6) * host_screenwidth);
+      }
+      break;
+  }
+
+  /*reset defaults*/
+  teletext_alphacolour = 0x07;
+  teletext_alphacolourmask= teletext_colourmap8[0x07];
+  teletext_graphiccolour = 0x07;
+  teletext_graphiccolourmask= teletext_colourmap8[0x07];
+  teletext_backcolourmask = teletext_colourmap8[0x00];
+  teletext_style = TELETEXT_ALPHA;
+  /*teletext_alphastyle = TELETEXT_ALPHA_NORMAL;*/
+  teletext_graphicstyle = TELETEXT_GRAPHICS_CONTIGUOUS;
+  teletext_holdgraphics = FALSE;
+  teletext_steady = TRUE;
+  teletext_character = 0x20;
+
+  nx = 0;
+  if (m6845_screenwidth > 40)
+    nxend = 40;
+  else
+    nxend = m6845_screenwidth;
+  /*draw a row of characters*/
+  while (nx < nxend)
+  {
+    /*if (!teletext_holdgraphics)
+      teletext_character = 0x20;*/
+
+    switch (beebit_machinetype)
+    {
+      case MACHINE_MODELB:
+        video_n = memory[video_address];
+        break;
+      case MACHINE_MODELBPLUS:
+        if (beebit_acccon & 0x80)
+          video_n = shadow[video_address];
+        else
+          video_n = memory[video_address];
+        break;
+      case MACHINE_MASTER128:
+      case MACHINE_COMPACT:
+        if (beebit_acccon & 0x01)
+          /*LYNNE (D)*/
+          video_n = shadow[video_address];
+        else
+          video_n = memory[video_address];
+        break;
+    }
+
+    switch (video_n)
+    {
+      case 0x81:
+      case 0x82:
+      case 0x83:
+      case 0x84:
+      case 0x85:
+      case 0x86:
+      case 0x87:
+        teletext_alphacolour = (video_n-0x80);
+        /*if (!teletext_holdgraphics)
+        {*/
+          teletext_alphacolourmask = teletext_colourmap8[teletext_alphacolour];
+          teletext_style = TELETEXT_ALPHA;
+          teletext_character = 0x20;
+        /*}*/
+        break;
+      case 0x88:
+        /*flash*/
+        teletext_steady = FALSE;
+        teletext_character = 0x20;
+        break;
+      case 0x89:
+        /*steady*/
+        teletext_steady = TRUE;
+        teletext_character = 0x20;
+        break;
+      case 0x8C:
+        /*normal height*/
+        /*if (!teletext_holdgraphics)
+        {*/
+          /*teletext_style = TELETEXT_ALPHA;*/
+          /*teletext_alphastyle = TELETEXT_ALPHA_NORMAL;*/
+          teletext_doubleheight = FALSE;
+          teletext_character = 0x20;
+        /*}*/
+        break;
+      case 0x8D:
+        /*double height*/
+        /*if (!teletext_holdgraphics)
+        {*/
+          teletext_style = TELETEXT_ALPHA;
+          teletext_doubleheight = TRUE;
+
+          if (teletext_doubleheightstyle == TELETEXT_ALPHA_NORMAL)
+            teletext_doubleheightstyle = TELETEXT_ALPHA_DOUBLETOP;
+
+          /*if (teletext_doubleheightstyle == TELETEXT_ALPHA_DOUBLEBOTTOM)
+            teletext_doubleheightstyle = TELETEXT_ALPHA_DOUBLETOP;*/
+        /*}*/
+        teletext_character = 0x20;
+        break;
+      case 0x91:
+      case 0x92:
+      case 0x93:
+      case 0x94:
+      case 0x95:
+      case 0x96:
+      case 0x97:
+        teletext_graphiccolour = (video_n-0x90);
+        teletext_style = TELETEXT_GRAPHICS;
+        if (!teletext_holdgraphics)
+        {
+          teletext_graphiccolourmask = teletext_colourmap8[teletext_graphiccolour];
+          teletext_character = 0x20;
+        }
+        break;
+      case 0x98:
+        /*conceal*/
+        teletext_style = TELETEXT_CONCEAL;
+        break;
+      case 0x99:
+        /*contiguous*/
+        if (!teletext_holdgraphics)
+        {
+          teletext_graphicstyle = TELETEXT_GRAPHICS_CONTIGUOUS;
+          teletext_character = 0x20;
+        }
+        break;
+      case 0x9A:
+        /*separated*/
+        if (!teletext_holdgraphics)
+        {
+          teletext_graphicstyle = TELETEXT_GRAPHICS_SEPARATED;
+          teletext_character = 0x20;
+        }
+        break;
+      case 0x9C:
+        teletext_backcolourmask = teletext_colourmap8[0x00];
+        break;
+      case 0x9D:
+        switch (teletext_style)
+        {
+          case TELETEXT_ALPHA:
+            teletext_backcolourmask = teletext_alphacolourmask;
+            break;
+          case TELETEXT_GRAPHICS:
+            teletext_backcolourmask = teletext_graphiccolourmask;
+            break;
+        }
+        break;
+      case 0x9E:
+        /*hold graphics*/
+        /*hold/release graphics actually affects the way colour-change*/
+        /*codes are displayed. normally they are blank; when hold graphics*/
+        /*is set, the previous character is displayed again. This allows*/
+        /*contiguous blocks of colour.*/
+        /*Thanks to Tom Seddon for that bit of information...*/
+        teletext_holdgraphics = TRUE;
+        break;
+      case 0x9F:
+        /*release graphics*/
+        teletext_holdgraphics = FALSE;
+        break;
+      default:
+        teletext_character = video_n;
+        /*if (teletext_character >= 160)
+          teletext_style = TELETEXT_GRAPHICS;*/
+        break;
+    }
+
+    switch (teletext_style)
+    {
+      case TELETEXT_ALPHA:
+        if (teletext_doubleheight)
+        {
+          switch (teletext_doubleheightstyle)
+          {
+            case TELETEXT_ALPHA_DOUBLETOP:
+              if (!teletext_steady AND teletext_timer >= 36)
+                teletextblankchar();
+              else
+                teletextalphadoubletop();
+              break;
+            case TELETEXT_ALPHA_DOUBLEBOTTOM:
+              if (!teletext_steady AND teletext_timer >= 36)
+                teletextblankchar();
+              else
+                teletextalphadoublebottom();
+              break;
+          }
+        }
+        else
+        {
+          if (!teletext_steady AND teletext_timer >= 36)
+            teletextblankchar();
+          else
+          {
+            if (teletext_doubleheightstyle == TELETEXT_ALPHA_DOUBLEBOTTOM)
+              teletextblankchar();
+            else
+              teletextalphanormal();
+          }
+        }
+        break;
+      case TELETEXT_GRAPHICS:
+        if (teletext_character >= 0x40 AND teletext_character < 0x60)
+        {
+          /*teletext_character >= 0x40 and < 0x60 are alpha*/
+          teletext_oldcolour = teletext_alphacolour;
+          teletext_oldcolourmask = teletext_alphacolourmask;
+          teletext_alphacolour = teletext_graphiccolour;
+          teletext_alphacolourmask = teletext_colourmap8[teletext_alphacolour];
+          if (teletext_doubleheight)
+          {
+            switch (teletext_doubleheightstyle)
+            {
+              case TELETEXT_ALPHA_DOUBLETOP:
+                if (!teletext_steady AND teletext_timer >= 36)
+                  teletextblankchar();
+                else
+                  teletextalphadoubletop();
+                break;
+              case TELETEXT_ALPHA_DOUBLEBOTTOM:
+                if (!teletext_steady AND teletext_timer >= 36)
+                  teletextblankchar();
+                else
+                  teletextalphadoublebottom();
+                break;
+            }
+          }
+          else
+          {
+            if (!teletext_steady AND teletext_timer >= 36)
+              teletextblankchar();
+            else
+            {
+              if (teletext_doubleheightstyle == TELETEXT_ALPHA_DOUBLEBOTTOM)
+                teletextblankchar();
+              else
+                teletextalphanormal();
+            }
+          }
+          teletext_alphacolourmask = teletext_oldcolourmask;
+          teletext_alphacolour = teletext_oldcolour;
+        }
+        else
+        {
+          /*teletext_character < &40 or >= &60 are graphics*/
+          switch (teletext_graphicstyle)
+          {
+            case TELETEXT_GRAPHICS_CONTIGUOUS:
+              if (!teletext_steady AND teletext_timer >= 36)
+                teletextblankchar();
+              else
+                teletextgraphicscontiguous();
+              break;
+            case TELETEXT_GRAPHICS_SEPARATED:
+              if (!teletext_steady AND teletext_timer >= 36)
+                teletextblankchar();
+              else
+                teletextgraphicsseparated();
+              break;
+          }
+        }
+        break;
+      case TELETEXT_CONCEAL:
+        if (!teletext_holdgraphics)
+          teletextblankchar();
+        break;
+    }
+
+    if (teletext_holdgraphics)
+    {
+      /*set the colourmask to the current colour*/
+      teletext_alphacolourmask = teletext_colourmap8[teletext_alphacolour];
+      teletext_graphiccolourmask = teletext_colourmap8[teletext_graphiccolour];
+    }
+
+    /*increment screen address and x counter*/
+    switch (beebit_teletextmode)
+    {
+      case 15:
+      case 21:
+        nscreen = nscreen + 16;
+        break;
+      case 12801024:
+      case 16001024:
+        nscreen = nscreen + 32;
+        break;
+    }
+    nx++;
+
+    if (video_address >= 0x7FFF)
+      video_address = 0x7C00;
+    else
+      video_address++;
+  }
+
+  if (m6845_vc == 24)
+  {
+    /*end of frame*/
+    switch (beebit_teletextmode)
+    {
+      case 15:
+        /*host machine screen memory address*/
+        /*10-1 lines per char row*/
+        nscreen = nscreen + (host_screenwidth * 9);
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        break;
+      case 21:
+        /*host machine screen memory address*/
+        /*20-1 lines per char row*/
+        nscreen = nscreen + (host_screenwidth * 19);
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0);
+        break;
+      case 12801024:
+      case 16001024:
+        /*host machine screen memory address*/
+        /*40-1 lines per char row*/
+        nscreen = nscreen + (host_screenwidth * 39);
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        nscreen = nscreen + host_screenwidth;
+        blankrow(nscreen,host_screenwidth,0x00);
+        break;
+    }
+  }
+
+  switch (teletext_doubleheightstyle)
+  {
+    case TELETEXT_ALPHA_DOUBLETOP :
+      teletext_doubleheightstyle = TELETEXT_ALPHA_DOUBLEBOTTOM;
+      break;
+    case TELETEXT_ALPHA_DOUBLEBOTTOM :
+      teletext_doubleheight = FALSE;
+      teletext_doubleheightstyle = TELETEXT_ALPHA_NORMAL;
+      break;
+  }
+
+  /*else
+  {*/
+    /*if (teletext_doubleheightstyle == TELETEXT_ALPHA_DOUBLETOP)
+      teletext_doubleheightstyle = TELETEXT_ALPHA_DOUBLEBOTTOM;*/
+    /*else
+      teletext_alphastyle = TELETEXT_ALPHA_NORMAL;*/
+    /*else
+    {
+      teletext_doubleheight = FALSE;
+    }*/
+  /*}*/
+
+  /*draw cursor*/
+  if (beebit_cursor AND cursor_show AND cursor_on)
+  {
+    if (m6845_vc == cursor_y0)
+    {
+      switch (beebit_teletextmode)
+      {
+        case 15:
+          nscreen = nlocalscreen+((((m6845_vc+1) * 10) + 2) * host_screenwidth);
+          nscreen += (cursor_x << 4);
+          #ifdef __RISCOS__
+            blankrow(nscreen,cursor_width,cursor_bitmap);
+          #else
+            cscreen = (char *)nscreen;
+            cscreen[0] = 0x77;
+            cscreen[1] = 0x77;
+            cscreen[2] = 0x77;
+            cscreen[3] = 0x77;
+            cscreen[4] = 0x77;
+            cscreen[5] = 0x77;
+            cscreen[6] = 0x77;
+            cscreen[7] = 0x77;
+          #endif
+
+          break;
+        case 21:
+          nscreen = nlocalscreen+((((m6845_vc+1) * 20) + 1) * host_screenwidth);
+          nscreen += (cursor_x << 4);
+          #ifdef __RISCOS__
+            blankrow(nscreen,cursor_width,cursor_bitmap);
+            nscreen = nscreen + host_screenwidth;
+            blankrow(nscreen,cursor_width,cursor_bitmap);
+          #else
+            cscreen = (char *)nscreen;
+            cscreen[0] = 0x77;
+            cscreen[1] = 0x77;
+            cscreen[2] = 0x77;
+            cscreen[3] = 0x77;
+            cscreen[4] = 0x77;
+            cscreen[5] = 0x77;
+            cscreen[6] = 0x77;
+            cscreen[7] = 0x77;
+            nscreen = nscreen + host_screenwidth;
+            cscreen = (char *)nscreen;
+            cscreen[0] = 0x77;
+            cscreen[1] = 0x77;
+            cscreen[2] = 0x77;
+            cscreen[3] = 0x77;
+            cscreen[4] = 0x77;
+            cscreen[5] = 0x77;
+            cscreen[6] = 0x77;
+            cscreen[7] = 0x77;
+          #endif
+          break;
+      case 12801024:
+      case 16001024:
+          nscreen = nlocalscreen+((((m6845_vc+1) * 40) + 1) * host_screenwidth);
+          nscreen += (cursor_x << 5);
+          #ifdef __RISCOS__
+            blankrow(nscreen,cursor_width,cursor_bitmap);
+            nscreen = nscreen + host_screenwidth;
+            blankrow(nscreen,cursor_width,cursor_bitmap);
+            nscreen = nscreen + host_screenwidth;
+            /*blankrow(nscreen,cursor_width<<4,cursor_bitmap);
+            nscreen = nscreen + host_screenwidth;
+            blankrow(nscreen,cursor_width<<4,cursor_bitmap);*/
+          #else
+            cscreen = (char *)nscreen;
+            cscreen[0] = 0x77;
+            cscreen[1] = 0x77;
+            cscreen[2] = 0x77;
+            cscreen[3] = 0x77;
+            cscreen[4] = 0x77;
+            cscreen[5] = 0x77;
+            cscreen[6] = 0x77;
+            cscreen[7] = 0x77;
+            nscreen = nscreen + host_screenwidth;
+            cscreen = (char *)nscreen;
+            cscreen[0] = 0x77;
+            cscreen[1] = 0x77;
+            cscreen[2] = 0x77;
+            cscreen[3] = 0x77;
+            cscreen[4] = 0x77;
+            cscreen[5] = 0x77;
+            cscreen[6] = 0x77;
+            cscreen[7] = 0x77;
+          #endif
+          break;
+      }
+    }
+  }
+}
+
+void videomodechange(void)
+{
+  switch (video_mode)
+  {
+    case 0:
+      videoplot = videodrawline0;
+      break;
+    case 1:
+      videoplot = videodrawline1;
+      break;
+    case 2:
+      videoplot = videodrawline2;
+      break;
+    case 3:
+      videoplot = videodrawline3;
+      break;
+    case 4:
+      videoplot = videodrawline4;
+      break;
+    case 5:
+      videoplot = videodrawline5;
+      break;
+    case 6:
+      videoplot = videodrawline6;
+      break;
+    case 8:
+      videoplot = videodrawline8;
+      break;
+  }
+}
+
+void videoscanline(void)
+{
+  char cmodeblock[24];
+  int naddress;
+  /*---plot---*/
+
+  if (lteletextmode)
+  {
+    /*if (video_framerate == beebit_framerate)*/
+    if (video_framerate == beebit_framerate)
+    {
+      if (m6845_sc == 0 AND m6845_vc < m6845_vd)
+        videoteletext();
+    }
+  }
+  else
+  {
+    if (video_scanline >= video_display0 && video_scanline < video_display1)
+    {
+      /*if allowed to draw a line on this pass*/
+      /*if internal scanline counter >= start of display*/
+      /*and internal scanline counter < end of display*/
+      if (video_drawline == 0 && video_framerate == beebit_framerate)
+      {
+        /*if the frames per second counter matches the option*/
+
+        /*bbc screen memory address*/
+        video_address = video_startaddress+video_offset+m6845_sc;
+        /*if (video_address < 0x2F00)
+        {*/
+          /*inttohex4(video_baseaddress);
+          bbcvdu(32);
+          inttohex4(video_startaddress);
+          bbcvdu(32);
+          inttohex4(video_offset);
+          bbcvdu(32);
+          inttohex4(video_address);
+          bbcvdu(13);
+          bbcvdu(10);*/
+          /*for (i=0;i<=0xFF;i++)
+            shadow[0x2F00+i] = shadow[0xDF00+i];
+        }*/
+        if (video_address >= 0x8000) /* AND !(beebit_acccon & beebit_vdusel))*/
+        {
+          video_address &= 0x7FFF;
+          video_address += video_baseaddress;
+        }
+
+        if (video_display) /*video_de AND m6845_displayskew != 3)*/
+        {
+          /*if display is enabled*/
+          /*videodrawline();*/
+          /*video_plot[video_mode]();*/
+          /*switch (video_mode)
+          {
+            case 0:
+              videodrawline0();
+              break;
+            case 1:
+              videodrawline1();
+              break;
+            case 2:
+              videodrawline2();
+              break;
+            case 3:
+              videodrawline3();
+              break;
+            case 4:
+              videodrawline4();
+              break;
+            case 5:
+              videodrawline5();
+              break;
+            case 6:
+              videodrawline6();
+              break;
+          }*/
+
+          switch (beebit_graphicsmode)
+          {
+            case 12:
+              /*host machine screen memory address*/
+              nscreen = nlocalscreen+(video_currentrow * host_screenwidth);
+              videoplot();
+              break;
+            case 15:
+              /*host machine screen memory address*/
+              nscreen = nlocalscreen+(video_currentrow * host_screenwidth);
+              videoplot();
+              break;
+            case 21:
+              /*host machine screen memory address*/
+              nscreen = nlocalscreen+(video_currentrow * (host_screenwidth<<1));
+              naddress = video_address;
+              videoplot();
+              nscreen = nscreen + host_screenwidth;
+              video_address = naddress;
+              videoplot();
+              break;
+            case 12801024:
+            case 16001024:
+              /*host machine screen memory address*/
+              nscreen = nlocalscreen+(video_currentrow * (host_screenwidth2<<1));
+              naddress = video_address;
+              video_address = naddress;
+              videoplot();
+              nscreen = nscreen + host_screenwidth2;
+              video_address = naddress;
+              videoplot();
+              break;
+          }
+        }
+        else
+        {
+          switch (beebit_graphicsmode)
+          {
+            case 12:
+              /*host machine screen memory address*/
+              nscreen = nlocalscreen+(video_currentrow * host_screenwidth);
+              videoblankline();
+              break;
+            case 15:
+              /*host machine screen memory address*/
+              nscreen = nlocalscreen+(video_currentrow * host_screenwidth);
+              videoblankline();
+              break;
+            case 21:
+              /*host machine screen memory address*/
+              nscreen = nlocalscreen+(video_currentrow * (host_screenwidth<<1));
+              videoblankline();
+              nscreen = nscreen + host_screenwidth;
+              videoblankline();
+              break;
+            case 12801024:
+            case 16001024:
+              /*host machine screen memory address*/
+              nscreen = nlocalscreen+(video_currentrow * (host_screenwidth2<<1));
+              videoblankline();
+              nscreen = nscreen + host_screenwidth2;
+              videoblankline();
+              break;
+          }
+        }
+
+        /*draw cursor*/
+        if (beebit_cursor AND cursor_show AND cursor_on)
+        {
+          if (video_currentrow > cursor_y0 AND video_currentrow <= cursor_y1)
+          {
+            /*nscreen = nlocalscreen+(video_currentrow*host_screenwidth)+cursor_x;*/
+            nscreen += cursor_x;
+            #ifdef __RISCOS__
+              if (videoula_clockrate)
+              {
+                /*modes 0-3*/
+                switch (beebit_graphicsmode)
+                {
+                  case 12:
+                  case 15:
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    break;
+                  case 21:
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    nscreen = nscreen + host_screenwidth;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    break;
+                  case 12801024:
+                  case 16001024:
+                    nscreen = nscreen - host_screenwidth2;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    nscreen = nscreen + host_screenwidth;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    nscreen = nscreen + host_screenwidth;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    nscreen = nscreen + host_screenwidth;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    break;
+                }
+              }
+              else
+              {
+                /*modes 4-7*/
+                switch (beebit_graphicsmode)
+                {
+                  case 12:
+                  case 15:
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    break;
+                  case 21:
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    nscreen = nscreen + host_screenwidth;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    break;
+                  case 12801024:
+                  case 16001024:
+                    nscreen = nscreen - host_screenwidth2;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    nscreen = nscreen + host_screenwidth;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    nscreen = nscreen + host_screenwidth;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    nscreen = nscreen + host_screenwidth;
+                    blankrow(nscreen,cursor_width,cursor_bitmap);
+                    break;
+                }
+              }
+            #else
+              cscreen = (char *)nscreen;
+              cscreen[0] = 0x77;
+              cscreen[1] = 0x77;
+              cscreen[2] = 0x77;
+              cscreen[3] = 0x77;
+              cscreen[4] = 0x77;
+              cscreen[5] = 0x77;
+              cscreen[6] = 0x77;
+              cscreen[7] = 0x77;
+            #endif
+          }
+        }
+      }
+      /*increase the currently plotted row by 1*/
+      video_currentrow++;
+
+      if (m6845_interlaceon AND beebit_videospeed == VIDEO_FAST)
+        /*toggle the line drawing flag*/
+        video_drawline ^= 1;
+    }
+  }
+
+  /*---counter---*/
+
+  /*increase internal scanline count by 1*/
+  video_scanline++;
+
+  /*increase 6845 scanline count by 1*/
+  m6845_sc++;
+
+  if (m6845_sc >= m6845_sl)
+  {
+    /*scanline count >= scan lines per character row*/
+    m6845_vc++;
+    m6845_sc = 0;
+    /*scanline count = 0*/
+    if (m6845_vc == m6845_vd)
+    {
+      /*curent row == vertical display rows*/
+      video_de = video_display = FALSE;
+    }
+    video_offset += video_width;
+  }
+
+  /*---vertical sync---*/
+
+  if (video_synchold == 0)
+  {
+    /*vertical sync width*/
+    if (m6845_vc == m6845_vsp && m6845_sc <= m6845_vsw)
+    {
+      video_synchold = m6845_vsw+1;
+
+      video_scanline = 0;
+      if (video_framerate == beebit_framerate)
+        video_field ^= 1;
+
+      video_currentrow = 0;
+      if (beebit_videospeed == VIDEO_SLOW)
+        video_drawline = 0;
+      else
+      {
+        if (m6845_interlaceon AND video_field == 1)
+          video_drawline = 1;
+        else
+          video_drawline = 0;
+      }
+
+      /*print screen during vertical sync*/
+      if (lprintscreen !=0)
+      {
+        sprite_printscreen();
+        lprintscreen = 0;
+      }
+
+    }
+  }
+  else
+  {
+    video_synchold--;
+
+    if (video_synchold == 0)
+    {
+      if (video_mode != ncurrentmode)
+      {
+        /*screen mode has changed*/
+        switch (beebit_graphicsmode)
+        {
+          case 12:
+            if (lteletextmode)
+            {
+              switch (beebit_teletextmode)
+              {
+                case 7:
+                  host_screenwidth = MODE12_X;
+                  cursor_bitmap = 0x77777777;
+                  videoulasetcursor();
+                  regs.r[0] = 0;
+                  regs.r[1] = 7;
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  /*bbcvdu(22);
+                  bbcvdu(7);*/
+                  break;
+                case 15:
+                  host_screenwidth = MODE15_X;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  regs.r[0] = 0;
+                  regs.r[1] = 15;
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  /*bbcvdu(22);
+                  bbcvdu(15);*/
+                  break;
+                case 21:
+                  host_screenwidth = MODE15_X;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  regs.r[0] = 0;
+                  regs.r[1] = 21;
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  /*bbcvdu(22);
+                  bbcvdu(21);*/
+                  break;
+                case 12801024:
+                  /*1280 x 1024*/
+                  host_screenwidth = 1280;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1280);
+                  setword(cmodeblock + 8, 1024);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = 0;
+                  regs.r[1] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  break;
+                case 16001024:
+                  /*1280 x 1024*/
+                  host_screenwidth = 1600;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1600);
+                  setword(cmodeblock + 8, 1024);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = 0;
+                  regs.r[1] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  break;
+              }
+              screenstart();
+              cursordisable();
+            }
+            else
+            {
+              videoulasetpalette();
+              if (ncurrentmode == 7 OR ncurrentmode == -1)
+              {
+                /*mode 12 will suit all modes*/
+                regs.r[0] = 0;
+                regs.r[1] = 12;
+                _kernel_swi(OS_ScreenMode,&regs,&regs);
+                /*bbcvdu(22);
+                bbcvdu(12); */
+                host_screenwidth = MODE12_X;
+                cursor_bitmap = 0x77777777;
+                screenstart();
+                cursordisable();
+              }
+            }
+            break;
+          case 15:
+            if (!lteletextmode)
+              videoulasetpalette();
+            break;
+          case 21:
+            if (!lteletextmode)
+              videoulasetpalette();
+            break;
+          case 12801024:
+          case 16001024:
+            if (!lteletextmode)
+              videoulasetpalette();
+            break;
+        }
+
+        ncurrentmode = video_mode;
+        videomodechange();
+        crtcscreen();
+        crtccursor();
+        video_startaddress = video_storeaddress;
+        video_offset = 0;
+      }
+
+      r6522sysvia_ifr |= 0x02; /*CA1 flag*/
+      systemviasetirq();
+      r6522sysvia_ira = (r6522sysvia_ora & r6522sysvia_ddra) + (r6522sysvia_porta & ~r6522sysvia_ddra);
+
+      /*sync emulated BBC clock with PC clock*/
+      if (beebit_cpuspeed == CPU_2MHZ)
+      {
+        vsync(); /*wait for native scren vsync*/
+        while (clock() < nclock)
+        {
+        }
+        nclock = clock()+TIME_50HZ;
+      }
+    }
+  }
+
+  /*---timing---*/
+
+  /*if (lteletextmode)
+  {
+    video_timer += (m6845_horizontaltotal*m6845_sl);
+    video_timer += m6845_horizontaltotal + 32;
+  }
+  else
+  {*/
+  /*if (videoula_clockrate)
+    video_timer += m6845_horizontaltotal;
+  else
+    video_timer += (m6845_horizontaltotal << 1);*/
+  video_timer += m6845_horizontaltotal;
+  /*}*/
+
+  if (m6845_interlaceon AND video_scanline == 0)
+  {
+    /*if (video_field == 1)
+      video_timer += m6845_horizontaltotal;*/
+    video_timer += (m6845_horizontaltotal>>1);
+  }
+
+  /*---reset---*/
+
+  /*if (video_mode == 2)
+    fprintf(htrace,"vc=%u vt=%u sc=%u adj=%u\n",m6845_vc,m6845_vt,m6845_sc,m6845_adj);*/
+  /*if (m6845_vc >= m6845_vt && m6845_sc >= m6845_adj)*/
+  if (((m6845_vc << 8) | m6845_sc) >= video_totalend)
+  {
+    videorecalc();
+    m6845_vc = m6845_sc = 0;
+    /*vertical count = 0*/
+    video_de = TRUE;
+    /*video_display = TRUE;*/
+    video_display = (m6845_displayskew != 3);
+
+    /*cursor timer counts up to 50 fields*/
+    if (cursor_timer <= 0)
+    {
+      cursor_timer = cursor_blinktime;
+      if (cursor_blink)
+        cursor_on = (!cursor_on);
+      else
+        cursor_on = TRUE;
+    }
+    else
+      cursor_timer--;
+
+    /*teletext timer counts 50 fields*/
+    if (teletext_timer >= 50)
+      teletext_timer = 0;
+    else
+      teletext_timer ++;
+
+    /*video_framerate counts 0-2 fields*/
+    /*if (video_framerate >= 255)*/
+    if (video_framerate >= beebit_framerate)
+      video_framerate = 0;
+    else
+      video_framerate++;
+
+    video_startaddress = video_storeaddress;
+    video_offset = 0;
+  /*if (video_mode == 2)
+    fprintf(htrace,"videostart=&%X\n",video_startaddress);*/
+  }
+}

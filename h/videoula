@@ -1,0 +1,33 @@
+/*>videoula.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*Video ULA*/
+/*extern char videoula_colours[0x10];*/
+/*colour lookup table for modes 0, 3, 4 and 6*/
+extern int video_colourlookup1[0x10];
+/*colour lookup table for modes 1 and 5*/
+extern int video_colourlookup2[0x10];
+extern char videoula_physical0[0x10];
+extern char videoula_physical1[0x10];
+extern char videoula_palette0[0x10];
+extern char videoula_palette1[0x10];
+extern char videoula_palette[0x10];
+/*colour map to 8bpp modes*/
+extern char videoula_colourmap8[0x08];
+extern int videoula_palettevalue;
+extern int videoula_clockrate;
+extern int videoula_flashcolour;
+
+extern int ncurrentmode,lteletextmode;
+
+extern void videoulareset(int lfull);
+extern void videoulasetpalette(void);
+extern int videoularead(unsigned int naddress);
+extern void videoulawrite(int naddress, int nvalue);
+extern void videoulasetcursor(void);

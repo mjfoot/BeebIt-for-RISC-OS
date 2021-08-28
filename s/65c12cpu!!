@@ -1,0 +1,1025 @@
+;>65c12cpu!!.s
+;
+; BeebIt - BBC Micro Model B Emulator
+;
+; (C) Copyright Michael J Foot, 1998-1999
+;
+; Email: <mikef@voyager.co.nz>
+;
+; r12=pointer to variable
+; r11=pointer to variable
+; r10=pointer to variable
+; r9=PC
+; r8=PS
+; r7=Y
+; r6=X
+; r5=A
+
+  GET h.6502cpus
+
+  GET h.6502cpui
+
+; Use the GET directive to include register definitions as if typed here
+
+  GET h.RegNames
+
+; Use the GET directive to include a list of SWI names as if typed here
+
+  GET h.SWInames
+
+; Area name C$$code advisable as wanted to link with C output
+
+  AREA |C$$code|, CODE, READONLY
+
+; Import global symbols
+
+  IMPORT r65c12opcode00
+  IMPORT r65c12opcode01
+  IMPORT r65c12opcode02
+  IMPORT r65c12opcode03
+  IMPORT r65c12opcode04
+  IMPORT r65c12opcode05
+  IMPORT r65c12opcode06
+  IMPORT r65c12opcode07
+  IMPORT r65c12opcode08
+  IMPORT r65c12opcode09
+  IMPORT r65c12opcode0A
+  IMPORT r65c12opcode0B
+  IMPORT r65c12opcode0C
+  IMPORT r65c12opcode0D
+  IMPORT r65c12opcode0E
+  IMPORT r65c12opcode0F
+  IMPORT r65c12opcode10
+  IMPORT r65c12opcode11
+  IMPORT r65c12opcode12
+  IMPORT r65c12opcode13
+  IMPORT r65c12opcode14
+  IMPORT r65c12opcode15
+  IMPORT r65c12opcode16
+  IMPORT r65c12opcode17
+  IMPORT r65c12opcode18
+  IMPORT r65c12opcode19
+  IMPORT r65c12opcode1A
+  IMPORT r65c12opcode1B
+  IMPORT r65c12opcode1C
+  IMPORT r65c12opcode1D
+  IMPORT r65c12opcode1E
+  IMPORT r65c12opcode1F
+  IMPORT r65c12opcode20
+  IMPORT r65c12opcode21
+  IMPORT r65c12opcode22
+  IMPORT r65c12opcode23
+  IMPORT r65c12opcode24
+  IMPORT r65c12opcode25
+  IMPORT r65c12opcode26
+  IMPORT r65c12opcode27
+  IMPORT r65c12opcode28
+  IMPORT r65c12opcode29
+  IMPORT r65c12opcode2A
+  IMPORT r65c12opcode2B
+  IMPORT r65c12opcode2C
+  IMPORT r65c12opcode2D
+  IMPORT r65c12opcode2E
+  IMPORT r65c12opcode2F
+  IMPORT r65c12opcode30
+  IMPORT r65c12opcode31
+  IMPORT r65c12opcode32
+  IMPORT r65c12opcode33
+  IMPORT r65c12opcode34
+  IMPORT r65c12opcode35
+  IMPORT r65c12opcode36
+  IMPORT r65c12opcode37
+  IMPORT r65c12opcode38
+  IMPORT r65c12opcode39
+  IMPORT r65c12opcode3A
+  IMPORT r65c12opcode3B
+  IMPORT r65c12opcode3C
+  IMPORT r65c12opcode3D
+  IMPORT r65c12opcode3E
+  IMPORT r65c12opcode3F
+  IMPORT r65c12opcode40
+  IMPORT r65c12opcode41
+  IMPORT r65c12opcode42
+  IMPORT r65c12opcode43
+  IMPORT r65c12opcode44
+  IMPORT r65c12opcode45
+  IMPORT r65c12opcode46
+  IMPORT r65c12opcode47
+  IMPORT r65c12opcode48
+  IMPORT r65c12opcode49
+  IMPORT r65c12opcode4A
+  IMPORT r65c12opcode4B
+  IMPORT r65c12opcode4C
+  IMPORT r65c12opcode4D
+  IMPORT r65c12opcode4E
+  IMPORT r65c12opcode4F
+  IMPORT r65c12opcode50
+  IMPORT r65c12opcode51
+  IMPORT r65c12opcode52
+  IMPORT r65c12opcode53
+  IMPORT r65c12opcode54
+  IMPORT r65c12opcode55
+  IMPORT r65c12opcode56
+  IMPORT r65c12opcode57
+  IMPORT r65c12opcode58
+  IMPORT r65c12opcode59
+  IMPORT r65c12opcode5A
+  IMPORT r65c12opcode5B
+  IMPORT r65c12opcode5C
+  IMPORT r65c12opcode5D
+  IMPORT r65c12opcode5E
+  IMPORT r65c12opcode5F
+  IMPORT r65c12opcode60
+  IMPORT r65c12opcode61
+  IMPORT r65c12opcode62
+  IMPORT r65c12opcode63
+  IMPORT r65c12opcode64
+  IMPORT r65c12opcode65
+  IMPORT r65c12opcode66
+  IMPORT r65c12opcode67
+  IMPORT r65c12opcode68
+  IMPORT r65c12opcode69
+  IMPORT r65c12opcode6A
+  IMPORT r65c12opcode6B
+  IMPORT r65c12opcode6C
+  IMPORT r65c12opcode6D
+  IMPORT r65c12opcode6E
+  IMPORT r65c12opcode6F
+  IMPORT r65c12opcode70
+  IMPORT r65c12opcode71
+  IMPORT r65c12opcode72
+  IMPORT r65c12opcode73
+  IMPORT r65c12opcode74
+  IMPORT r65c12opcode75
+  IMPORT r65c12opcode76
+  IMPORT r65c12opcode77
+  IMPORT r65c12opcode78
+  IMPORT r65c12opcode79
+  IMPORT r65c12opcode7A
+  IMPORT r65c12opcode7B
+  IMPORT r65c12opcode7C
+  IMPORT r65c12opcode7D
+  IMPORT r65c12opcode7E
+  IMPORT r65c12opcode7F
+  IMPORT r65c12opcode80
+  IMPORT r65c12opcode81
+  IMPORT r65c12opcode82
+  IMPORT r65c12opcode83
+  IMPORT r65c12opcode84
+  IMPORT r65c12opcode85
+  IMPORT r65c12opcode86
+  IMPORT r65c12opcode87
+  IMPORT r65c12opcode88
+  IMPORT r65c12opcode89
+  IMPORT r65c12opcode8A
+  IMPORT r65c12opcode8B
+  IMPORT r65c12opcode8C
+  IMPORT r65c12opcode8D
+  IMPORT r65c12opcode8E
+  IMPORT r65c12opcode8F
+  IMPORT r65c12opcode90
+  IMPORT r65c12opcode91
+  IMPORT r65c12opcode92
+  IMPORT r65c12opcode93
+  IMPORT r65c12opcode94
+  IMPORT r65c12opcode95
+  IMPORT r65c12opcode96
+  IMPORT r65c12opcode97
+  IMPORT r65c12opcode98
+  IMPORT r65c12opcode99
+  IMPORT r65c12opcode9A
+  IMPORT r65c12opcode9B
+  IMPORT r65c12opcode9C
+  IMPORT r65c12opcode9D
+  IMPORT r65c12opcode9E
+  IMPORT r65c12opcode9F
+  IMPORT r65c12opcodeA0
+  IMPORT r65c12opcodeA1
+  IMPORT r65c12opcodeA2
+  IMPORT r65c12opcodeA3
+  IMPORT r65c12opcodeA4
+  IMPORT r65c12opcodeA5
+  IMPORT r65c12opcodeA6
+  IMPORT r65c12opcodeA7
+  IMPORT r65c12opcodeA8
+  IMPORT r65c12opcodeA9
+  IMPORT r65c12opcodeAA
+  IMPORT r65c12opcodeAB
+  IMPORT r65c12opcodeAC
+  IMPORT r65c12opcodeAD
+  IMPORT r65c12opcodeAE
+  IMPORT r65c12opcodeAF
+  IMPORT r65c12opcodeB0
+  IMPORT r65c12opcodeB1
+  IMPORT r65c12opcodeB2
+  IMPORT r65c12opcodeB3
+  IMPORT r65c12opcodeB4
+  IMPORT r65c12opcodeB5
+  IMPORT r65c12opcodeB6
+  IMPORT r65c12opcodeB7
+  IMPORT r65c12opcodeB8
+  IMPORT r65c12opcodeB9
+  IMPORT r65c12opcodeBA
+  IMPORT r65c12opcodeBB
+  IMPORT r65c12opcodeBC
+  IMPORT r65c12opcodeBD
+  IMPORT r65c12opcodeBE
+  IMPORT r65c12opcodeBF
+  IMPORT r65c12opcodeC0
+  IMPORT r65c12opcodeC1
+  IMPORT r65c12opcodeC2
+  IMPORT r65c12opcodeC3
+  IMPORT r65c12opcodeC4
+  IMPORT r65c12opcodeC5
+  IMPORT r65c12opcodeC6
+  IMPORT r65c12opcodeC7
+  IMPORT r65c12opcodeC8
+  IMPORT r65c12opcodeC9
+  IMPORT r65c12opcodeCA
+  IMPORT r65c12opcodeCB
+  IMPORT r65c12opcodeCC
+  IMPORT r65c12opcodeCD
+  IMPORT r65c12opcodeCE
+  IMPORT r65c12opcodeCF
+  IMPORT r65c12opcodeD0
+  IMPORT r65c12opcodeD1
+  IMPORT r65c12opcodeD2
+  IMPORT r65c12opcodeD3
+  IMPORT r65c12opcodeD4
+  IMPORT r65c12opcodeD5
+  IMPORT r65c12opcodeD6
+  IMPORT r65c12opcodeD7
+  IMPORT r65c12opcodeD8
+  IMPORT r65c12opcodeD9
+  IMPORT r65c12opcodeDA
+  IMPORT r65c12opcodeDB
+  IMPORT r65c12opcodeDC
+  IMPORT r65c12opcodeDD
+  IMPORT r65c12opcodeDE
+  IMPORT r65c12opcodeDF
+  IMPORT r65c12opcodeE0
+  IMPORT r65c12opcodeE1
+  IMPORT r65c12opcodeE2
+  IMPORT r65c12opcodeE3
+  IMPORT r65c12opcodeE4
+  IMPORT r65c12opcodeE5
+  IMPORT r65c12opcodeE6
+  IMPORT r65c12opcodeE7
+  IMPORT r65c12opcodeE8
+  IMPORT r65c12opcodeE9
+  IMPORT r65c12opcodeEA
+  IMPORT r65c12opcodeEB
+  IMPORT r65c12opcodeEC
+  IMPORT r65c12opcodeED
+  IMPORT r65c12opcodeEE
+  IMPORT r65c12opcodeEF
+  IMPORT r65c12opcodeF0
+  IMPORT r65c12opcodeF1
+  IMPORT r65c12opcodeF2
+  IMPORT r65c12opcodeF3
+  IMPORT r65c12opcodeF4
+  IMPORT r65c12opcodeF5
+  IMPORT r65c12opcodeF6
+  IMPORT r65c12opcodeF7
+  IMPORT r65c12opcodeF8
+  IMPORT r65c12opcodeF9
+  IMPORT r65c12opcodeFA
+  IMPORT r65c12opcodeFB
+  IMPORT r65c12opcodeFC
+  IMPORT r65c12opcodeFD
+  IMPORT r65c12opcodeFE
+  IMPORT r65c12opcodeFF
+
+  IMPORT |memory|
+  IMPORT |shadow|
+  IMPORT |r6502_sp|
+  IMPORT |r6502_pc|
+  IMPORT |r6502_ps|
+  IMPORT |r6502_a|
+  IMPORT |r6502_x|
+  IMPORT |r6502_y|
+  IMPORT |r6502_cyclestogo|
+  IMPORT |r6502read|
+  IMPORT |r6502readm|
+  IMPORT |r6502write|
+  IMPORT |beebit_acccon|
+  IMPORT |beebit_trace|
+  IMPORT |beebit_romsel|
+; Export global symbols
+
+  EXPORT |r65c12loadregs|
+  EXPORT |r65c12saveregs|
+  EXPORT |r65c12execute|
+  ;EXPORT |r6502adc|
+  ;EXPORT |r6502sbc|
+  EXPORT |r65c12irq|
+  ;EXPORT |constFFFFFFFF|
+  EXPORT |r65c12opcodes|
+
+|r65c12loadregs|
+  ;STMFD sp!,{lr}
+  STR lr,[sp, #-4]!
+  LDR r12,=r6502_a
+  LDRB ra,[r12] ;load a
+  LDR r12,=r6502_x
+  LDRB rx,[r12] ;load x
+  LDR r12,=r6502_y
+  LDRB ry,[r12] ;load y
+
+  LDR r12,=r6502_pc
+  LDR rpc,[r12] ;load pc
+  LDR r12,=r6502_ps
+  LDRB rps,[r12] ;load ps
+  LDR r12,=r6502_sp
+  LDRB rsp,[r12] ;load sp
+
+  LDR r12,=r6502_cyclestogo
+  LDR rcycles,[r12] ;load sp
+
+  LDR r12,=memory
+  ;LDMFD sp!,{pc}
+  LDR pc, [sp], #4
+  ;MOV pc,lr
+
+|r65c12saveregs|
+  STMFD sp!,{r12,lr}
+  LDR r12,=r6502_a
+  STRB ra,[r12] ;save a
+  LDR r12,=r6502_x
+  STRB rx,[r12] ;save x
+  LDR r12,=r6502_y
+  STRB ry,[r12] ;save y
+
+  LDR r12,=r6502_pc
+  STR rpc,[r12] ;save pc
+  LDR r12,=r6502_ps
+  STRB rps,[r12] ;save ps
+  LDR r12,=r6502_sp
+  STRB rsp,[r12] ;save sp
+
+  LDR r12,=r6502_cyclestogo
+  STR rcycles,[r12] ;load sp
+
+  LDMFD sp!,{r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r65c12adc|
+  ;r0=number to adc with A
+  STMFD sp!,{r0-r12,lr}
+
+  ;if not decimal
+  MOV r0,r0,LSL#24 ;n=(n<<24)
+
+  LDR r12,=r6502_a
+  LDRB ra,[r12] ;load a
+  MOV ra,ra,LSL#24 ;a=(a<<24)
+  MOV r1,#&00FFFFFF ;raFFFFFF
+  ORR ra,ra,r1
+
+  MOV r1,#1 ;bit
+  MOV r2,#0 ;bit mask
+  LDR r11,=r6502_ps
+  LDRB rps,[r11]
+
+  ;n flag
+  ;ANDS r3,rps,#NFLAG
+  ;ORRNE r2,r2,r1,LSL#31 ;set n flag in bit mask
+  ;z flag
+  ;ANDS r3,rps,#ZFLAG
+  ;ORRNE r2,r2,r1,LSL#30 ;set z flag in bit mask
+  ;c flag
+  ANDS r3,rps,#CFLAG
+  ORRNE r2,r2,r1,LSL#29 ;set c flag in bit mask
+  ;v flag
+  ;ANDS r3,rps,#VFLAG
+  ;ORRNE r2,r2,r1,LSL#28 ;set v flag in bit mask
+  ;TEQP r3,r2 ;set flags in ARM PSR
+
+  TEQ PC,PC
+  TEQNEP r3,r2 ;set flags in ARM PSR
+  ;MSREQ CPSR_flg,R2
+  MSREQ CPSR_f,R2
+
+  ADCS ra,ra,r0 ;ra=a+n+c
+
+  AND rps,rps,#&3C ;%00111100 ;clear NVubdiZC
+  ORRMI rps,rps,#NFLAG
+  ;ORREQ rps,rps,#ZFLAG
+  ORRCS rps,rps,#CFLAG
+  ORRVS rps,rps,#VFLAG
+  STRB rps,[r11]
+
+  MOV ra,ra,LSR#24 ;(a=(a>>24)
+  CMP ra,#0
+  ORREQ rps,rps,#ZFLAG
+  STRB ra,[r12] ;store a
+
+  LDMFD sp!,{r0-r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r65c12sbc|
+  ;r0=number to sbc with A
+  STMFD sp!,{r0-r12,lr}
+
+  ;if not decimal
+  MOV r0,r0,LSL#24 ;n=(n<<24)
+
+  LDR r12,=r6502_a
+  LDRB ra,[r12] ;load a
+  MOV ra,ra,LSL#24 ;a=(a<<24)
+
+  MOV r1,#1 ;bit
+  MOV r2,#0 ;bit mask
+  LDR r11,=r6502_ps
+  LDRB rps,[r11]
+  ;n flag
+  ;ANDS r3,rps,#NFLAG
+  ;ORRNE r2,r2,r1,LSL#31 ;set n flag in bit mask
+  ;z flag
+  ;ANDS r3,rps,#ZFLAG
+  ;ORRNE r2,r2,r1,LSL#30 ;set z flag in bit mask
+  ;c flag
+  ANDS r3,rps,#CFLAG
+  ORRNE r2,r2,r1,LSL#29 ;set c flag in bit mask
+  ;v flag
+  ;ANDS r3,rps,#VFLAG
+  ;ORRNE r2,r2,r1,LSL#28 ;set v flag in bit mask
+  ;TEQP r3,r2 ;set flags in ARM PSR
+
+  TEQ PC,PC
+  TEQNEP r3,r2 ;set flags in ARM PSR
+  ;MSREQ CPSR_flg,R2
+  MSREQ CPSR_f,R2
+
+  SBCS ra,ra,r0 ;ra=a-n-c
+
+  AND rps,rps,#&3C ;%00111100 ;clear NVubdiZC
+  ;n flag
+  ORRMI rps,rps,#NFLAG
+  ;z flag
+  ;ORREQ rps,rps,#ZFLAG
+  ;c flag
+  ORRCS rps,rps,#CFLAG
+  ;v flag
+  ORRVS rps,rps,#VFLAG
+  STRB rps,[r11]
+
+  MOV ra,ra,LSR#24 ;(a=(a>>24)
+  CMP ra,#0
+  ORREQ rps,rps,#ZFLAG
+  STRB ra,[r12] ;store a
+
+  LDMFD sp!,{r0-r12,pc}
+
+;
+;rockwell 6502 cpu
+;
+|r65c12irq|
+  STMFD sp!,{r0-r12,lr}
+  LDR r12,=memory ;pointer to memory
+  LDR r11,=r6502_pc ;pointer to r6502_pc
+  LDR rpc,[r11]
+  LDR r10,=r6502_sp ;pointer to r6502_sp
+  LDRB rsp,[r10] ;load r6502_sp
+  AND r0,rpc,#&FF00
+  MOV r0,r0,LSR#8
+  STACKPUSH r0
+  AND r0,rpc,#&FF
+  STACKPUSH r0
+  ;PROCESSORSTATUS(0)
+  LDR r2,=r6502_ps
+  LDRB rps,[r2] ;load ps
+  AND rps,rps,#NOTBFLAG ;clear b flag
+  ORR r0,rps,#UFLAG ;set u flag
+  STACKPUSH r0
+  ORR rps,rps,#IFLAG ;set i flag
+  STRB rps,[r2]
+  ADD r2,r12,#&10000 ;memory+&10000
+  LDRB r0,[r2,#-2] ;&FFFE
+  LDRB r1,[r2,#-1] ;&FFFF
+  ADD rpc,r0,r1,LSL#8
+  STRB rsp,[r10]
+  STR rpc,[r11]
+
+  LDR r11,=r6502_cyclestogo
+  LDR rcycles,[r11] ;r6502_cyclestogo
+  CPU_CYCLES 7
+  STR rcycles,[r11] ;r6502_cyclestogo
+  LDMFD sp!,{r0-r12,pc}
+
+|r65c12execute|
+  STMFD sp!,{r0-r12,lr}
+  BL r65c12loadregs
+
+r65c12execute_loop
+  ;tracing below
+  ;LDR r11,=beebit_trace ;trace
+  ;LDR r0,[r11]
+  ;CMP r0,#00
+  ;BEQ r65c12execute_loop2
+
+  ;---
+
+  ;B r65c12execute_loop2
+
+  ;CMP rpc,#&C000
+  ;BGT r65c12execute_loop2
+  ;CMP rpc,#&8000
+  ;BLT asas
+  ;CMP rpc,#&C000
+  ;BLT r65c12execute_loop2
+
+;asas
+  ;LDR r1,=beebit_romsel
+  ;LDR r0,[r1]
+  ;AND r0,r0,#&0F
+  ;CMP r0,#9
+  ;BNE r65c12execute_loop2
+
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ; ---
+
+  ;MOV r0, rpc ;get RPC
+
+  ;-CMP r0,#&DA00
+  ;-BLT r65c12execute_loop2
+
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;CMP rpc,#&3000
+  ;LDRLTB r0,[r12,rpc] ;get opcode
+  ;MOVGE r0,rpc
+  ;BLGE r6502readm ;=r0
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+65
+  ;MOV r0, ra ;a
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+88
+  ;MOV r0, rx ;x
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+89
+  ;MOV r0, ry ;y
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+83
+  ;MOV r0, rsp ;program status
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;SWI OS_WriteI+80
+  ;MOV r0, rps ;program status
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;LDR r12,=memory
+  ;LDRB r0,[r12,#&F0]
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;LDR r1,=beebit_romsel
+  ;LDR r0,[r1]
+  ;;AND r0,r0,#&0F
+  ;;CMP r0,#9
+  ;;BNE r65c12execute_loop2
+
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;;SWI OS_WriteI+32
+
+  ;---
+
+  ;&DAEE
+  ;LDR r12,=memory
+  ;MOV r1,#&DA00
+  ;ADD r1,r1,#&EE
+  ;LDRB r0,[r12,r1]
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;LDR r12,=shadow
+  ;MOV r1,#&DA00
+  ;ADD r1,r1,#&EE
+  ;LDRB r0,[r12,r1]
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;---
+
+  ;SWI OS_NewLine
+  ;-------------------
+  ;LDR r12,=memory
+
+r65c12execute_loop2
+  CMP rpc,#&3000
+  LDRLTB r0,[r12,rpc] ;get opcode
+  MOVGE r0,rpc
+  BLGE r6502readm ;=r0
+  ;LDRB r3,[r12,rpc] ;get opcode
+  ADD rpc,rpc,#1
+  ;ANDS r0,rpc,#&10000
+  ;MOVNE r0,#&FF00
+  ;ORRNE r0,r0,#&00FF
+  ;ANDNE rpc,rpc,r0
+  ;STR rpc,[r11] ;pc
+
+  LDR r1,=r65c12opcodes
+  ;STMFD sp!,{lr}
+  MOV lr,pc
+  LDR pc,[r1,r0,LSL#2]
+  ;LDMFD sp!,{lr}
+
+  ;LDR r11,=beebit_trace ;trace
+  ;LDR r0,[r11]
+  ;CMP r0,#00
+  ;BEQ r65c12execute_loop3
+  ;B r65c12execute_loop3
+
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;MOV r0,ra ;a
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;MOV r0,rx ;x
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;MOV r0,ry ;y
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0,rps ;program status
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0,rsp ;sp
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_NewLine
+
+  ;LDR r0,=stuff
+  ;LDR r1,[r0]
+  ;LDRB r0,[r12,r1]
+  ;CMP r0,#0
+  ;BEQ r65c12execute_loop3
+
+  ;SWINE OS_WriteI+33
+  ;SWINE OS_WriteI+33
+
+  ;MOV r0, rpc ;get RPC
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex4 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+  ;LDRB r0,[r12,rpc] ;get opcode
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+  ;SWI OS_WriteI+32
+
+r65c12execute_loop3
+  CMP rcycles,#0
+  BGT r65c12execute_loop
+
+r65c12execute_end
+  BL r65c12saveregs
+  LDMFD sp!,{r0-r12,pc}
+
+|r65c12opcodes|
+  DCD r65c12opcode00
+  DCD r65c12opcode01
+  DCD r65c12opcode02
+  DCD r65c12opcode03
+  DCD r65c12opcode04
+  DCD r65c12opcode05
+  DCD r65c12opcode06
+  DCD r65c12opcode07
+  DCD r65c12opcode08
+  DCD r65c12opcode09
+  DCD r65c12opcode0A
+  DCD r65c12opcode0B
+  DCD r65c12opcode0C
+  DCD r65c12opcode0D
+  DCD r65c12opcode0E
+  DCD r65c12opcode0F
+  DCD r65c12opcode10
+  DCD r65c12opcode11
+  DCD r65c12opcode12
+  DCD r65c12opcode13
+  DCD r65c12opcode14
+  DCD r65c12opcode15
+  DCD r65c12opcode16
+  DCD r65c12opcode17
+  DCD r65c12opcode18
+  DCD r65c12opcode19
+  DCD r65c12opcode1A
+  DCD r65c12opcode1B
+  DCD r65c12opcode1C
+  DCD r65c12opcode1D
+  DCD r65c12opcode1E
+  DCD r65c12opcode1F
+  DCD r65c12opcode20
+  DCD r65c12opcode21
+  DCD r65c12opcode22
+  DCD r65c12opcode23
+  DCD r65c12opcode24
+  DCD r65c12opcode25
+  DCD r65c12opcode26
+  DCD r65c12opcode27
+  DCD r65c12opcode28
+  DCD r65c12opcode29
+  DCD r65c12opcode2A
+  DCD r65c12opcode2B
+  DCD r65c12opcode2C
+  DCD r65c12opcode2D
+  DCD r65c12opcode2E
+  DCD r65c12opcode2F
+  DCD r65c12opcode30
+  DCD r65c12opcode31
+  DCD r65c12opcode32
+  DCD r65c12opcode33
+  DCD r65c12opcode34
+  DCD r65c12opcode35
+  DCD r65c12opcode36
+  DCD r65c12opcode37
+  DCD r65c12opcode38
+  DCD r65c12opcode39
+  DCD r65c12opcode3A
+  DCD r65c12opcode3B
+  DCD r65c12opcode3C
+  DCD r65c12opcode3D
+  DCD r65c12opcode3E
+  DCD r65c12opcode3F
+  DCD r65c12opcode40
+  DCD r65c12opcode41
+  DCD r65c12opcode42
+  DCD r65c12opcode43
+  DCD r65c12opcode44
+  DCD r65c12opcode45
+  DCD r65c12opcode46
+  DCD r65c12opcode47
+  DCD r65c12opcode48
+  DCD r65c12opcode49
+  DCD r65c12opcode4A
+  DCD r65c12opcode4B
+  DCD r65c12opcode4C
+  DCD r65c12opcode4D
+  DCD r65c12opcode4E
+  DCD r65c12opcode4F
+  DCD r65c12opcode50
+  DCD r65c12opcode51
+  DCD r65c12opcode52
+  DCD r65c12opcode53
+  DCD r65c12opcode54
+  DCD r65c12opcode55
+  DCD r65c12opcode56
+  DCD r65c12opcode57
+  DCD r65c12opcode58
+  DCD r65c12opcode59
+  DCD r65c12opcode5A
+  DCD r65c12opcode5B
+  DCD r65c12opcode5C
+  DCD r65c12opcode5D
+  DCD r65c12opcode5E
+  DCD r65c12opcode5F
+  DCD r65c12opcode60
+  DCD r65c12opcode61
+  DCD r65c12opcode62
+  DCD r65c12opcode63
+  DCD r65c12opcode64
+  DCD r65c12opcode65
+  DCD r65c12opcode66
+  DCD r65c12opcode67
+  DCD r65c12opcode68
+  DCD r65c12opcode69
+  DCD r65c12opcode6A
+  DCD r65c12opcode6B
+  DCD r65c12opcode6C
+  DCD r65c12opcode6D
+  DCD r65c12opcode6E
+  DCD r65c12opcode6F
+  DCD r65c12opcode70
+  DCD r65c12opcode71
+  DCD r65c12opcode72
+  DCD r65c12opcode73
+  DCD r65c12opcode74
+  DCD r65c12opcode75
+  DCD r65c12opcode76
+  DCD r65c12opcode77
+  DCD r65c12opcode78
+  DCD r65c12opcode79
+  DCD r65c12opcode7A
+  DCD r65c12opcode7B
+  DCD r65c12opcode7C
+  DCD r65c12opcode7D
+  DCD r65c12opcode7E
+  DCD r65c12opcode7F
+  DCD r65c12opcode80
+  DCD r65c12opcode81
+  DCD r65c12opcode82
+  DCD r65c12opcode83
+  DCD r65c12opcode84
+  DCD r65c12opcode85
+  DCD r65c12opcode86
+  DCD r65c12opcode87
+  DCD r65c12opcode88
+  DCD r65c12opcode89
+  DCD r65c12opcode8A
+  DCD r65c12opcode8B
+  DCD r65c12opcode8C
+  DCD r65c12opcode8D
+  DCD r65c12opcode8E
+  DCD r65c12opcode8F
+  DCD r65c12opcode90
+  DCD r65c12opcode91
+  DCD r65c12opcode92
+  DCD r65c12opcode93
+  DCD r65c12opcode94
+  DCD r65c12opcode95
+  DCD r65c12opcode96
+  DCD r65c12opcode97
+  DCD r65c12opcode98
+  DCD r65c12opcode99
+  DCD r65c12opcode9A
+  DCD r65c12opcode9B
+  DCD r65c12opcode9C
+  DCD r65c12opcode9D
+  DCD r65c12opcode9E
+  DCD r65c12opcode9F
+  DCD r65c12opcodeA0
+  DCD r65c12opcodeA1
+  DCD r65c12opcodeA2
+  DCD r65c12opcodeA3
+  DCD r65c12opcodeA4
+  DCD r65c12opcodeA5
+  DCD r65c12opcodeA6
+  DCD r65c12opcodeA7
+  DCD r65c12opcodeA8
+  DCD r65c12opcodeA9
+  DCD r65c12opcodeAA
+  DCD r65c12opcodeAB
+  DCD r65c12opcodeAC
+  DCD r65c12opcodeAD
+  DCD r65c12opcodeAE
+  DCD r65c12opcodeAF
+  DCD r65c12opcodeB0
+  DCD r65c12opcodeB1
+  DCD r65c12opcodeB2
+  DCD r65c12opcodeB3
+  DCD r65c12opcodeB4
+  DCD r65c12opcodeB5
+  DCD r65c12opcodeB6
+  DCD r65c12opcodeB7
+  DCD r65c12opcodeB8
+  DCD r65c12opcodeB9
+  DCD r65c12opcodeBA
+  DCD r65c12opcodeBB
+  DCD r65c12opcodeBC
+  DCD r65c12opcodeBD
+  DCD r65c12opcodeBE
+  DCD r65c12opcodeBF
+  DCD r65c12opcodeC0
+  DCD r65c12opcodeC1
+  DCD r65c12opcodeC2
+  DCD r65c12opcodeC3
+  DCD r65c12opcodeC4
+  DCD r65c12opcodeC5
+  DCD r65c12opcodeC6
+  DCD r65c12opcodeC7
+  DCD r65c12opcodeC8
+  DCD r65c12opcodeC9
+  DCD r65c12opcodeCA
+  DCD r65c12opcodeCB
+  DCD r65c12opcodeCC
+  DCD r65c12opcodeCD
+  DCD r65c12opcodeCE
+  DCD r65c12opcodeCF
+  DCD r65c12opcodeD0
+  DCD r65c12opcodeD1
+  DCD r65c12opcodeD2
+  DCD r65c12opcodeD3
+  DCD r65c12opcodeD4
+  DCD r65c12opcodeD5
+  DCD r65c12opcodeD6
+  DCD r65c12opcodeD7
+  DCD r65c12opcodeD8
+  DCD r65c12opcodeD9
+  DCD r65c12opcodeDA
+  DCD r65c12opcodeDB
+  DCD r65c12opcodeDC
+  DCD r65c12opcodeDD
+  DCD r65c12opcodeDE
+  DCD r65c12opcodeDF
+  DCD r65c12opcodeE0
+  DCD r65c12opcodeE1
+  DCD r65c12opcodeE2
+  DCD r65c12opcodeE3
+  DCD r65c12opcodeE4
+  DCD r65c12opcodeE5
+  DCD r65c12opcodeE6
+  DCD r65c12opcodeE7
+  DCD r65c12opcodeE8
+  DCD r65c12opcodeE9
+  DCD r65c12opcodeEA
+  DCD r65c12opcodeEB
+  DCD r65c12opcodeEC
+  DCD r65c12opcodeED
+  DCD r65c12opcodeEE
+  DCD r65c12opcodeEF
+  DCD r65c12opcodeF0
+  DCD r65c12opcodeF1
+  DCD r65c12opcodeF2
+  DCD r65c12opcodeF3
+  DCD r65c12opcodeF4
+  DCD r65c12opcodeF5
+  DCD r65c12opcodeF6
+  DCD r65c12opcodeF7
+  DCD r65c12opcodeF8
+  DCD r65c12opcodeF9
+  DCD r65c12opcodeFA
+  DCD r65c12opcodeFB
+  DCD r65c12opcodeFC
+  DCD r65c12opcodeFD
+  DCD r65c12opcodeFE
+  DCD r65c12opcodeFF
+
+buffer
+  DCD 0
+  DCD 0
+  DCD 0
+  DCD 0
+
+;Data Area
+
+;  AREA    |C$$data|, DATA
+
+
+  END

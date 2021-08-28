@@ -1,0 +1,31 @@
+/*>65c12cpu.c
+ *
+ * Rockwell 6502 central processor unit
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*Original BBC 6502 ran at 2MHz (2,000,000 cycles)*/
+
+#include "6502cpu.h"
+#include "beebit.h"
+
+void r65c12reset(int lfull)
+{
+  /*noldloc = memory[0x10CE];*/
+  if (lfull)
+  {
+    /*r6502_a = 0;
+    r6502_x = 0;
+    r6502_y = 0;*/
+    r6502_sp = 0xFF;
+    r6502_ps = 0x00;
+    beebit_irq = 0x00;
+    beebit_nmi = beebit_oldnmi = 0x00;
+  }
+  r6502_pc = (memory[0xFFFD]<<8) + memory[0xFFFC];
+}

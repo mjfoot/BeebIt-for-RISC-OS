@@ -1,0 +1,69 @@
+/*>6502.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998
+ *
+ * Email: <mikef@voyager.co.nz>
+ */
+
+#define NFLAG 0x80
+#define VFLAG 0x40
+#define UFLAG 0x20
+#define BFLAG 0x10
+#define DFLAG 0x08
+#define IFLAG 0x04
+#define ZFLAG 0x02
+#define CFLAG 0x01
+#define NOTNFLAG 0x7F
+#define NOTVFLAG 0xBF
+#define NOTUFLAG 0xDF
+#define NOTBFLAG 0xEF
+#define NOTDFLAG 0xF7
+#define NOTIFLAG 0xFB
+#define NOTZFLAG 0xFD
+#define NOTCFLAG 0xFE
+
+#define STACK_START 0x100
+#define STACK_END 0x1FF
+
+/*define this to allow undocumented op-codes*/
+#define __UNDOCUMENTED__
+
+/*Rockwell 6502 Central Processor Unit (CPU)*/
+extern char r6502_a, r6502_x, r6502_y; /*3 registers*/
+/*extern char r6502_n;*/ /*sign flag*/
+/*extern char r6502_v, r6502_b, r6502_d, r6502_i, r6502_z, r6502_c;*/ /*status bits*/
+extern int r6502_pc; /*program counter*/
+extern char r6502_sp; /*stack pointer*/
+extern char r6502_ps; /*processor status*/
+/*extern char r6502read(int naddress);*/
+extern char (*r6502read)(int naddress);
+/*extern void r6502write(int naddress, char nvalue);*/
+extern void (*r6502write)(int naddress, char nvalue);
+extern void (*cpu_execute)(void);
+
+/*extern int r6502_cyclestotal;*/
+extern int r6502_cyclestogo;
+extern int r6502_cyclesoriginal;
+extern int r6502_cyclesexpired;
+extern int r6502_cyclesstored;
+extern int r6502_cycle;
+extern unsigned int r6502_cyclesmonotonic;
+
+extern void r6502badopcode(void);
+#ifndef __RISCOS__
+  /*extern char r6502read(int naddress);
+  extern void r6502write(int naddress, char nvalue);*/
+  extern int r6502processorstatus(int lbreak);
+#endif
+extern void r6502reset(int lfull);
+extern void r65c12reset(int lfull);
+extern void r6502doirq(void);
+extern void r6502donmi(void);
+/*extern void r6502execute(int ncycles);*/
+extern void r6502execute(void);
+extern void r6512execute(void);
+extern void r6512execute_ram(void);
+extern void r65c12execute(void);
+extern void r6502showps(void);

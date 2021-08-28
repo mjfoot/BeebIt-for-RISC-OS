@@ -1,0 +1,3318 @@
+/*>main.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2007
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/* DEFINES */
+
+#define APP_NAME "BeebIt"
+#define APP_VERSION "0.70"
+
+#define Wimp_GetMenuState 0x0400F4
+
+#define DragASprite_Start 0x42400
+#define DragASprite_Stop 0x42401
+
+#define MessageTrans_OpenFile 0x41501
+#define MessageTrans_Lookup 0x41502
+#define MessageTrans_CloseFile 0x41504
+
+/*Options*/
+#define MACHINE_TYPE_EDIT 7
+#define MACHINE_TYPE_MENU 8
+#define OS_ROM_EDIT 10
+#define ROM_PATH_EDIT 12
+#define CPU_SPEED_EDIT 14
+#define CPU_SPEED_MENU 15
+#define SCREEN_UPDATE_EDIT 17
+#define SCREEN_UPDATE_MENU 18
+#define FRAME_RATE_EDIT 20
+#define FRAME_RATE_MENU 21
+#define KEYBOARD_LAYOUT_EDIT 23
+#define KEYBOARD_LAYOUT_MENU 24
+/*#define KEYBOARD_LAYOUT_EDIT 41*/
+#define MOUSE_EMULATION_EDIT 26
+#define MOUSE_EMULATION_MENU 27
+#define DISPLAY_MODE_EDIT 45
+#define DISPLAY_MODE_MENU 46
+#define OPTION_SOUND 28
+#define OPTION_CURSOR 29
+#define OPTION_FASTTAPE 30
+#define OPTION_PRINTER 31
+#define KEYBOARD_LINKS 32
+#define OPTIONS_SAVE 41
+#define OPTIONS_CANCEL 40
+#define OPTIONS_OK 42
+#define CONFIG_ROMS_SET 54
+#define CONFIG_ROMS_CANCEL 55
+#define CONFIG_ROMS_SAVE 53
+#define CONFIG_DRIVES_SET 15
+#define CONFIG_DRIVES_CANCEL 13
+#define CONFIG_DRIVES_SAVE 14
+
+/*string constants*/
+#define TEXT_2_MHZ "2 MHz"
+#define TEXT_FULL_SPEED "Full Speed"
+
+void redraw(void);
+void openwindow(void);
+void closewindow(void);
+int do_poll(int poll_mask);
+int snapshotsave(void),memorysave(void),spritesave(void);
+void storewimpmode(void);
+void gobeebit(void);
+
+/* LIBRARIES */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "6502cpu.h"
+#include "6522sysvia.h"
+#include "6522usrvia.h"
+#include "6845crtc.h"
+#include "6850acia.h"
+#include "8271fdc.h"
+#include "beebit.h"
+#include "sheila.h"
+#include "swis.h"
+#include "kernel.h"
+#include "riscos.h"
+#include "scrsave.h"
+#include "snapshots.h"
+#include "video.h"
+#include "videoula.h"
+
+/* STRUCTURES */
+
+/* GLOBALS */
+
+extern int beebit_rommask;
+
+_kernel_swi_regs regs;
+int lquit;
+int nmask,wimp_version,ntask,nicon;
+int hmessages; /*message file*/
+int hinfo, hconfigdrives, hconfigroms, hoptions, hsaveas; /*window handles*/
+int nwimpmode;
+char csprite[0x10],ctext[0x10];
+char b[256],cusermessages[0x08],cresetmenu[128],cmainmenu[256];
+char cconfigmenu[128], ckeymapmenu[2048], cmousemenu[128];
+char cspeedmenu[128], cscreenmenu[128], cframemenu[128];
+char cmachinemenu[128], cdisplaymenu[196];
+char cscreenitem1[16],cscreenitem2[16];
+/*char cwimpmodeblock[24];*/
+/*char cmachinecompact[16];*/
+/*char cbartext[64];*/
+char csprites[0x400];
+char ctempbuf[8192],ciconbuf[8192],cfontref[256];
+int niconbufb,niconbufe,ncurmenu;
+/* int nbytestogo, nbytessent;*/ /*ram fetch*/
+int nlastmachinetype;
+/* FILE *hsavefile;*/ /*data save*/
+int nconfigromid[0x10] = {49,46,43,40,37,34,31,28,25,22,19,16,13,10,7,4};
+int nconfigdiscid[0x04] = {4,9,6,11};
+char cbintohex[0x10] = {48,49,50,51,52,53,54,55,56,57,65,66,67,68,69,70};
+
+/*INTERNAL FUNCTIONS*/
+
+#ifndef __RISCOS__
+void setword(char *cblock,int nvalue)
+{
+  cblock[0] = (nvalue & 0xFF);
+  cblock[1] = (nvalue & 0xFF00) >> 8;
+  cblock[2] = (nvalue & 0xFF0000) >> 16;
+  cblock[3] = (nvalue & 0xFF000000) >> 24;
+}
+
+int getword(char *cblock)
+{
+  int nreturn;
+  nreturn = cblock[0];
+  nreturn += (cblock[1] << 8);
+  nreturn += (cblock[2] << 16);
+  nreturn += (cblock[3] << 24);
+  return nreturn;
+}
+#endif
+
+void itoa(int nvalue,char *cbuffer)
+{
+  regs.r[0] = nvalue;
+  regs.r[1] = (int)cbuffer;
+  regs.r[2] = 10;
+  _kernel_swi(OS_BinaryToDecimal,&regs,&regs);
+  cbuffer[regs.r[2]] = 0;
+}
+
+void wimperror(char *cerror)
+{
+  char cname[16];
+  strcpy(cname,APP_NAME);
+  setword(b,0);
+  strcpy(b+4,cerror);
+  regs.r[0] = (int)b;
+  regs.r[1] = 1;
+  regs.r[2] = (int)cname;
+  regs.r[3] = 0;
+  regs.r[4] = 0;
+  regs.r[5] = 0;
+  _kernel_swi(Wimp_ReportError,&regs,&regs);
+}
+
+int wimpconfirm(char *cmessage)
+{
+  char cname[16],cbuttons[12];
+  strcpy(cname,APP_NAME);
+  strcpy(cbuttons,"OK,Cancel");
+  setword(b,0);
+  strcpy(b+4,cmessage);
+  regs.r[0] = (int)b;
+  regs.r[1] = 0x900;
+  regs.r[2] = (int)cname;
+  regs.r[3] = 0;
+  regs.r[4] = 0;
+  regs.r[5] = (int)cbuttons;
+  _kernel_swi(Wimp_ReportError,&regs,&regs);
+  return (regs.r[1] & 0x01); /*OK*/
+}
+
+void iconbitclear(int nwindow,int nicon, int nbit)
+{
+  setword(b,nwindow);
+  setword(b+4,nicon);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetIconState,&regs,&regs);
+  setword(b+8,0);
+  setword(b+12,1<<nbit);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_SetIconState,&regs,&regs);
+}
+
+void iconbitset(int nwindow,int nicon, int nbit)
+{
+  setword(b,nwindow);
+  setword(b+4,nicon);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetIconState,&regs,&regs);
+  setword(b+8,1<<nbit);
+  setword(b+12,1<<nbit);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_SetIconState,&regs,&regs);
+}
+
+void setbutton(int nwindow,int nicon, int lset)
+{
+  if (lset)
+    iconbitset(nwindow,nicon,21);
+  else
+    iconbitclear(nwindow,nicon,21);
+}
+
+int buttonset(int nwindow, int nicon)
+{
+  int nreturn;
+  setword(b,nwindow);
+  setword(b+4,nicon);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetIconState,&regs,&regs);
+  nreturn = getword(b+24);
+  /*bit 21*/
+  return (nreturn & 0x200000);
+}
+
+char *readicon(int nwindow,int nicon)
+{
+  setword(b,nwindow);
+  setword(b+4,nicon);
+  /*regs.r[0] = 0;*/
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetIconState,&regs,&regs);
+  return (char *)getword(b+28);
+}
+
+void writeicon(int nwindow,int nicon,char *ctext,int neor,int nclear)
+{
+  int naddress;
+  setword(b,nwindow);
+  setword(b+4,nicon);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetIconState,&regs,&regs);
+  naddress = getword(b+28);
+  strcpy((char *)naddress,ctext);
+  if (neor >= 0 OR nclear >= 0)
+  {
+    setword(b+8,neor);
+    setword(b+12,nclear);
+    regs.r[0] = 0;
+    regs.r[1] = (int)b;
+    _kernel_swi(Wimp_SetIconState,&regs,&regs);
+  }
+}
+
+void updateappicon(void)
+{
+  switch (beebit_machinetype)
+  {
+    case MACHINE_MODELB:
+      strcpy(ctext,NAME_MODELB);
+      ctext[strlen(NAME_MODELB)] = 0;
+      break;
+    case MACHINE_MODELBPLUS:
+      strcpy(ctext,NAME_MODELBPLUS);
+      ctext[strlen(NAME_MODELBPLUS)] = 0;
+      break;
+    case MACHINE_MASTER128:
+      strncpy(ctext,NAME_MASTER128,6);
+      ctext[6] = 0;
+      break;
+    case MACHINE_COMPACT:
+      /*strcpy(ctext,NAME_MASTERCOMPACT);
+      strncpy(ctext,ctext+7,7);*/
+      strncpy(ctext,NAME_MASTERCOMPACT,7);
+      ctext[7] = 0;
+      break;
+  }
+  setword(b,-2);
+  setword(b+4,nicon);
+  setword(b+8,0x80);
+  setword(b+12,0x80);
+  _kernel_swi(Wimp_SetIconState,&regs,&regs);
+  setword(b+8,0x00);
+  setword(b+12,0x80);
+  _kernel_swi(Wimp_SetIconState,&regs,&regs);
+}
+
+void getwindowstate(int hwindow)
+{
+  setword(b,hwindow);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetWindowState,&regs,&regs);
+}
+
+int messagefileopen(char *cmessagefile)
+{
+  int hm;
+  regs.r[0] = 6;
+  regs.r[1] = 0;
+  regs.r[2] = 0;
+  regs.r[3] = 16;
+  _kernel_swi(OS_Module,&regs,&regs);
+  hm = regs.r[2]; /*handle to module block*/
+  regs.r[0] = hm;
+  regs.r[1] = (int)cmessagefile;
+  regs.r[2] = 0;
+  _kernel_swi(MessageTrans_OpenFile,&regs,&regs);
+  return (hm);
+}
+
+void messagefileclose(int hm)
+{
+  if (hm != NULL)
+  {
+    regs.r[0] = hm;
+    _kernel_swi(MessageTrans_CloseFile,&regs,&regs);
+    regs.r[0] = 7;
+    regs.r[1] = 0;
+    regs.r[2] = hm;
+    _kernel_swi(OS_Module,&regs,&regs);
+  }
+}
+
+char *messagefilelookup(int hm,char *ctoken)
+{
+  char *cbuffer;
+  if (hm == NULL)
+    return (NULL);
+  else
+  {
+    regs.r[0] = hm;
+    regs.r[1] = (int)ctoken;
+    regs.r[2] = 0;
+    regs.r[3] = 0;
+    regs.r[4] = 0;
+    regs.r[5] = 0;
+    regs.r[6] = 0;
+    regs.r[7] = 0;
+    _kernel_swi(MessageTrans_Lookup,&regs,&regs);
+    cbuffer = (char *)regs.r[2];
+    cbuffer[regs.r[3]] = 0;
+    return (cbuffer);
+  }
+}
+
+int messagefilelookupb(int hm, char *cbuffer, char *ctoken)
+{
+  if (hm == NULL)
+  {
+    cbuffer[0] = 0;
+    return (0);
+  }
+  else
+  {
+    regs.r[0] = hm;
+    regs.r[1] = (int)ctoken;
+    regs.r[2] = 0;
+    regs.r[3] = 0;
+    regs.r[4] = 0;
+    regs.r[5] = 0;
+    regs.r[6] = 0;
+    regs.r[7] = 0;
+    _kernel_swi(MessageTrans_Lookup,&regs,&regs);
+    strncpy(cbuffer, (char *)regs.r[2], regs.r[3]);
+    cbuffer[regs.r[3]] = 0;
+    return (regs.r[3]);
+  }
+}
+
+/* jdl** new function, used when return is pressed in save window to fake a
+click on 'OK' -helps avoid duplicate code*/
+/* this could also be used in the options and configure windows*/
+void fake_selectclick(int hwindow,int hicon)
+{
+  regs.r[0] = 6;    /*fake mouse click */
+  regs.r[1] = (int)b;
+  regs.r[2] = hwindow;
+  setword(b+0,0); /*mouse-x irrelevant */
+  setword(b+4,0); /*mouse-y irrelevant */
+  setword(b+8,4); /*select pressed */
+  setword(b+12,hwindow);
+  setword(b+16,hicon);
+  setword(b+20,0); /* old button state irrelevant*/
+
+  _kernel_swi(Wimp_SendMessage,&regs,&regs);
+}
+
+/* jdl** two new functions used in new save routines*/
+int sendmess(int messtype,int messcode,int messlen,int hwindow,int nicon)
+{
+  if (messlen >0) setword(b,messlen);
+  setword(b+12,0);  /* your_ref =0, this is an original message*/
+  setword(b+16,messcode);
+  regs.r[0] = messtype;
+  regs.r[1] = (int)b;
+  regs.r[2] = hwindow;
+  regs.r[3] = nicon;
+  _kernel_swi(Wimp_SendMessage,&regs,&regs);
+  return getword(b+8); /* =my_ref*/
+}
+
+int sendreply(int messtype,int messcode)
+{
+  setword(b+12,getword(b+8)); /* your_ref =my_ref, a reply*/
+  setword(b+16,messcode);
+  regs.r[0] = messtype;
+  regs.r[1] = (int)b;
+  regs.r[2] = getword(b+4);
+  _kernel_swi(Wimp_SendMessage,&regs,&regs);
+  return getword(b+8); /* =new my_ref*/
+}
+
+/*LIBRARY FUNCTIONS*/
+
+char *filename(char *cbuffer)
+{
+  int i;
+  i = strlen(cbuffer);
+  while (i > 0 AND cbuffer[i] != 58 AND cbuffer[i] != 46)
+    i--;
+  if (i > 0)
+    i++;
+  return (cbuffer+i);
+}
+
+void initdrag(int hwindow,int nicon)
+{
+  int nx0,ny1,nx2,ny2,nx3,ny3;
+  char *cbuffer;
+  setword(b,hwindow);
+  _kernel_swi(Wimp_GetWindowState,&regs,&regs);
+  nx0 = getword(b+4);
+  ny1 = getword(b+16);
+  setword(b+4,nicon);
+  _kernel_swi(Wimp_GetIconState,&regs,&regs);
+  nx2 = getword(b+8);
+  ny2 = getword(b+12);
+  nx3 = getword(b+16);
+  ny3 = getword(b+20);
+  regs.r[0] = 161;
+  regs.r[1] = 28;
+  _kernel_swi(OS_Byte,&regs,&regs);
+  if (wimp_version >= 300 AND (regs.r[2] & 2) == 2)
+  {
+    /*drag a sprite mode enabled*/
+    cbuffer = readicon(hwindow,nicon);
+    setword(b,nx0+nx2);
+    setword(b+4,ny1+ny2);
+    setword(b+8,nx0+nx3);
+    setword(b+12,ny1+ny3);
+    regs.r[0] = 0xC5;
+    regs.r[1] = 1;
+    regs.r[2] = (int)cbuffer;
+    regs.r[3] = (int)b;
+    _kernel_swi(DragASprite_Start,&regs,&regs);
+  }
+  else
+  {
+    /*setword(b+4,5);
+    setword(b+8,nx0+nx2);
+    setword(b+12,ny1+ny2);
+    setword(b+16,nx0+nx3);
+    setword(b+20,ny1+ny3);
+    setword(b+24,0);
+    setword(b+28,0);
+    setword(b+32,nxwindlimit<<nxeigfactor);
+    setword(b+36,nywindlimit<<nyeigfactor);
+    regs.r[1] = (int)b;
+    _kernel_swi(Wimp_DragBox,&regs,&regs);*/
+  }
+}
+
+int oktosave(char *cfile)
+{
+  return (TRUE);
+}
+
+/* general vars & types for new save system */
+enum {out_error,out_file,out_ok,out_ramtfer};
+static int wimpoutput;
+static int early_error = FALSE;
+FILE* wimpstreamh;
+char csavefile[512];
+
+/* jdl** setup arrays for different files we can output*/
+static int (*arDoSave[])(void) = {snapshotsave,memorysave,spritesave};
+static char *arError[] = {"snapshot","memory dump","screen"};
+static char *arFileName[] = {"Snapshot","Memory","Screen"};
+static int arFileType[] = {0xbbc,0xffd,0xff9};
+static int arFileSize[] = {0x210 +0x8000 ,0x20000 ,0x140B8};
+static char *arFileSpr[] = {"file_bbc","file_ffd","file_ff9"};
+static int file_tosave = 1; /* memory dump*/
+
+void wimp_setfiletransfer(char *cfile)
+{
+  wimpstreamh =fopen(cfile,"wb");
+  if (wimpstreamh ==NULL)
+    early_error =TRUE;
+    wimpoutput =out_file;
+    strncpy(csavefile,cfile,512);
+}
+
+void wimp_setoktransfer(char *cfile)
+{
+  wimp_setfiletransfer(cfile);
+  if (wimpoutput !=out_error)
+    wimpoutput =out_ok;
+}
+
+/* jdl** vars used over ram transfer protocol*/
+static int nbuffer;
+static int nbuf_remaining;
+static int nsendhandle;
+static int nmyref;
+
+void wimp_setramtransfer(void)
+{
+  wimpoutput =out_ramtfer;
+  nsendhandle =getword(b+4);
+  nbuffer =getword(b+20);
+  nbuf_remaining =getword(b+24);
+}
+
+int wimpwrite(const void *ptr,size_t size,size_t num)
+/* stream handle implicit*/
+/* as you can only do one wimpsave at a time*/
+{
+  int myptr =(int)ptr;
+  int pollresult;
+  switch (wimpoutput)
+  {
+    case out_error:
+      return 0;
+      break;
+    case out_file:
+    case out_ok:
+    {
+      int nwritten =fwrite(ptr,size,num,wimpstreamh);
+      if (nwritten <num)
+        wimpoutput =out_error;
+      return nwritten;
+    }
+    case out_ramtfer:
+    {
+      int nopsize;
+      int nbytes_towrite =num*size;
+      while (nbytes_towrite >0)
+      {
+        if (nbytes_towrite >nbuf_remaining)
+          nopsize =nbuf_remaining;
+        else
+          nopsize =nbytes_towrite;
+
+        regs.r[0] =ntask;
+        regs.r[1] =myptr;
+        regs.r[2] =nsendhandle;
+        regs.r[3] =nbuffer;
+        regs.r[4] =nopsize;
+        _kernel_swi(Wimp_TransferBlock,&regs,&regs);
+
+        nbytes_towrite -=nopsize;
+        nbuf_remaining -=nopsize;
+        nbuffer +=nopsize;
+        myptr +=nopsize;
+
+        if (nbuf_remaining ==0)
+        {
+          nmyref =sendreply(18,7);  /*Message_RAMTransmit */
+
+          do pollresult =do_poll((1<<17)+(1<<18)+(1<<19));
+          while ((getword(b+12) !=nmyref) || (pollresult ==FALSE));
+
+          if (getword(b+16) !=6)
+          {
+            wimpoutput =out_error;
+            return 0;
+          }
+          wimp_setramtransfer();
+        }
+      }
+    }
+    return num;
+    break;
+  }
+return 0; /* to supress warning in Acorn C*/
+}
+
+int wimpputc(char achar)
+{
+  return wimpwrite(&achar,1,1);
+}
+
+int snapshotsave(void)
+{
+  int i;
+
+  SNAPHDR writehdr;
+  snapheadersave(&writehdr);
+  wimpwrite(&writehdr,1,sizeof(writehdr));
+
+  for (i=0;i<0x210 -sizeof(writehdr);i++) //fill header up to 0x210
+    wimpputc(0);
+
+  wimpwrite(memory,1,0x8000);
+  return TRUE;
+}
+
+int memorysave(void)
+{
+/* jdl** changed so bbc b saves only 64k*/
+    wimpwrite(memory,1,0x10000);
+    if (beebit_machinetype !=MACHINE_MODELB)
+      wimpwrite(shadow,1,0x10000);
+  return TRUE;
+}
+
+int dosave(void)
+{
+  int success;
+  int origoutput = wimpoutput;
+
+  if (early_error ==TRUE)    /* bodge*/
+    wimpoutput =out_error;
+  early_error =FALSE;
+
+  success = ((*arDoSave[file_tosave])());
+
+/* error handling is a little fiddly, if an error occurs in one of the high
+ level routines (ie no mode7 sprites in spritesave()) it should report the
+ error & return FALSE.
+ If an error occurs in the low level routines (ie wimpwrite()) it should set
+ wimpoutput to out_error, eventually control will return to here, and if
+ it is a save to file we will report an error; if it is a ramtransfer then
+ it is up to the other task to report the error.
+
+ In all cases this routine itself will return TRUE/FALSE depending on a
+ successful save. This is used by OKsave.
+ */
+
+  if ((wimpoutput ==out_file) || (wimpoutput ==out_ok))
+    fclose(wimpstreamh);
+
+  if (success ==FALSE)
+    return FALSE;
+
+  if ((wimpoutput ==out_error) && ((origoutput ==out_file) || (origoutput ==out_ok)))
+  {
+    char errorstr[0x100 -5];
+
+    strcpy(errorstr,"Unable to save ");
+    strcpy(errorstr+strlen(errorstr),arError[file_tosave]);
+
+    wimperror(errorstr);
+    return FALSE;
+  }
+
+  if ((wimpoutput ==out_file) || (wimpoutput ==out_ok))
+  {
+    /*set filetype*/
+    regs.r[0] = 18;
+    regs.r[1] = (int)csavefile;
+    regs.r[2] = (arFileType[file_tosave]);
+    _kernel_swi(OS_File,&regs,&regs);
+  }
+
+  if (wimpoutput ==out_file)
+    sendreply(17,3);      /* Message_DataLoad*/
+
+  if ((wimpoutput ==out_file) && (getword(b+36) !=-1))
+    writeicon(hsaveas,1,b+44,0,0);
+
+  if (wimpoutput ==out_ramtfer)
+  {
+    setword(b+24,getword(b+24) -nbuf_remaining); /* =num bytes written*/
+    sendreply(17,7);  /* Message_RAMTransmit*/
+  }
+
+  if (wimpoutput ==out_error)
+    return FALSE;
+  else
+    return TRUE;
+}
+/*jdl** end of new code */
+
+/* void ramfetch(void)
+{
+  int nlength,nsendhandle,nmyref,nyourref,nbuffer,nsize;
+
+  nlength = getword(b);
+  nsendhandle = getword(b+4);
+  nmyref = getword(b+8);
+  nyourref = getword(b+12);
+  nbuffer = getword(b+20);
+  nsize = getword(b+24);
+
+  if (nbytestogo < 0)
+  {
+    setword(b,hsaveas);
+    closewindow();
+    regs.r[0] = ncurmenu;
+    regs.r[1] = -1;
+    _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+    nbytestogo = 0x10000;
+    nbytessent = 0;
+  }
+ regs.r[0] = ntask;
+  regs.r[1] = (int)memory+nbytessent;
+  regs.r[2] = nsendhandle;
+  regs.r[3] = nbuffer;
+  regs.r[4] = nsize;
+  _kernel_swi(Wimp_TransferBlock,&regs,&regs);
+
+  setword(b,nlength);
+  setword(b+12,nmyref);
+  setword(b+16,7); */ /*RAMTransmit*/
+/*  setword(b+20,nbuffer);
+  if (nbytestogo > nsize)
+  {
+    setword(b+24,nsize);
+    nbytestogo -= nsize;
+    nbytessent += nsize;
+  }
+  else
+  {
+    setword(b+24,nbytestogo);
+    nbytestogo = -1;
+    nbytessent += nbytestogo;
+  }
+  regs.r[0] = 17;
+  regs.r[1] = (int)b;
+  regs.r[2] = nsendhandle;
+  _kernel_swi(Wimp_SendMessage,&regs,&regs);
+} */
+
+/* void datasaveack(void)
+{
+  char cbuffer[512];
+  strcpy(cbuffer,b+44);
+*/  /*cbuffer = b+44;*/
+/*  if (oktosave(cbuffer))
+  {
+    if (buttonset(hsaveas,3))
+      snapshotsave(cbuffer);
+    else if (buttonset(hsaveas,4))
+      memorysave(cbuffer);
+    else if (buttonset(hsaveas,5))
+      spritesave(cbuffer);
+    writeicon(hsaveas,1,cbuffer,0,0);
+    setword(b,hsaveas);
+    closewindow();
+    regs.r[0] = ncurmenu;
+    regs.r[1] = -1;
+    _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+  }
+} */
+
+void dataload(void)
+{
+  char cbuffer[0x100];
+  FILE *hfile;
+  int lok;
+  lok = FALSE;
+  strcpy(cbuffer,b+44);
+  setword(b+12,getword(b+8));
+  setword(b+16,4);
+  regs.r[0] = (int)b;
+  _kernel_swi(Wimp_SendMessage,&regs,&regs);
+  hfile = fopen(cbuffer,"rb");
+  if (hfile == NULL)
+    wimperror("Unable to load file.");
+  else
+  {
+    /*0=low/first byte*/
+    /*3=high/last byte*/
+    fread(cbuffer,1,16,hfile);
+    if (strncmp(cbuffer,"BBC Snapshot101",15) != 0)
+      wimperror("This is not a BBC Snapshot file.");
+    else
+    {
+      storewimpmode(); /* so return to desktop doesn't force mode15*/
+      beebitreset();
+
+      snapshotload(hfile);
+
+      lok = TRUE;
+    }
+    fclose(hfile);
+  }
+  if (lok)
+    gobeebit();
+}
+
+int helprequest(int hwindow, int hicon, char *cbuffer)
+{
+  int i, nlen, nmainmenu;
+  char menubuffer[40];
+  nlen = 0;
+
+  if (hwindow == -2)
+    nlen = messagefilelookupb(hmessages, cbuffer, "IconBarHelp");
+  else if (hwindow == hconfigroms)
+  {
+    /*ROM slot*/
+    i = 0;
+    while ((i < 0x10) AND (hicon != nconfigromid[i]))
+      i++;
+    if (i < 0x10)
+      nlen = messagefilelookupb(hmessages, cbuffer, "ConfigROM");
+
+    /*ROM write enabled*/
+    if (nlen == 0)
+    {
+      i = 0;
+      while ((i < 0x10) AND (hicon != nconfigromid[i]+1))
+        i++;
+      if (i < 0x10)
+        nlen = messagefilelookupb(hmessages, cbuffer, "ConfigROMWrite");
+    }
+  }
+  else if (hwindow == hconfigdrives)
+  {
+    /*disc drive*/
+    if (nlen == 0)
+    {
+      i = 0;
+      while ((i < 0x04) AND (hicon != nconfigdiscid[i]))
+        i++;
+      if (i < 0x04)
+        nlen = messagefilelookupb(hmessages, cbuffer, "ConfigDisc");
+    }
+
+    /*disc drive write enabled*/
+    if (nlen == 0)
+    {
+      i = 0;
+      while ((i < 0x04) AND (hicon != nconfigdiscid[i]+1))
+        i++;
+      if (i < 0x04)
+        nlen = messagefilelookupb(hmessages, cbuffer, "ConfigDiscWrite");
+    }
+
+    /*cassette tape*/
+    if (nlen == 0)
+    {
+      if (hicon == 17)
+        nlen = messagefilelookupb(hmessages, cbuffer, "ConfigTape");
+    }
+  }
+  else if (hwindow == hoptions)
+  {
+    switch (hicon)
+    {
+      case MACHINE_TYPE_EDIT:
+      case MACHINE_TYPE_MENU:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsMachineType");
+        break;
+      case OS_ROM_EDIT:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsOS");
+        break;
+      case ROM_PATH_EDIT:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsPath");
+        break;
+      case CPU_SPEED_EDIT:
+      case CPU_SPEED_MENU:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsCPUSpeed");
+        break;
+      case SCREEN_UPDATE_EDIT:
+      case SCREEN_UPDATE_MENU:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsScreenUpdate");
+        break;
+      case FRAME_RATE_EDIT:
+      case FRAME_RATE_MENU:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsFPS");
+        break;
+      case KEYBOARD_LAYOUT_EDIT:
+      case KEYBOARD_LAYOUT_MENU:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsKeyboard");
+        break;
+      case MOUSE_EMULATION_EDIT:
+      case MOUSE_EMULATION_MENU:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsMouse");
+        break;
+      case DISPLAY_MODE_EDIT:
+      case DISPLAY_MODE_MENU:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsDisplayMode");
+        break;
+      case OPTION_SOUND:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsSound");
+        break;
+      case OPTION_CURSOR:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsCursor");
+        break;
+      case OPTION_FASTTAPE:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsFastTape");
+        break;
+      case OPTION_PRINTER:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsPrinter");
+        break;
+      case KEYBOARD_LINKS:
+      case 33:
+      case 34:
+      case 35:
+      case 36:
+      case 37:
+      case 38:
+      case 39:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsLinks");
+        break;
+      case OPTIONS_CANCEL:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsCancel");
+        break;
+      case OPTIONS_SAVE:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsSave");
+        break;
+      case OPTIONS_OK:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsOK");
+        break;
+    }
+  }
+  else
+  {
+    if (ncurmenu == (int)cmainmenu)
+    {
+      regs.r[0] = 1;
+      regs.r[1] = (int)menubuffer;
+      regs.r[2] = hwindow;
+      regs.r[3] = hicon;
+      _kernel_swi(Wimp_GetMenuState, &regs, &regs);
+      nmainmenu = getword(menubuffer+0);
+      switch (nmainmenu)
+      {
+        case 0:
+          /*info*/
+          nlen = messagefilelookupb(hmessages, cbuffer, "MainMenuInfo");
+          break;
+        case 1:
+          /*configure*/
+          nlen = messagefilelookupb(hmessages, cbuffer, "MainMenuConfig");
+          break;
+        case 2:
+          /*options*/
+          nlen = messagefilelookupb(hmessages, cbuffer, "MainMenuOptions");
+          break;
+        case 3:
+          /*save*/
+          nlen = messagefilelookupb(hmessages, cbuffer, "MainMenuSave");
+          break;
+        case 4:
+          /*reset*/
+          nlen = messagefilelookupb(hmessages, cbuffer, "MainMenuReset");
+          break;
+        case 5:
+          /*quit*/
+          nlen = messagefilelookupb(hmessages, cbuffer, "MainMenuQuit");
+          break;
+      }
+    }
+  }
+  return (nlen);
+}
+
+void configsave(void)
+{
+  FILE *hfile;
+  int i, j;
+  /*int niconr[0x10] = {49,46,43,40,37,34,31,28,25,22,19,16,13,10,7,4};*/
+  /*int nicond[0x04] = {57,62,59,64};*/
+  /*char cslot[0x10] = {48,49,50,51,52,53,54,55,56,57,65,66,67,68,69,70};*/
+  char cname[128], cmachine[128]/*, *cbuffer*/;
+  char choicedir[]="<Choices$Write>.BeebIt";
+
+  regs.r[0] = 8; /* create directory*/
+  regs.r[1] = (int)choicedir;
+  regs.r[4] = 0;
+  _kernel_swi(OS_File,&regs,&regs);
+
+  /*hfile = fopen("<BeebIt$Dir>.!Config","w");*/
+  hfile = fopen("<Choices$Write>.BeebIt.Choices","w");
+
+  if (hfile == NULL)
+    wimperror("Unable to save configuration.");
+  else
+  {
+    fputs(";BeebIt\n", hfile);
+    strcpy(cname,";Version ");
+    strcat(cname,APP_VERSION);
+    strcat(cname,"\n\n");
+    fputs(cname, hfile);
+
+    strcpy(cname,"MachineType=");
+    fputs(cname, hfile);
+    switch (beebit_machinetype)
+    {
+      case MACHINE_MODELB:
+        fputs(NAME_MODELB, hfile);
+        break;
+      case MACHINE_MODELBPLUS:
+        fputs(NAME_MODELBPLUS, hfile);
+        break;
+      case MACHINE_MASTER128:
+        fputs(NAME_MASTER128, hfile);
+        break;
+      case MACHINE_COMPACT:
+        fputs(NAME_MASTERCOMPACT, hfile);
+        break;
+    }
+    fputs("\n", hfile);
+
+    for (i=MACHINE_MODELB;i<=MACHINE_COMPACT;i++)
+    {
+      switch (i)
+      {
+        case MACHINE_MODELB:
+          strcpy(cmachine,NAME_MODELB);
+          break;
+        case MACHINE_MODELBPLUS:
+          strcpy(cmachine,NAME_MODELBPLUS);
+          break;
+        case MACHINE_MASTER128:
+          strcpy(cmachine,NAME_MASTER128);
+          break;
+        case MACHINE_COMPACT:
+          strcpy(cmachine,NAME_MASTERCOMPACT);
+          break;
+      }
+      fputs(cmachine, hfile);
+      fputs(".OS=", hfile);
+      fputs(beebit_osrom[i], hfile);
+      fputs("\n",hfile);
+
+      /*configuration*/
+      for (j=0x0F;j>=0;j--)
+      {
+        fputs(cmachine, hfile);
+        strcpy(cname,".ROMSlot =");
+        cname[0x08] = cbintohex[j];
+        fputs(cname, hfile);
+        /*cbuffer = readicon(hconfig,nconfigromid[i]);
+        fputs(cbuffer, hfile);*/
+        fputs(beebit_romimage[(i*16)+j], hfile);
+        fputs("\n",hfile);
+        fputs(cmachine, hfile);
+        strcpy(cname,".ROMWrite =");
+        cname[0x09] = cbintohex[j];
+        fputs(cname, hfile);
+        /*if (buttonset(hconfig,nconfigromid[i]+1))*/
+        if (beebit_romwrite[(i*16)+j])
+          fputs("TRUE\n", hfile);
+        else
+          fputs("FALSE\n", hfile);
+      }
+    }
+    for (i=0;i<=3;i++)
+    {
+      strcpy(cname,"DiscDrive =");
+      cname[0x09] = cbintohex[i];
+      fputs(cname, hfile);
+      /*cbuffer = readicon(hconfig,nconfigdiscid[i]);
+      fputs(cbuffer, hfile);*/
+      fputs(beebit_discimage[i], hfile);
+      fputs("\n",hfile);
+    }
+    strcpy(cname,"DiscWrite =");
+    cname[0x09] = cbintohex[0];
+    fputs(cname, hfile);
+    /*if (buttonset(hconfig,60))*/
+    if (beebit_discwritable[0])
+      fputs("TRUE\n", hfile);
+    else
+      fputs("FALSE\n", hfile);
+    cname[0x09] = cbintohex[1];
+    fputs(cname ,hfile);
+    /*if (buttonset(hconfig,65))*/
+    if (beebit_discwritable[1])
+      fputs("TRUE\n", hfile);
+    else
+      fputs("FALSE\n", hfile);
+    /*tape*/
+    strcpy(cname,"TapeFile=");
+    fputs(cname, hfile);
+    fputs(beebit_uefimage, hfile);
+    fputs("\n",hfile);
+    /*options*/
+    strcpy(cname,"ROMPath=");
+    fputs(cname, hfile);
+    fputs(beebit_rompath, hfile);
+    fputs("\n",hfile);
+     strcpy(cname,"CPUSpeed=");
+    fputs(cname, hfile);
+    /*cbuffer = readicon(hoptions,3);
+    fputs(cbuffer, hfile);*/
+    if (beebit_cpuspeed == CPU_2MHZ)
+      fputs(TEXT_2_MHZ, hfile);
+    else if (beebit_cpuspeed == CPU_FAST)
+      fputs(TEXT_FULL_SPEED, hfile);
+    fputs("\n", hfile);
+    strcpy(cname,"ScreenUpdate=");
+    fputs(cname, hfile);
+    /*cbuffer = readicon(hoptions,6);
+    fputs(cbuffer, hfile);*/
+    if (beebit_videospeed == VIDEO_FAST)
+      fputs("Interlaced", hfile);
+    else if (beebit_videospeed == VIDEO_SLOW)
+      fputs("Non-Interlaced", hfile);
+    fputs("\n", hfile);
+    strcpy(cname,"FrameRate=");
+    fputs(cname, hfile);
+    /*cbuffer = readicon(hoptions,9);
+    fputs(cbuffer, hfile);*/
+    if (beebit_framerate == VIDEO_50FPS)
+      fputs("50 fps", hfile);
+    else if (beebit_framerate == VIDEO_25FPS)
+      fputs("25 fps", hfile);
+    else if (beebit_framerate == VIDEO_12FPS)
+      fputs("12.5 fps", hfile);
+    fputs("\n", hfile);
+    /*keyboard layout*/
+    strcpy(cname,"KeyboardLayout=");
+    fputs(cname, hfile);
+    fputs(beebit_keylayout, hfile);
+    fputs("\n",hfile);
+    /*mouse emulation*/
+    strcpy(cname,"MouseEmulation=");
+    fputs(cname, hfile);
+    if (beebit_mouseemulation == MOUSE_JOYSTICK)
+      fputs("Joystick", hfile);
+    else if (beebit_mouseemulation == MOUSE_AMXMOUSE)
+      fputs("AMX Mouse", hfile);
+    else
+      fputs("FALSE", hfile);
+    fputs("\n",hfile);
+    /*display mode*/
+    strcpy(cname,"DisplayMode=");
+    fputs(cname, hfile);
+    if (beebit_displaymode == DISPLAY_MODE_LOW)
+      fputs("Low", hfile);
+    else if (beebit_displaymode == DISPLAY_MODE_MEDIUM)
+      fputs("Medium", hfile);
+    else if (beebit_displaymode == DISPLAY_MODE_HIGH)
+      fputs("High", hfile);
+    else if (beebit_displaymode == DISPLAY_MODE_12801024)
+      fputs("1280 x 1024", hfile);
+    else if (beebit_displaymode == DISPLAY_MODE_16001024)
+      fputs("1600 x 1024", hfile);
+    else
+      fputs("Auto", hfile);
+    fputs("\n",hfile);
+    /*sound*/
+    strcpy(cname,"Sound=");
+    fputs(cname, hfile);
+    /*if (buttonset(hoptions,13))*/
+    if (beebit_sound)
+      fputs("TRUE\n", hfile);
+    else
+      fputs("FALSE\n", hfile);
+    strcpy(cname,"Cursor=");
+    fputs(cname, hfile);
+    if (beebit_cursor)
+      fputs("TRUE\n", hfile);
+    else
+      fputs("FALSE\n", hfile);
+    strcpy(cname,"FastTape=");
+    fputs(cname, hfile);
+    if (beebit_fasttape)
+      fputs("TRUE\n", hfile);
+    else
+      fputs("FALSE\n", hfile);
+    strcpy(cname,"Printer=");
+    fputs(cname, hfile);
+    if (beebit_printer)
+      fputs("TRUE\n", hfile);
+    else
+      fputs("FALSE\n", hfile);
+    /*keyboard links*/
+    strcpy(cname,"KeyboardLinks=");
+    fputs(cname, hfile);
+    itoa(beebit_links,cname);
+    fputs(cname, hfile);
+    fputs("\n", hfile);
+
+    fclose(hfile);
+
+    /*delete old file*/
+    remove("<BeebIt$Dir>.!Config");
+  }
+}
+
+void setoptions(int ntype)
+{
+  int i;
+  char *citem;
+  char cbuffer[128];
+  char cpath[]="<BeebIt$Dir>.KeyMaps";
+  /*os rom*/
+  writeicon(hoptions,OS_ROM_EDIT,beebit_osrom[ntype],0,0);
+  /*rom path*/
+  writeicon(hoptions,ROM_PATH_EDIT,beebit_rompath,0,0);
+  /*cpu speed*/
+  if (beebit_cpuspeed == CPU_FAST)
+    writeicon(hoptions,CPU_SPEED_EDIT,"Full speed",0,0);
+  else
+    writeicon(hoptions,CPU_SPEED_EDIT,TEXT_2_MHZ,0,0);
+  if (beebit_videospeed == VIDEO_FAST)
+    writeicon(hoptions,SCREEN_UPDATE_EDIT,"Interlaced",0,0);
+  else
+    writeicon(hoptions,SCREEN_UPDATE_EDIT,"Non-interlaced",0,0);
+  if (beebit_framerate == VIDEO_50FPS)
+    writeicon(hoptions,FRAME_RATE_EDIT,"50 fps",0,0);
+  else if (beebit_framerate == VIDEO_25FPS)
+    writeicon(hoptions,FRAME_RATE_EDIT,"25 fps",0,0);
+  else if (beebit_framerate == VIDEO_12FPS)
+    writeicon(hoptions,FRAME_RATE_EDIT,"12.5 fps",0,0);
+
+  /*keyboard layout*/
+  writeicon(hoptions,KEYBOARD_LAYOUT_EDIT,beebit_keylayout,0,0);
+  /*key maps*/
+  strcpy(ckeymapmenu,"Keyboard Maps");
+  setword(ckeymapmenu+12,0x00070207);
+  *(ckeymapmenu+16) = 208;
+  *(ckeymapmenu+20) = 44;
+  *(ckeymapmenu+24) = 0;
+  citem = (ckeymapmenu+28);
+  i = 0;
+  do
+  {
+    regs.r[0] = 9;
+    regs.r[1] = (int)cpath;
+    regs.r[2] = (int)cbuffer;
+    regs.r[3] = 1;
+    regs.r[4] = i;
+    regs.r[5] = sizeof(cbuffer);
+    regs.r[6] = 0;
+    _kernel_swi(OS_GBPB, &regs, &regs);
+    if (regs.r[3] > 0)
+    {
+      *(citem) = 0;
+      setword(citem+4,-1);
+      setword(citem+8,0x7009011);
+      strcpy((citem+12),cbuffer);
+      citem = (citem+24);
+      i++;
+    }
+  }
+  while (i < 68 AND regs.r[4] != -1);
+  citem = (citem-24);
+  *(citem) = 128;
+
+  /*mouse emulation*/
+  if (beebit_mouseemulation == MOUSE_OFF)
+    writeicon(hoptions,MOUSE_EMULATION_EDIT,"None",0,0);
+  else if (beebit_mouseemulation == MOUSE_JOYSTICK)
+    writeicon(hoptions,MOUSE_EMULATION_EDIT,"Joystick",0,0);
+  else if (beebit_mouseemulation == MOUSE_AMXMOUSE)
+    writeicon(hoptions,MOUSE_EMULATION_EDIT,"AMX Mouse",0,0);
+
+  /*display mode*/
+  if (beebit_displaymode == DISPLAY_MODE_LOW)
+    writeicon(hoptions,DISPLAY_MODE_EDIT,"Low",0,0);
+  else if (beebit_displaymode == DISPLAY_MODE_MEDIUM)
+    writeicon(hoptions,DISPLAY_MODE_EDIT,"Medium",0,0);
+  else if (beebit_displaymode == DISPLAY_MODE_HIGH)
+    writeicon(hoptions,DISPLAY_MODE_EDIT,"High",0,0);
+  else if (beebit_displaymode == DISPLAY_MODE_12801024)
+    writeicon(hoptions,DISPLAY_MODE_EDIT,"1280 x 1024",0,0);
+  else if (beebit_displaymode == DISPLAY_MODE_16001024)
+    writeicon(hoptions,DISPLAY_MODE_EDIT,"1600 x 1024",0,0);
+  else
+    writeicon(hoptions,DISPLAY_MODE_EDIT,"Auto",0,0);
+
+  setbutton(hoptions,OPTION_SOUND,beebit_sound);
+  setbutton(hoptions,OPTION_CURSOR,beebit_cursor);
+  setbutton(hoptions,OPTION_FASTTAPE,beebit_fasttape);
+  setbutton(hoptions,OPTION_PRINTER,beebit_printer);
+  for (i=0;i<8;i++)
+  {
+    if (beebit_links & (1 << (7-i)))
+      setbutton(hoptions,KEYBOARD_LINKS+i,TRUE);
+    else
+      setbutton(hoptions,KEYBOARD_LINKS+i,FALSE);
+   }
+  switch (beebit_machinetype)
+  {
+    case MACHINE_MODELB:
+    case MACHINE_MODELBPLUS:
+      /*enable switches*/
+      /*iconbitclear(hoptions,KEYBOARD_LINKS-1,22);*/
+      for (i=0;i<8;i++)
+        iconbitclear(hoptions,KEYBOARD_LINKS+i,22);
+      break;
+    case MACHINE_MASTER128:
+    case MACHINE_COMPACT:
+      /*disable switches*/
+      /*iconbitset(hoptions,KEYBOARD_LINKS-1,22);*/
+      for (i=0;i<8;i++)
+        iconbitset(hoptions,KEYBOARD_LINKS+i,22);
+      break;
+  }
+}
+
+void updateconfigromswindow(void)
+{
+  int i;
+  for (i=0x0F;i>=0;i--)
+  {
+    /*copy rom image names*/
+    writeicon(hconfigroms,nconfigromid[i],beebit_romimage[(beebit_machinetype*16)+i],0,0);
+    /*copy rom writable*/
+    setbutton(hconfigroms,nconfigromid[i]+1,beebit_romwrite[(beebit_machinetype*16)+i]);
+  }
+}
+
+void updateconfigdriveswindow(void)
+{
+  int i;
+  /*copy disc image names*/
+  for (i=0x03;i>=0;i--)
+    writeicon(hconfigdrives,nconfigdiscid[i],beebit_discimage[i],0,0);
+  /*set disc writable*/
+  setbutton(hconfigdrives,7,beebit_discwritable[0]);
+  setbutton(hconfigdrives,12,beebit_discwritable[1]);
+  /*copy tape name*/
+  writeicon(hconfigdrives,17,beebit_uefimage,0,0);
+
+  switch (beebit_machinetype)
+  {
+    case MACHINE_MODELB:
+      iconbitclear(hconfigroms,4,22);
+      iconbitclear(hconfigroms,5,22);
+      break;
+    case MACHINE_MODELBPLUS:
+      iconbitset(hconfigroms,4,22);
+      iconbitset(hconfigroms,5,22);
+      break;
+    case MACHINE_MASTER128:
+    case MACHINE_COMPACT:
+      iconbitclear(hconfigroms,4,22);
+      iconbitclear(hconfigroms,5,22);
+      break;
+  }
+}
+
+void openconfigromswindow(void)
+{
+  setword(b,hconfigroms);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetWindowState,&regs,&regs);
+  _kernel_swi(Wimp_OpenWindow,&regs,&regs);
+}
+
+void openconfigdriveswindow(void)
+{
+  setword(b,hconfigdrives);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetWindowState,&regs,&regs);
+  _kernel_swi(Wimp_OpenWindow,&regs,&regs);
+}
+
+void storewimpmode(void)
+{
+  /*regs.r[0] = 0x87;
+  _kernel_swi(OS_Byte,&regs,&regs);
+  nwimpmode = regs.r[2];*/
+
+  regs.r[0] = 1;
+  _kernel_swi(Wimp_ReadSysInfo,&regs,&regs);
+  nwimpmode = regs.r[0];
+
+  /*setword(cwimpmodeblock, 1);
+  setword(cwimpmodeblock + 4, 11);*/ /*x*/
+  /*setword(cwimpmodeblock + 8, 12);*/ /*y*/
+  /*setword(cwimpmodeblock + 12, 9);*/ /*log2bpp*/
+  /*setword(cwimpmodeblock + 16, -1);
+  setword(cwimpmodeblock + 20, -1);
+  regs.r[0] = (int)(cwimpmodeblock + 4);
+  regs.r[1] = (int)(cwimpmodeblock + 4);
+  _kernel_swi(OS_ReadVduVariables,&regs,&regs);
+  setword(cwimpmodeblock + 4, getword(cwimpmodeblock + 4) + 1);
+  setword(cwimpmodeblock + 8, getword(cwimpmodeblock + 8) + 1);*/
+
+  /*regs.r[0] = 1;*/ /*return current screen mode*/
+  /*_kernel_swi(OS_ScreenMode,&regs,&regs);
+  strncpy((char *)regs.r[1], cwimpmodeblock, 24);*/
+}
+
+void gobeebit(void)
+{
+  int lredraw;
+  /*regs.r[0] = 0x87;
+  _kernel_swi(OS_Byte,&regs,&regs);
+  nwimpmode = regs.r[2];*/
+  lredraw = beebitmain();
+  if (lredraw)
+  {
+    screentobuffer();
+    regs.r[0] = nwimpmode; /*(int)cwimpmodeblock;*/
+    _kernel_swi(Wimp_SetMode,&regs,&regs);
+  }
+  /*regs.r[0] = -1;
+  _kernel_swi(Wimp_ForceRedraw,&regs,&regs);*/
+}
+
+/*void dumpscreen(void)
+{
+  char cbuffer[128];
+  FILE *hfile;
+  setword(cbuffer,1);
+  setword(cbuffer+0x04,0x10);
+  setword(cbuffer+0x08,0x140BC);
+  setword(cbuffer+0x0B,0x140AC);
+  strcpy(cbuffer+0x10,"screendump");
+  cbuffer[0x1A] = 0;
+  cbuffer[0x1B] = 0;
+  hfile = fopen("<BeebIt$Dir>.^,ScreenDump","wb");
+  fwrite(memory,1,0x128,hfile);
+  fclose(hfile);*/
+  /*strcpy(cbuffer,"<BeebIt$Dir>.^.ScreenDump");
+  regs.r[0] = 2;
+  regs.r[1] = 0;
+  regs.r[2] = (int)cbuffer;
+  regs.r[3] = 3;
+  _kernel_swi(OS_Sprite,&regs,&regs);*/
+/*}*/
+
+/*WIMP POLL FUNCTIONS*/
+
+void null(void)
+{
+}
+
+void dragbox(void)
+{
+  int nx,ny, hwindow, nicon;
+  char *cbuffer,*cpointer;
+  int pollresult;
+
+  regs.r[1] =(int)b;
+  _kernel_swi(Wimp_GetPointerInfo,&regs,&regs);
+  nx = getword(b);
+  ny = getword(b+4);
+  hwindow = getword(b+12);
+  nicon = getword(b+16);
+  regs.r[0] = 161;
+  regs.r[1] = 28;
+  _kernel_swi(OS_Byte,&regs,&regs);
+  if (wimp_version >= 300 AND (regs.r[2] & 2) == 2)
+  {
+    /*drag a sprite mode enabled*/
+    _kernel_swi(DragASprite_Stop,&regs,&regs);
+  }
+  else
+  {
+    regs.r[1] = -1;
+    _kernel_swi(Wimp_DragBox,&regs,&regs);
+  }
+  cbuffer = readicon(hsaveas,1);
+  setword(b+36,arFileSize[file_tosave]);
+  setword(b+40,arFileType[file_tosave]);
+  cpointer = filename(cbuffer);
+  strcpy(b+44,cpointer);
+  setword(b+12,0);
+  setword(b+20,hwindow);
+  setword(b+24,nicon);
+  setword(b+28,nx);
+  setword(b+32,ny);
+  nmyref =sendmess(18,1,256,hwindow,nicon); /* message_datasave*/
+
+  /* poll until message*/
+  do
+  {
+    pollresult =(do_poll((1<<17) +(1<<18) +(1<<19)));
+  }
+  while ((pollresult ==FALSE) || ((pollresult ==TRUE) && (getword(b+12) !=nmyref)));
+
+
+  if (regs.r[0] ==19) return; /*save has bounced  */
+
+  switch (getword(b+16))
+  {
+    case 2: wimp_setfiletransfer(b+44); break; /*Message_DataSaveAck */
+    case 6: wimp_setramtransfer();      break; /*Message_RamFetch */
+
+    default: return;            /*not a valid message */
+  }
+
+  dosave();
+  /*close the save as window and menu*/
+  setword(b+0,hsaveas);
+  closewindow();
+  regs.r[0] = ncurmenu;
+  regs.r[1] = -1;
+  _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+}
+
+void select(void)
+{
+  int nmain,nsubmenu1,nmousex,nmousey,nbutton,n;
+  char *nchar;
+  nmain = getword(b);
+  nsubmenu1 = getword(b+4);
+
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_GetPointerInfo,&regs,&regs);
+  nmousex = getword(b);
+  nmousey = getword(b+4);
+  nbutton = getword(b+8);
+  if (ncurmenu == (int)cmainmenu)
+  {
+    switch (nmain)
+    {
+      case 1:
+        /*configure*/
+        switch (nsubmenu1)
+        {
+          case 0:
+            /*ROMs*/
+            updateconfigromswindow();
+            openconfigromswindow();
+            break;
+          case 1:
+            /*drives*/
+            updateconfigdriveswindow();
+            openconfigdriveswindow();
+            break;
+        }
+        break;
+      case 2:
+        /*options*/
+        nlastmachinetype = beebit_machinetype;
+        switch (beebit_machinetype)
+        {
+          case MACHINE_MODELB:
+            writeicon(hoptions,MACHINE_TYPE_EDIT,NAME_MODELB,0,0);
+            break;
+          case MACHINE_MODELBPLUS:
+            writeicon(hoptions,MACHINE_TYPE_EDIT,NAME_MODELBPLUS,0,0);
+            break;
+          case MACHINE_MASTER128:
+            writeicon(hoptions,MACHINE_TYPE_EDIT,NAME_MASTER128,0,0);
+            break;
+          case MACHINE_COMPACT:
+            writeicon(hoptions,MACHINE_TYPE_EDIT,NAME_MASTERCOMPACT,0,0);
+            break;
+          default:
+            writeicon(hoptions,MACHINE_TYPE_EDIT,NAME_MODELB,0,0);
+            break;
+        }
+        setoptions(beebit_machinetype);
+        setword(b,hoptions);
+        regs.r[0] = 0;
+        regs.r[1] = (int)b;
+        _kernel_swi(Wimp_GetWindowState,&regs,&regs);
+        _kernel_swi(Wimp_OpenWindow,&regs,&regs);
+        break;
+      case 4:
+        /*reset*/
+        switch (nsubmenu1)
+        {
+          case 0:
+            /*rewind tape*/
+            if (wimpconfirm("Rewind the Tape?"))
+              uefrewind();
+            break;
+          case 1:
+            /*reset*/
+            if (wimpconfirm("Reset the emulation?"))
+              beebitreset();
+            break;
+        }
+        break;
+      case 5:
+        lquit = TRUE;
+        break;
+    }
+    if (nbutton == 1)
+    {
+      regs.r[1] = (int)cmainmenu;
+      regs.r[2] = nmousex-64;
+      regs.r[3] = nmousey+16;
+      _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+    }
+  }
+  else if (ncurmenu == (int)cmachinemenu)
+  {
+    /*if (nmain == MACHINE_COMPACT)
+    {
+      nchar = (char *)(cmachinemenu+40+(nmain*24));
+      n = getword(nchar);
+      writeicon(hoptions,MACHINE_TYPE_EDIT,(char *)n,0,0);
+    }
+    else*/
+      writeicon(hoptions,MACHINE_TYPE_EDIT,cmachinemenu+40+(nmain*24),0,0);
+    if (beebit_machinetype != nmain)
+    {
+      beebit_machinetype = nmain;
+      setoptions(beebit_machinetype);
+      getwindowstate(hoptions);
+      if (getword(b+32) & 0x10)
+      {
+        updateconfigromswindow();
+        updateconfigdriveswindow();
+      }
+    }
+    else
+      setoptions(nmain);
+  }
+  else if (ncurmenu == (int)cspeedmenu)
+  {
+    writeicon(hoptions,CPU_SPEED_EDIT,cspeedmenu+40+(nmain*24),0,0);
+  }
+  else if (ncurmenu == (int)cscreenmenu)
+  {
+    nchar = (char *)(cscreenmenu+40+(nmain*24));
+    n = getword(nchar);
+    writeicon(hoptions,SCREEN_UPDATE_EDIT,(char *)n,0,0);
+  }
+  else if (ncurmenu == (int)cframemenu)
+  {
+    writeicon(hoptions,FRAME_RATE_EDIT,cframemenu+40+(nmain*24),0,0);
+  }
+  else if (ncurmenu == (int)ckeymapmenu)
+  {
+    writeicon(hoptions,KEYBOARD_LAYOUT_EDIT,ckeymapmenu+40+(nmain*24),0,0);
+  }
+  else if (ncurmenu == (int)cmousemenu)
+  {
+    writeicon(hoptions,MOUSE_EMULATION_EDIT,cmousemenu+40+(nmain*24),0,0);
+  }
+  else if (ncurmenu == (int)cdisplaymenu)
+  {
+    writeicon(hoptions,DISPLAY_MODE_EDIT,cdisplaymenu+40+(nmain*24),0,0);
+  }
+}
+
+void keypress(void)
+{
+  int nwindow,nkey;
+  nwindow = getword(b);
+  nkey = getword(b+24);
+  /*jdl** added code so RETURN press in save window is equivalent to pressing OK, this could be extended to the configure and options dialogues*/
+  if ((nwindow == hsaveas) && (nkey ==13))
+    fake_selectclick(hsaveas,2);
+  else
+  {
+    /* jdl** end of extra code */
+    regs.r[0] = nkey;
+    _kernel_swi(Wimp_ProcessKey,&regs,&regs);
+  }
+}
+
+void button(void)
+{
+  /*button clicks*/
+  int nmousex, nmousey, nbutton;
+  int nwindow, nicon, i, nromchanged, nmask, nindex;
+  char *cbuffer;
+  nmousex = getword(b);
+  nmousey = getword(b+4);
+  nbutton = getword(b+8);
+  nwindow = getword(b+12);
+  nicon = getword(b+16);
+  if (nwindow == -2)
+  {
+    /*icon bar*/
+    switch (nbutton)
+    {
+      case 1:
+        updateconfigdriveswindow();
+        openconfigdriveswindow();
+        break;
+      case 2:
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)cmainmenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = 360; /*272;*/
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        break;
+      case 4:
+        /*go bbc*/
+        storewimpmode();
+        gobeebit();
+        break;
+    }
+  }
+  else if (nwindow == hconfigroms)
+  {
+    switch (nicon)
+    {
+      case CONFIG_ROMS_CANCEL:
+        /*cancel*/
+        setword(b,nwindow);
+        closewindow();
+        break;
+      case CONFIG_ROMS_SAVE:
+      case CONFIG_ROMS_SET:
+        /*Save, OK*/
+        /*copy rom image names*/
+        for (i=0x0F;i>=0;i--)
+        {
+          nindex = (beebit_machinetype*16)+i;
+          cbuffer = readicon(hconfigroms,nconfigromid[i]);
+          nromchanged = strcmp(cbuffer, beebit_romimage[nindex]);
+          if (nromchanged != 0)
+          {
+            nmask = (1 << (i+1));
+            beebit_rommask = (beebit_rommask | nmask);
+          }
+          strcpy(beebit_romimage[nindex],cbuffer);
+          /*copy rom writable*/
+          beebit_romwrite[nindex] = buttonset(hconfigroms,nconfigromid[i]+1);
+        }
+
+        if (nicon == CONFIG_ROMS_SAVE)
+        {
+          /*save*/
+          configsave();
+        }
+        else
+        {
+          /*ok*/
+          if (nbutton == 4)
+          {
+            setword(b,nwindow);
+            closewindow();
+          }
+        }
+        break;
+    }
+  }
+  else if (nwindow == hconfigdrives)
+  {
+    switch (nicon)
+    {
+      case CONFIG_DRIVES_CANCEL:
+        /*cancel*/
+        setword(b,nwindow);
+        closewindow();
+        break;
+      case CONFIG_DRIVES_SAVE:
+      case CONFIG_DRIVES_SET:
+        /*Save, OK*/
+        /*copy disc image names*/
+        for (i=0x03;i>=0;i--)
+        {
+          cbuffer = readicon(hconfigdrives,nconfigdiscid[i]);
+          strcpy(beebit_discimage[i],cbuffer);
+        }
+        /*copy disc writable*/
+        beebit_discwritable[0] = buttonset(hconfigdrives,7);
+        beebit_discwritable[1] = buttonset(hconfigdrives,12);
+        /*copy tape name*/
+        cbuffer = readicon(hconfigdrives,17);
+        strcpy(beebit_uefimage,cbuffer);
+
+        if (nicon == CONFIG_DRIVES_SAVE)
+        {
+          /*save*/
+          configsave();
+        }
+        else
+        {
+          /*ok*/
+          if (nbutton == 4)
+          {
+            setword(b,nwindow);
+            closewindow();
+          }
+        }
+        break;
+    }
+  }
+  else if (nwindow == hoptions)
+  {
+    switch (nicon)
+    {
+      case MACHINE_TYPE_MENU:
+        /*machine type*/
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)cmachinemenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = nmousey;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        /*ask for save confirmation here*/
+        break;
+      case CPU_SPEED_MENU:
+        /*cpu speed*/
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)cspeedmenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = nmousey;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        break;
+      case SCREEN_UPDATE_MENU:
+        /*video speed*/
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)cscreenmenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = nmousey;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        break;
+      case FRAME_RATE_MENU:
+        /*frame rate*/
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)cframemenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = nmousey;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        break;
+      case KEYBOARD_LAYOUT_MENU:
+        /*keyboard layout*/
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)ckeymapmenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = nmousey;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        break;
+      case MOUSE_EMULATION_MENU:
+        /*mouse emuation*/
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)cmousemenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = nmousey;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        break;
+      case DISPLAY_MODE_MENU:
+        /*display mode*/
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)cdisplaymenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = nmousey;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        break;
+      case OPTIONS_CANCEL:
+        /*cancel*/
+        beebit_machinetype = nlastmachinetype;
+        setword(b,hoptions);
+        closewindow();
+        break;
+      case OPTIONS_SAVE:
+      case OPTIONS_OK:
+        /*Save, OK*/
+        cbuffer = readicon(hoptions,MACHINE_TYPE_EDIT);
+        if (strcmp(cbuffer,NAME_MODELB) == 0)
+          beebit_machinetype = MACHINE_MODELB;
+        else if (strcmp(cbuffer,NAME_MODELBPLUS) == 0)
+          beebit_machinetype = MACHINE_MODELBPLUS;
+        else if (strcmp(cbuffer,NAME_MASTER128) == 0)
+          beebit_machinetype = MACHINE_MASTER128;
+        else if (strcmp(cbuffer,NAME_MASTERCOMPACT) == 0)
+          beebit_machinetype = MACHINE_COMPACT;
+        else
+          beebit_machinetype = MACHINE_MODELB;
+        /*os rom*/
+        cbuffer = readicon(hoptions,OS_ROM_EDIT);
+        strcpy(beebit_osrom[beebit_machinetype],cbuffer);
+        /*rom path*/
+        cbuffer = readicon(hoptions,ROM_PATH_EDIT);
+        strcpy(beebit_rompath,cbuffer);
+        /*cpu speed*/
+        cbuffer = readicon(hoptions,CPU_SPEED_EDIT);
+        if (strcmp(cbuffer,"Full speed") == 0)
+          beebit_cpuspeed = CPU_FAST;
+        else
+          beebit_cpuspeed = CPU_2MHZ;
+        /*screen update*/
+        cbuffer = readicon(hoptions,SCREEN_UPDATE_EDIT);
+        if (strcmp(cbuffer,"Non-interlaced") == 0)
+          beebit_videospeed = VIDEO_SLOW;
+        else
+          beebit_videospeed = VIDEO_FAST;
+        /*frame rate*/
+        cbuffer = readicon(hoptions,FRAME_RATE_EDIT);
+        if (strcmp(cbuffer,"50 fps") == 0)
+          beebit_framerate = VIDEO_50FPS;
+        else if (strcmp(cbuffer,"25 fps") == 0)
+          beebit_framerate = VIDEO_25FPS;
+        else if (strcmp(cbuffer,"12.5 fps") == 0)
+          beebit_framerate = VIDEO_12FPS;
+        /*keyboard layout*/
+        cbuffer = readicon(hoptions,KEYBOARD_LAYOUT_EDIT);
+        strcpy(beebit_keylayout,cbuffer);
+        /*mouse emulation*/
+        cbuffer = readicon(hoptions,MOUSE_EMULATION_EDIT);
+        if (strcmp(cbuffer,"None") == 0)
+          beebit_mouseemulation = MOUSE_OFF;
+        else if (strcmp(cbuffer,"Joystick") == 0)
+          beebit_mouseemulation = MOUSE_JOYSTICK;
+        else if (strcmp(cbuffer,"AMX Mouse") == 0)
+          beebit_mouseemulation = MOUSE_AMXMOUSE;
+        /*display mode*/
+        cbuffer = readicon(hoptions,DISPLAY_MODE_EDIT);
+        if (strcmp(cbuffer,"Low") == 0)
+          beebit_displaymode = DISPLAY_MODE_LOW;
+        else if (strcmp(cbuffer,"Medium") == 0)
+          beebit_displaymode = DISPLAY_MODE_MEDIUM;
+        else if (strcmp(cbuffer,"High") == 0)
+          beebit_displaymode = DISPLAY_MODE_HIGH;
+        else if (strcmp(cbuffer,"1280 x 1024") == 0)
+          beebit_displaymode = DISPLAY_MODE_12801024;
+        else if (strcmp(cbuffer,"1600 x 1024") == 0)
+          beebit_displaymode = DISPLAY_MODE_16001024;
+        else
+          beebit_displaymode = DISPLAY_MODE_AUTO;
+        /*sound*/
+        if (buttonset(hoptions,OPTION_SOUND))
+          beebit_sound = TRUE;
+        else
+          beebit_sound = FALSE;
+        /*cursor*/
+        if (buttonset(hoptions,OPTION_CURSOR))
+          beebit_cursor = TRUE;
+        else
+          beebit_cursor = FALSE;
+        /*fast tape*/
+        if (buttonset(hoptions,OPTION_FASTTAPE))
+          beebit_fasttape = TRUE;
+        else
+          beebit_fasttape = FALSE;
+        /*printer*/
+        if (buttonset(hoptions,OPTION_PRINTER))
+          beebit_fasttape = TRUE;
+        else
+          beebit_fasttape = FALSE;
+        /*keyboard links*/
+        beebit_links = 0;
+        for (i=0;i<8;i++)
+        {
+          if (buttonset(hoptions,KEYBOARD_LINKS+i))
+            beebit_links = (beebit_links | (1 << (7-i)));
+        }
+
+        aciaresettimer();
+
+        if (beebit_machinetype != nlastmachinetype)
+        {
+          getwindowstate(hoptions);
+          if (getword(b+32) & 0x10)
+          {
+            updateconfigromswindow();
+            updateconfigdriveswindow();
+          }
+          updateappicon();
+        }
+        if (nicon == OPTIONS_SAVE)
+        {
+          /*save*/
+          configsave();
+        }
+        else
+        {
+          /*ok*/
+          if (nbutton == 4)
+          {
+            setword(b,hoptions);
+            closewindow();
+          }
+        }
+        break;
+    }
+  }
+  else if (nwindow == hsaveas)
+  {
+    switch (nbutton)
+    {
+      case 4:
+        switch (nicon)
+        {
+          case 0:
+            initdrag(hsaveas,0);
+            break;
+
+        }
+        break;
+    }
+/* jdl** changed so adjust clicking on OK works, and to get around the 'adjust leaves no radio buttons selected' bug/feature of risc os*/
+    switch (nbutton)
+    {
+      case 4:
+      case 1:
+        switch (nicon)
+        {
+          case 2:
+            /*OK*/
+            cbuffer = readicon(hsaveas,1);
+            if (oktosave(cbuffer))
+            {
+              int was_savesuccess;
+              /* if (buttonset(hsaveas,3))
+                snapshotsave(cbuffer);
+              else if (buttonset(hsaveas,4))
+                memorysave(cbuffer);
+              else if (buttonset(hsaveas,5))
+                spritesave(cbuffer);
+              wimp_setfiletransfer(cbuffer);*/
+              wimp_setoktransfer(cbuffer);
+              was_savesuccess =dosave();
+              if (was_savesuccess ==TRUE)
+              {
+                /* if save to csd, then convert to full canonicalised path*/
+                char canpathbuffer[512];
+                regs.r[0] =37;
+                regs.r[1] =(int)cbuffer;
+                regs.r[2] =(int)canpathbuffer;
+                regs.r[3] =0;
+                regs.r[4] =0;
+                regs.r[5] =512;
+                _kernel_swi(OS_FSControl,&regs,&regs);
+
+                if ((signed int)regs.r[5] >0)
+                  writeicon(hsaveas,1,canpathbuffer,0,0);
+              }
+            }
+            /*writeicon(hsaveas,1,cbuffer,0,0);*/
+            /*setword(b,hsaveas);
+            closewindow();
+            regs.r[0] = ncurmenu;
+            regs.r[1] = -1;
+            _kernel_swi(Wimp_CreateMenu,&regs,&regs);*/
+            break;
+          case 3:
+          case 4:
+          case 5:
+          {
+            char caretblock[23];
+
+            file_tosave =nicon -3;
+            writeicon(hsaveas,0,arFileSpr[file_tosave],0,0);
+            writeicon(hsaveas,1,arFileName[file_tosave],0,0);
+            setbutton(hsaveas,file_tosave+3,TRUE);
+
+            regs.r[1] =(int)caretblock;
+            _kernel_swi(Wimp_GetCaretPosition,&regs,&regs);
+
+            regs.r[0] =getword(caretblock);
+            regs.r[1] =getword(caretblock+4);
+            regs.r[2] =0; /* caret X=0*/
+            regs.r[3] =getword(caretblock+12);
+            regs.r[4] =getword(caretblock+16);
+            regs.r[5] =0; /* index into string*/
+            _kernel_swi(Wimp_SetCaretPosition,&regs,&regs);
+/* this is to get around some small problems, when you have full path name
+ and then press a radio icon, the old caret position seems to be remembered
+ this causes trouble deleting characters (a cursor press correctly updates
+ the position).
+
+ As this routine is called during startup to set the initial filetype,
+ this has the unfortunate side-effect of moving the caret on any other app
+ which happens to have it at the time.*/
+
+            break;
+          }
+        }
+        break;
+    }
+  }
+}
+
+void closewindow(void)
+{
+  int nwindow;
+  nwindow = getword(b);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_CloseWindow,&regs,&regs);
+}
+
+void openwindow(void)
+{
+  int nwindow;
+  nwindow = getword(b);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_OpenWindow,&regs,&regs);
+}
+
+void redraw(void)
+{
+  int nwindow,lmore;
+  nwindow = getword(b);
+  regs.r[0] = 0;
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_RedrawWindow,&regs,&regs);
+  lmore = regs.r[0];
+  while (lmore)
+  {
+    regs.r[0] = 0;
+    regs.r[1] = (int)b;
+    _kernel_swi(Wimp_GetRectangle,&regs,&regs);
+    lmore = regs.r[0];
+  }
+}
+
+void message(void)
+{
+  int naction, n, nlen;
+  int nwindow, nicon, nfiletype;
+  char *cpointer;
+  FILE *hfile;
+  naction = getword(b+16);
+  switch (naction)
+  {
+    case 0x000:
+      lquit = TRUE;
+      break;
+    case 0x003:
+      /*data load*/
+      nwindow = getword(b+20);
+      nicon = getword(b+24);
+      nfiletype = getword(b+40);
+      if (nwindow == hconfigroms)
+      {
+        if (nfiletype != 0x1000 AND nfiletype != 0x2000)
+        {
+          switch (nicon)
+          {
+            case 4:
+            case 7:
+            case 10:
+            case 13:
+            case 16:
+            case 19:
+            case 22:
+            case 25:
+            case 28:
+            case 31:
+            case 34:
+            case 37:
+            case 40:
+            case 43:
+            case 46:
+            case 49:
+              /*ROMs*/
+              cpointer = filename(b+44);
+              writeicon(nwindow,nicon,cpointer,0,0);
+              break;
+          }
+        }
+      }
+      else if (nwindow == hconfigdrives)
+      {
+
+        if (nfiletype != 0x1000 AND nfiletype != 0x2000)
+        {
+          switch (nicon)
+          {
+            case 4:
+              /*drive 0*/
+              hfile = fopen(b+44,"rb");
+              n = beebitsectorcount(hfile);
+              n = beebitimagetype(hfile,n);
+              fclose(hfile);
+              if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+                iconbitset(nwindow,6,22);
+              else
+                iconbitclear(nwindow,6,22);
+              writeicon(nwindow,nicon,b+44,0,0);
+              break;
+            case 6:
+              /*drive 2*/
+              hfile = fopen(b+44,"rb");
+              n = beebitsectorcount(hfile);
+              n = beebitimagetype(hfile,n);
+              fclose(hfile);
+              if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+              {
+                writeicon(nwindow,4,b+44,0,0);
+                iconbitset(nwindow,nicon,22);
+              }
+              else
+              {
+                writeicon(nwindow,nicon,b+44,0,0);
+                iconbitclear(nwindow,nicon,22);
+              }
+              break;
+            case 9:
+              /*drive 1*/
+              hfile = fopen(b+44,"rb");
+              n = beebitsectorcount(hfile);
+              n = beebitimagetype(hfile,n);
+              fclose(hfile);
+              if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+                iconbitset(nwindow,11,22);
+              else
+                iconbitclear(nwindow,11,22);
+              writeicon(nwindow,nicon,b+44,0,0);
+              break;
+            case 11:
+              /*drive 3*/
+              hfile = fopen(b+44,"rb");
+              n = beebitsectorcount(hfile);
+              n = beebitimagetype(hfile,n);
+              fclose(hfile);
+              if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+              {
+                writeicon(nwindow,9,b+44,0,0);
+                iconbitset(nwindow,nicon,22);
+              }
+              else
+              {
+                writeicon(nwindow,nicon,b+44,0,0);
+                iconbitclear(nwindow,nicon,22);
+              }
+              break;
+            case 17:
+              /*tape*/
+              hfile = fopen(b+44,"rb");
+              if (hfile == NULL)
+                wimperror("This file cannot be opened.");
+              else
+              {
+                fread(uef_buffer, 1, 2, hfile);
+                n = (getword(uef_buffer) & 0xFFFF);
+                if (n == 0x8B1F)
+                  wimperror("This file has been compressed with GZip. It must be uncompressed before it can be used.");
+                else
+                {
+                  n = uefvalidate(hfile);
+                  if (n)
+                    writeicon(nwindow,nicon,b+44,0,0);
+                  else
+                    wimperror("This is not a valid UEF file.");
+                }
+                fclose(hfile);
+              }
+              break;
+          }
+        }
+      }
+      else if (nwindow == hoptions)
+      {
+        if (nfiletype == 0x1000 OR nfiletype == 0x2000)
+        {
+          switch (nicon)
+          {
+            case ROM_PATH_EDIT:
+              writeicon(nwindow,nicon,b+44,0,0);
+              break;
+          }
+        }
+        /*else
+        {
+          switch (nicon)
+          {
+            case KEYBOARD_LAYOUT_EDIT:
+              cpointer = filename(b+44);
+              writeicon(nwindow,nicon,cpointer,0,0);
+              break;
+          }
+        }*/
+      }
+      else if (nwindow == -2)
+      {
+        if (nfiletype != 0x1000 OR nfiletype != 0x2000)
+        {
+          /*check to see if it's a snapshot or not*/
+          if (nfiletype == 0xBBC)
+          {
+            dataload();
+          }
+          else
+          {
+            /*load into drive 0*/
+            strcpy(beebit_discimage[0],b+44);
+            n = getword(b+8);
+            setword(b+12,n);
+            setword(b+16,4);
+            regs.r[0] = 17;
+            regs.r[1] = (int)b;
+            regs.r[2] = getword(b+4);
+            _kernel_swi(Wimp_SendMessage,&regs,&regs);
+            hfile = fopen(beebit_discimage[0],"rb+");
+            n = beebitsectorcount(hfile);
+            n = beebitimagetype(hfile,n);
+            fclose(hfile);
+            if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+              iconbitset(hconfigdrives,6,22);
+            else
+              iconbitclear(hconfigdrives,6,22);
+            storewimpmode();
+            gobeebit();
+          }
+        }
+      }
+      break;
+    case 0x005:
+      nfiletype = getword(b+40);
+      if (nfiletype == 0xB22)
+      {
+        strcpy(beebit_discimage[0],b+44);
+        n = getword(b+8);
+        setword(b+12,n);
+        setword(b+16,4);
+        regs.r[0] = 17;
+        regs.r[1] = (int)b;
+        regs.r[2] = getword(b+4);
+        _kernel_swi(Wimp_SendMessage,&regs,&regs);
+        storewimpmode();
+        gobeebit();
+      }
+      break;
+/*    case 6:*/
+      /*ram fetch*/
+/*      ramfetch();
+      break;*/
+    case 0x502:
+      /*help request*/
+      nwindow = getword(b+32);
+      nicon = getword(b+36);
+      n = getword(b+8);
+      nlen = helprequest(nwindow, nicon, b+20);
+      /*nlen = messagefilelookupb(hmessages, b+20, "Version");*/
+      if (nlen > 0)
+      {
+        setword(b+12,n);
+        setword(b+16,0x503);
+        n = ((20+nlen+4) & ~3);
+        setword(b,n);
+        regs.r[0] = 17;
+        regs.r[1] = (int)b;
+        regs.r[2] = getword(b+4);
+        _kernel_swi(Wimp_SendMessage,&regs,&regs);
+      }
+      break;
+  }
+}
+
+/*WIMP FUNCTIONS*/
+
+void closedown(void)
+{
+/*  free(cstring);*/
+  messagefileclose(hmessages);
+  regs.r[0] = ntask;
+  regs.r[1] = 0x4B534154;
+  _kernel_swi(Wimp_CloseDown,&regs,&regs);
+}
+
+void setup(void)
+{
+  FILE *hfile;
+  int i, ntype;
+  char cbuffer[0xFF];
+
+  /*setup sensible defaults for everything, before trying to read choices
+  file */
+  /*model b*/
+  strcpy(beebit_osrom[MACHINE_MODELB],"OS120");
+  strcpy(beebit_romimage[0x0F],"BASIC200");
+  beebit_romwrite[0x0F] = FALSE;
+  strcpy(beebit_romimage[0x0E],"DFS120");
+  beebit_romwrite[0x0E] = FALSE;
+  for (i=0x00;i<=0x07;i++)
+    beebit_romwrite[i] = TRUE;
+  /*model b+*/
+  strcpy(beebit_osrom[MACHINE_MODELBPLUS],"OS200");
+  strcpy(beebit_romimage[0x1E],"BASIC200");
+  beebit_romwrite[0x1E] = FALSE;
+  strcpy(beebit_romimage[0x1B],"DFS220");
+  beebit_romwrite[0x1B] = FALSE;
+  for (i=0x10;i<=0x17;i++)
+    beebit_romwrite[i] = TRUE;
+  /*master 128*/
+  strcpy(beebit_osrom[MACHINE_MASTER128],"OS320");
+  strcpy(beebit_romimage[0x2F],"Terminl120");
+  beebit_romwrite[0x2F] = FALSE;
+  strcpy(beebit_romimage[0x2E],"View300");
+  beebit_romwrite[0x2E] = FALSE;
+  strcpy(beebit_romimage[0x2D],"ADFS150");
+  beebit_romwrite[0x2D] = FALSE;
+  strcpy(beebit_romimage[0x2C],"BASIC400");
+  beebit_romwrite[0x2C] = FALSE;
+  strcpy(beebit_romimage[0x2B],"Edit100");
+  beebit_romwrite[0x2B] = FALSE;
+  strcpy(beebit_romimage[0x2A],"ViewSh100");
+  beebit_romwrite[0x2A] = FALSE;
+  strcpy(beebit_romimage[0x29],"DFS224");
+  beebit_romwrite[0x29] = FALSE;
+  for (i=0x20;i<=0x27;i++)
+    beebit_romwrite[i] = TRUE;
+  /*master compact*/
+  strcpy(beebit_osrom[MACHINE_COMPACT],"OS510");
+  strcpy(beebit_romimage[0x3F],"BASIC40086");
+  beebit_romwrite[0x3F] = FALSE;
+  strcpy(beebit_romimage[0x3E],"Utils110");
+  beebit_romwrite[0x3E] = FALSE;
+  strcpy(beebit_romimage[0x3D],"ADFS210");
+  beebit_romwrite[0x3D] = FALSE;
+  for (i=0x30;i<=0x37;i++)
+    beebit_romwrite[i] = TRUE;
+
+  strcpy(beebit_rompath,"<BeebIt$Dir>.ROMs."); /*,<BeebItFSRom$Dir>.");*/
+  strcpy(beebit_keylayout,"Default");
+
+  /*new location*/
+  hfile = fopen("Choices:BeebIt.Choices","r");
+  if (hfile == NULL)
+    /*old location*/
+    hfile = fopen("<BeebIt$Dir>.!Config","r");
+  if (hfile == NULL)
+    /*not found*/
+    configsave();
+  else
+  {
+    while (feof(hfile) == 0)
+    {
+      if (fgets(cbuffer,0xFF,hfile) != NULL)
+      {
+        /*strip off CR and LF*/
+        i = strlen(cbuffer)-1;
+        while (i > 0 AND cbuffer[i] == 0x0D OR cbuffer[i] == 0x0A)
+        {
+          cbuffer[i] = 0;
+          i--;
+        }
+        /*find which machine it's for*/
+        if (strncmp(cbuffer,NAME_MODELBPLUS,8) == 0)
+        {
+          ntype = MACHINE_MODELBPLUS;
+          strcpy(cbuffer, cbuffer+9);
+        }
+        else if (strncmp(cbuffer,NAME_MODELB,7) == 0)
+        {
+          ntype = MACHINE_MODELB;
+          strcpy(cbuffer, cbuffer+8);
+        }
+        else if (strncmp(cbuffer,NAME_MASTER128,10) == 0)
+        {
+          ntype = MACHINE_MASTER128;
+          strcpy(cbuffer, cbuffer+11);
+        }
+        else if (strncmp(cbuffer,NAME_MASTERCOMPACT,7) == 0)
+        {
+          ntype = MACHINE_COMPACT;
+          strcpy(cbuffer, cbuffer+8);
+        }
+        else
+          ntype = MACHINE_MODELB;
+
+        if (strncmp(cbuffer,"MachineType",11) == 0)
+        {
+          if (beebit_machinetype == -1)
+          {
+            /*if a machine type has not been passed in on the command line*/
+            if (strncmp(cbuffer+12,NAME_MODELBPLUS,8) == 0)
+              beebit_machinetype = MACHINE_MODELBPLUS;
+            else if (strncmp(cbuffer+12,NAME_MODELB,7) == 0)
+              beebit_machinetype = MACHINE_MODELB;
+            else if (strncmp(cbuffer+12,NAME_MASTER128,10) == 0)
+              beebit_machinetype = MACHINE_MASTER128;
+            else if (strncmp(cbuffer+12,NAME_MASTERCOMPACT,7) == 0)
+              beebit_machinetype = MACHINE_COMPACT;
+            else
+              beebit_machinetype = MACHINE_MODELB;
+          }
+        }
+        else if (strncmp(cbuffer,"OS",2) == 0)
+        {
+          strcpy(beebit_osrom[ntype],cbuffer+3);
+        }
+        else if (strncmp(cbuffer,"ROMSlot",7) == 0)
+        {
+    /*wimperror(cbuffer);*/ /*beebit_romimage[(beebit_machinetype*16)+i]);*/
+
+          if (strlen(cbuffer) < 10)
+            cbuffer[10] = 0;
+          switch (cbuffer[7])
+          {
+            case 70:
+              /*writeicon(hconfig,4,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x0F],cbuffer+9);
+              break;
+            case 69:
+              /*writeicon(hconfig,7,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x0E],cbuffer+9);
+              break;
+            case 68:
+              /*writeicon(hconfig,10,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x0D],cbuffer+9);
+              break;
+            case 67:
+              /*writeicon(hconfig,13,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x0C],cbuffer+9);
+              break;
+            case 66:
+              /*writeicon(hconfig,16,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x0B],cbuffer+9);
+              break;
+            case 65:
+              /*writeicon(hconfig,19,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x0A],cbuffer+9);
+              break;
+            case 57:
+              /*writeicon(hconfig,22,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x09],cbuffer+9);
+              break;
+            case 56:
+              /*writeicon(hconfig,25,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x08],cbuffer+9);
+              break;
+            case 55:
+              /*writeicon(hconfig,28,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x07],cbuffer+9);
+              break;
+            case 54:
+              /*writeicon(hconfig,31,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x06],cbuffer+9);
+              break;
+            case 53:
+              /*writeicon(hconfig,34,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x05],cbuffer+9);
+              break;
+            case 52:
+              /*writeicon(hconfig,37,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x04],cbuffer+9);
+              break;
+            case 51:
+              /*writeicon(hconfig,40,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x03],cbuffer+9);
+              break;
+            case 50:
+              /*writeicon(hconfig,43,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x02],cbuffer+9);
+              break;
+            case 49:
+              /*writeicon(hconfig,46,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x01],cbuffer+9);
+              break;
+            case 48:
+              /*writeicon(hconfig,49,cbuffer+9,0,0);*/
+              strcpy(beebit_romimage[(ntype*16)+0x00],cbuffer+9);
+              break;
+          }
+        }
+        else if (strncmp(cbuffer,"ROMWrite",8) == 0)
+        {
+          if (strlen(cbuffer) < 11)
+            cbuffer[11] = 0;
+
+          switch (cbuffer[8])
+          {
+            case 70:
+              /*setbutton(hconfig,5,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x0F] = (cbuffer[10] == 84);
+              break;
+            case 69:
+              /*setbutton(hconfig,8,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x0E] = (cbuffer[10] == 84);
+              break;
+            case 68:
+              /*setbutton(hconfig,11,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x0D] = (cbuffer[10] == 84);
+              break;
+            case 67:
+              /*setbutton(hconfig,14,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x0C] = (cbuffer[10] == 84);
+              break;
+            case 66:
+              /*setbutton(hconfig,17,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x0B] = (cbuffer[10] == 84);
+              break;
+            case 65:
+              /*setbutton(hconfig,20,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x0A] = (cbuffer[10] == 84);
+              break;
+            case 57:
+              /*setbutton(hconfig,23,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x09] = (cbuffer[10] == 84);
+              break;
+            case 56:
+              /*setbutton(hconfig,26,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x08] = (cbuffer[10] == 84);
+              break;
+            case 55:
+              /*setbutton(hconfig,29,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x07] = (cbuffer[10] == 84);
+              break;
+            case 54:
+              /*setbutton(hconfig,32,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x06] = (cbuffer[10] == 84);
+              break;
+            case 53:
+              /*setbutton(hconfig,35,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x05] = (cbuffer[10] == 84);
+              break;
+            case 52:
+              /*setbutton(hconfig,38,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x04] = (cbuffer[10] == 84);
+              break;
+            case 51:
+              /*setbutton(hconfig,41,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x03] = (cbuffer[10] == 84);
+              break;
+            case 50:
+              /*setbutton(hconfig,44,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x02] = (cbuffer[10] == 84);
+              break;
+            case 49:
+              /*setbutton(hconfig,47,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x01] = (cbuffer[10] == 84);
+              break;
+            case 48:
+              /*setbutton(hconfig,50,(cbuffer[10] == 84));*/
+              beebit_romwrite[(ntype*16)+0x00] = (cbuffer[10] == 84);
+              break;
+          }
+        }
+        else if (strncmp(cbuffer,"DiscDrive",9) == 0)
+        {
+          if (strlen(cbuffer) > 11)
+          {
+            /*strip off CR and LF*/
+            i = strlen(cbuffer)-1;
+            while (cbuffer[i] == 0x0D OR cbuffer[i] == 0x0A)
+              i--;
+            cbuffer[i+1] = 0;
+            switch (cbuffer[9])
+            {
+              case 48:
+                /*0*/
+                if (strlen(beebit_discimage[0]) == 0)
+                  /*writeicon(hconfig,57,cbuffer+11,0,0);*/
+                  strcpy(beebit_discimage[0],cbuffer+11);
+                break;
+              case 49:
+                /*1*/
+                if (strlen(beebit_discimage[1]) == 0)
+                  /*writeicon(hconfig,62,cbuffer+11,0,0);*/
+                  strcpy(beebit_discimage[1],cbuffer+11);
+                break;
+              case 50:
+                /*2*/
+                if (strlen(beebit_discimage[2]) == 0)
+                  /*writeicon(hconfig,59,cbuffer+11,0,0);*/
+                  strcpy(beebit_discimage[2],cbuffer+11);
+                break;
+             case 51:
+                /*3*/
+                if (strlen(beebit_discimage[3]) == 0)
+                  /*writeicon(hconfig,64,cbuffer+11,0,0);*/
+                  strcpy(beebit_discimage[3],cbuffer+11);
+                break;
+             }
+          }
+        }
+        else if (strncmp(cbuffer,"DiscWrite",9) == 0)
+        {
+          if (strlen(cbuffer) > 11)
+          {
+            switch (cbuffer[9])
+            {
+              case 48:
+                /*0*/
+                /*setbutton(hconfig,60,(cbuffer[11] == 84));*/
+                beebit_discwritable[0] = (cbuffer[11] == 84);
+                break;
+              case 49:
+                /*setbutton(hconfig,64,(cbuffer[11] == 84));
+                break;
+              case 50:*/
+                /*setbutton(hconfig,65,(cbuffer[11] == 84));*/
+                beebit_discwritable[1] = (cbuffer[11] == 84);
+                break;
+              /*case 51:*/
+                /*3*/
+                /*setbutton(hconfig,67,(cbuffer[11] == 84));
+                break;*/
+             }
+          }
+        }
+        else if (strncmp(cbuffer,"TapeFile",8) == 0)
+        {
+          strcpy(beebit_uefimage,cbuffer+9);
+        }
+        else if (strncmp(cbuffer,"ROMPath",7) == 0)
+        {
+          strcpy(beebit_rompath,cbuffer+8);
+        }
+        else if (strncmp(cbuffer,"CPUSpeed",8) == 0)
+        {
+          /*writeicon(hoptions,3,cbuffer+9,0,0);*/
+          /*if (strcmp(cbuffer+9,"2 MHz") = 0)*/
+          if (strncmp(cbuffer+9,TEXT_2_MHZ,5) == 0)
+            beebit_cpuspeed = CPU_2MHZ;
+          else if (strncmp(cbuffer+9,TEXT_FULL_SPEED,10) == 0)
+            beebit_cpuspeed = CPU_FAST;
+          else
+            beebit_cpuspeed = CPU_2MHZ;
+        }
+        else if (strncmp(cbuffer,"ScreenUpdate",12) == 0)
+        {
+          /*writeicon(hoptions,6,cbuffer+13,0,0);*/
+          if (strncmp(cbuffer+13,"Interlaced",10) == 0)
+            beebit_videospeed = VIDEO_FAST;
+          else if (strncmp(cbuffer+13,"Non-interlaced",14) == 0)
+            beebit_videospeed = VIDEO_SLOW;
+          else
+            beebit_videospeed = VIDEO_SLOW;
+        }
+        else if (strncmp(cbuffer,"FrameRate",9) == 0)
+        {
+          /*writeicon(hoptions,9,cbuffer+10,0,0);*/
+          if (strncmp(cbuffer+10,"50 fps",6) == 0)
+            beebit_framerate = VIDEO_50FPS;
+          else if (strncmp(cbuffer+10,"25 fps",6) == 0)
+            beebit_framerate = VIDEO_25FPS;
+          else if (strncmp(cbuffer+10,"12.5 fps",7) == 0)
+            beebit_framerate = VIDEO_12FPS;
+          else
+            beebit_framerate = VIDEO_50FPS;
+        }
+        else if (strncmp(cbuffer,"KeyboardLayout",14) == 0)
+        {
+          strcpy(beebit_keylayout,cbuffer+15);
+        }
+        else if (strncmp(cbuffer,"MouseEmulation",14) == 0)
+        {
+          if (strncmp(cbuffer+15,"JoyStick",8) == 0)
+            beebit_mouseemulation = MOUSE_JOYSTICK;
+          else if (strncmp(cbuffer+15,"AMX Mouse",9) == 0)
+            beebit_mouseemulation = MOUSE_AMXMOUSE;
+          else
+            beebit_mouseemulation = MOUSE_OFF;
+        }
+        else if (strncmp(cbuffer,"DisplayMode",11) == 0)
+        {
+          if (strncmp(cbuffer+12,"Low",3) == 0)
+            beebit_displaymode = DISPLAY_MODE_LOW;
+          else if (strncmp(cbuffer+12,"Medium",6) == 0)
+            beebit_displaymode = DISPLAY_MODE_MEDIUM;
+          else if (strncmp(cbuffer+12,"High",4) == 0)
+            beebit_displaymode = DISPLAY_MODE_HIGH;
+          else if (strncmp(cbuffer+12,"1280 x 1024",4) == 0)
+            beebit_displaymode = DISPLAY_MODE_12801024;
+          else if (strncmp(cbuffer+12,"1600 x 1024",4) == 0)
+            beebit_displaymode = DISPLAY_MODE_16001024;
+          else
+            beebit_displaymode = DISPLAY_MODE_AUTO;
+        }
+        else if (strncmp(cbuffer,"Sound",5) == 0)
+        {
+          /*setbutton(hoptions,13,(cbuffer[6] == 84));*/
+          if (cbuffer[6] == 84)
+            beebit_sound = TRUE;
+          else
+            beebit_sound = FALSE;
+        }
+        else if (strncmp(cbuffer,"Cursor",6) == 0)
+        {
+          if (cbuffer[7] == 84)
+            beebit_cursor = TRUE;
+          else
+            beebit_cursor = FALSE;
+        }
+        else if (strncmp(cbuffer,"FastTape",8) == 0)
+        {
+          if (cbuffer[9] == 84)
+            beebit_fasttape = TRUE;
+          else
+            beebit_fasttape = FALSE;
+        }
+        else if (strncmp(cbuffer,"Printer",8) == 0)
+        {
+          if (cbuffer[9] == 84)
+            beebit_fasttape = TRUE;
+          else
+            beebit_fasttape = FALSE;
+        }
+        else if (strncmp(cbuffer,"KeyboardLinks",13) == 0)
+        {
+          beebit_links = atoi(cbuffer+14);
+        }
+      }
+    }
+    fclose(hfile);
+    if (strlen(beebit_rompath) == 0)
+      strcpy(beebit_rompath,"<BeebIt$Dir>.ROMs.,<BeebItFSRoms$Dir>.");
+    if (strlen(beebit_keylayout) == 0)
+      strcpy(beebit_keylayout,"Default");
+    if (strlen(beebit_osrom[0]) == 0)
+      strcpy(beebit_osrom[0],"OS120");
+  }
+  if (beebit_machinetype == -1)
+    beebit_machinetype = MACHINE_MODELB;
+  updateappicon();
+}
+
+void menus(void)
+{
+  char cmodeblock[24];
+  char *citem;
+
+  strcpy(cspeedmenu,"CPU speed");
+  setword(cspeedmenu+12,0x00070207);
+  *(cspeedmenu+16) = 208;
+  *(cspeedmenu+20) = 44;
+  *(cspeedmenu+24) = 0;
+  citem = (cspeedmenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),TEXT_2_MHZ);
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Full speed");
+
+  strcpy(cscreenitem1,"Interlaced");
+  strcpy(cscreenitem2,"Non-interlaced");
+
+  strcpy(cscreenmenu,"Screen updte");
+  setword(cscreenmenu+12,0x00070207);
+  *(cscreenmenu+16) = 208;
+  *(cscreenmenu+20) = 44;
+  *(cscreenmenu+24) = 0;
+  citem = (cscreenmenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  /*setword(citem+8,0x7009011);
+  strcpy((citem+12),"Intlaced");*/
+  setword(citem+8,0x7009111);
+  setword(citem+12,(int)cscreenitem1);
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  /*setword(citem+8,0x7009011);
+  strcpy((citem+12),"Non-Intlaced");*/
+  setword(citem+8,0x7009111);
+  setword(citem+12,(int)cscreenitem2);
+
+  strcpy(cframemenu,"Frame rate");
+  setword(cframemenu+12,0x00070207);
+  *(cframemenu+16) = 208;
+  *(cframemenu+20) = 44;
+  *(cframemenu+24) = 0;
+  citem = (cframemenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"50 fps");
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"25 fps");
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"12.5 fps");
+
+  strcpy(cmousemenu,"Mouse emulat");
+  setword(cmousemenu+12,0x00070207);
+  *(cmousemenu+16) = 208;
+  *(cmousemenu+20) = 44;
+  *(cmousemenu+24) = 0;
+  citem = (cmousemenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"None");
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Joystick");
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"AMX Mouse");
+
+  strcpy(cdisplaymenu,"Display mode");
+  setword(cdisplaymenu+12,0x00070207);
+  *(cdisplaymenu+16) = 208;
+  *(cdisplaymenu+20) = 44;
+  *(cdisplaymenu+24) = 0;
+  citem = (cdisplaymenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Auto");
+  regs.r[0] = 12; /*MODE 12*/
+  _kernel_swi(OS_CheckModeValid,&regs,&regs);
+  if (regs.r[0] != -1)
+  {
+    citem = (citem+24);
+    *(citem) = 0;
+    setword(citem+4,-1);
+    setword(citem+8,0x7009011);
+    strcpy((citem+12),"Low");
+  }
+  regs.r[0] = 15; /*MODE 15*/
+  _kernel_swi(OS_CheckModeValid,&regs,&regs);
+  if (regs.r[0] != -1)
+  {
+    citem = (citem+24);
+    *(citem) = 0;
+    setword(citem+4,-1);
+    setword(citem+8,0x7009011);
+    strcpy((citem+12),"Medium");
+  }
+  regs.r[0] = 21; /*MODE 21*/
+  _kernel_swi(OS_CheckModeValid,&regs,&regs);
+  if (regs.r[0] != -1)
+  {
+    citem = (citem+24);
+    *(citem) = 0;
+    setword(citem+4,-1);
+    setword(citem+8,0x7009011);
+    strcpy((citem+12),"High");
+  }
+  /*1280 x 1024*/
+  setword(cmodeblock, 1);
+  setword(cmodeblock + 4, 1280);
+  setword(cmodeblock + 8, 1024);
+  setword(cmodeblock + 12, 3); /*log2bpp*/
+  setword(cmodeblock + 16, -1);
+  setword(cmodeblock + 20, -1);
+  regs.r[0] = (int)cmodeblock; /*MODE block*/
+  _kernel_swi(OS_CheckModeValid,&regs,&regs);
+  if (regs.r[0] != -1)
+  {
+    /*host_mode1280x1024 = regs.r[1];*/ /*r1 = internal screen mode to use*/
+    citem = (citem+24);
+    *(citem) = 0;
+    setword(citem+4,-1);
+    setword(citem+8,0x7009011);
+    strcpy((citem+12),"1280 x 1024");
+  }
+  /*1600 x 1024*/
+  setword(cmodeblock, 1);
+  setword(cmodeblock + 4, 1600);
+  setword(cmodeblock + 8, 1024);
+  setword(cmodeblock + 12, 3); /*log2bpp*/
+  setword(cmodeblock + 16, -1);
+  setword(cmodeblock + 20, -1);
+  regs.r[0] = (int)cmodeblock; /*MODE block*/
+  _kernel_swi(OS_CheckModeValid,&regs,&regs);
+  if (regs.r[0] != -1)
+  {
+    /*host_mode1600x1024 = regs.r[1];*/ /*r1 = internal screen mode to use*/
+    citem = (citem+24);
+    *(citem) = 0;
+    setword(citem+4,-1);
+    setword(citem+8,0x7009011);
+    strcpy((citem+12),"1600 x 1024");
+  }
+  *(citem) = 128;
+
+  /*strcpy(cmachinecompact,NAME_MASTERCOMPACT);*/
+
+  strcpy(cmachinemenu,"Machine type");
+  setword(cmachinemenu+12,0x00070207);
+  *(cmachinemenu+16) = 208;
+  *(cmachinemenu+20) = 44;
+  *(cmachinemenu+24) = 0;
+  citem = (cmachinemenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),NAME_MODELB);
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),NAME_MODELBPLUS);
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),NAME_MASTER128);
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),NAME_MASTERCOMPACT);
+  /**(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009111);
+  setword(citem+12,(int)cmachinecompact);*/
+
+  strcpy(cconfigmenu,"Configure");
+  setword(cconfigmenu+12,0x00070207);
+  *(cconfigmenu+16) = 208;
+  *(cconfigmenu+20) = 44;
+  *(cconfigmenu+24) = 0;
+  citem = (cconfigmenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"ROMs");
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Drives");
+
+  strcpy(cresetmenu,"Reset");
+  setword(cresetmenu+12,0x00070207);
+  *(cresetmenu+16) = 208;
+  *(cresetmenu+20) = 44;
+  *(cresetmenu+24) = 0;
+  citem = (cresetmenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Rewind Tape");
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Machine");
+
+  strcpy(cmainmenu,APP_NAME);
+  setword(cmainmenu+12,0x00070207);
+  *(cmainmenu+16) = 208;
+  *(cmainmenu+20) = 44;
+  *(cmainmenu+24) = 0;
+  citem = (cmainmenu+28);
+  *(citem) = 0;
+  setword(citem+4,hinfo);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Info");
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,(int)cconfigmenu); /*;-1);*/
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Configure");
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Options...");
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,hsaveas);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Save");
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,(int)cresetmenu); /*-1);*/
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Reset");
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Quit");
+}
+
+int createwin(char *cwindow)
+{
+  int nwindow;
+  regs.r[0] = 0;
+  regs.r[1] = (int)ctempbuf;
+  regs.r[2] = niconbufb;/*+niconbufo);*/
+  regs.r[3] = niconbufe;
+  regs.r[4] = (int)cfontref;
+  regs.r[5] = (int)cwindow;
+  regs.r[6] = 0;
+  _kernel_swi(Wimp_LoadTemplate,&regs,&regs);
+  /*niconbufo = (regs.r[2]-(int)ciconbuf);*/
+  niconbufb = regs.r[2];
+  setword(ctempbuf+64,(int)csprites);
+  regs.r[0] = 0;
+  regs.r[1] = (int)ctempbuf;
+  _kernel_swi(Wimp_CreateWindow,&regs,&regs);
+  nwindow = regs.r[0];
+  return nwindow;
+}
+
+void windows(void)
+{
+  char ctemplate[80],cname[12];
+  char *cbuffer;
+  niconbufb = (int)ciconbuf;
+  niconbufe = niconbufb+sizeof(ciconbuf);
+  strcpy(ctemplate,"<BeebIt$Dir>.Resources.Templates");
+  regs.r[0] = 0;
+  regs.r[1] = (int)ctemplate;
+  _kernel_swi(Wimp_OpenTemplate,&regs,&regs);
+  strcpy(cname,"info");
+  hinfo = createwin(cname);
+  cbuffer = messagefilelookup(hmessages, "Version");
+  if (cbuffer != NULL)
+    writeicon(hinfo,3,cbuffer,0,0);
+  strcpy(cname,"roms");
+  hconfigroms = createwin(cname);
+  strcpy(cname,"drives");
+  hconfigdrives = createwin(cname);
+  strcpy(cname,"options");
+  hoptions = createwin(cname);
+  strcpy(cname,"saveas");
+  hsaveas = createwin(cname);
+  /*defaults*/
+  /*iconbitset(hoptions,8,22);
+  iconbitset(hoptions,9,22);
+  iconbitset(hoptions,10,22);*/
+  /*iconbitset(hoptions,14,23);*/
+
+  /*iconbitset(hoptions,22,23);
+  iconbitset(hoptions,23,23);
+  iconbitset(hoptions,24,23);*/
+
+  /*iconbitset(hoptions,JOYSTICK_OPTION,22);*/
+  /*setbutton(hoptions,13,TRUE);*/
+  /*writeicon(hsaveas,0,"file_bbc",0,0);*/
+  /*writeicon(hsaveas,1,"Snapshot",0,0);*/
+  fake_selectclick(hsaveas,file_tosave + 2); /*memory dump*/
+  /*iconbitset(hsaveas,3,22);*/ /*snapshot*/
+  _kernel_swi(Wimp_CloseTemplate,&regs,&regs);
+}
+
+void init(void)
+{
+  char cname[32];
+/*  nbytestogo = -1;
+  nbytessent = -1;*/
+  lquit = FALSE;
+  nmask = 1; /*no idle*/
+
+  /*messages*/
+  hmessages = messagefileopen("<BeebIt$Dir>.Resources.Messages");
+
+  /*load custom sprites*/
+  setword(csprites,sizeof(csprites));
+  setword(csprites+8,16);
+  regs.r[0] = 265; /*256+9*/
+  regs.r[1] = (int)csprites;
+  _kernel_swi(OS_SpriteOp,&regs,&regs);
+  strcpy(cname,"<BeebIt$Dir>.Resources.Sprites");
+  regs.r[0] = 266; /*256+10*/
+  regs.r[1] = (int)csprites;
+  regs.r[2] = (int)cname;
+  _kernel_swi(OS_SpriteOp,&regs,&regs);
+
+  strcpy(cname,APP_NAME);
+  setword(cusermessages,0x0);
+  regs.r[0] = 300;
+  regs.r[1] = 0x4B534154;
+  regs.r[2] = (int)cname;
+  regs.r[3] = (int)cusermessages;
+  _kernel_swi(Wimp_Initialise,&regs,&regs);
+  wimp_version = regs.r[0];
+  ntask = regs.r[1];
+
+  setword(b,-1);
+  setword(b+4,0);
+  setword(b+8,-16);
+  setword(b+12,122);
+  setword(b+16,88);
+  /*(b+4)  = 0;
+  *(b+8)  = 0;
+  *(b+12) = 68;
+  *(b+16) = 68;*/
+  /*setword(b+20,0x3002);*/
+  setword(b+20,0x1700310B);
+  /*setword(b+20,0x1701310B);*/
+  strcpy(ctext,NAME_MODELB);
+  ctext[strlen(NAME_MODELB)] = 0;
+  strcpy(csprite,"S!beebit");
+  csprite[8] = 0;
+  setword(b+24,(int)ctext);
+  setword(b+28,(int)csprite);
+  setword(b+32,0x10);
+  regs.r[1] = (int)b;
+  _kernel_swi(Wimp_CreateIcon,&regs,&regs);
+  nicon = regs.r[0];
+}
+
+int do_poll(int poll_mask)
+{
+  /*while (NOT lquit)*/
+  if (lquit)
+  {
+    beebitclosedown();
+    closedown();
+    /*strcpy(b,"BeebSound");
+    regs.r[0] = 4;
+    regs.r[1] = (int)b;
+    _kernel_swi(OS_Module,&regs,&regs);*/
+
+    /*_kernel_oscli("%RMKill BeebSound");*/
+    /*_kernel_oscli("%UnSet BeebIt$Dir");*/
+    exit(EXIT_SUCCESS);
+  }
+else
+  {
+    int bit;
+
+    regs.r[0] = nmask;
+    regs.r[1] = (int)b;
+    _kernel_swi(Wimp_Poll,&regs,&regs);
+    /*_kernel_swi(OS_ReadMonotonicTime,&regs,&regs);
+    ntime = regs.r[0];
+    regs.r[0] = nmask;
+    regs.r[1] = (int)b;
+    regs.r[2] = ntime+nspeed;
+    _kernel_swi(Wimp_PollIdle,&regs,&regs);*/
+
+    bit = 1<<regs.r[0];
+    if ((bit & poll_mask) >0) return TRUE;
+    switch(regs.r[0])
+    {
+      case 17:
+      case 18:
+        message();
+        break;
+      case 19:
+        break;
+      case 1:
+        redraw();
+        break;
+      case 2:
+        openwindow();
+        break;
+      case 3:
+        closewindow();
+        break;
+      case 4:
+        break;
+      case 5:
+        break;
+      case 6:
+        button();
+        break;
+      case 8:
+        keypress();
+        break;
+      case 9:
+        select();
+        break;
+      case 7:
+        dragbox();
+        /*regs.r[0] = ncurmenu;
+        regs.r[1] = -1;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);*/
+        break;
+      case 10:
+        break;
+      case 11:
+        break;
+      case 12:
+        break;
+      case 13:
+        break;
+      case 14:
+        break;
+      case 15:
+        break;
+      case 16:
+        break;
+      case 0:
+        null();
+        break;
+    }
+  }
+  return FALSE;
+}
+
+/*int main(void)*/
+int main(int argc,char *argv[])
+{
+  int i;
+
+  init();
+  windows();
+  menus();
+  beebitinit();
+  if (argc > 1)
+  {
+    for (i = 1; i < argc; i++)
+    {
+      if (argv[i][0] == 0x2D) /*-*/
+      {
+        if (strcmp(argv[i]+1,"BBCB") == 0)
+          beebit_machinetype = MACHINE_MODELB;
+        else if (strcmp(argv[i]+1,"BBCB+") == 0)
+          beebit_machinetype = MACHINE_MODELBPLUS;
+        else if (strcmp(argv[i]+1,"Master128") == 0)
+          beebit_machinetype = MACHINE_MASTER128;
+        else if (strcmp(argv[i]+1,"Master Compact") == 0)
+          beebit_machinetype = MACHINE_COMPACT;
+      }
+      else
+        strcpy(beebit_discimage[0],argv[i]);
+    }
+  }
+  setup();
+
+  if (argc > 1)
+  {
+    storewimpmode();
+    gobeebit();
+  }
+
+  while (TRUE) do_poll(0);  /*infinite loop*/
+}

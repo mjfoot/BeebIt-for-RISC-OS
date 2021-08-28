@@ -1,0 +1,1295 @@
+/*>8271.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*reads/writes one byte every 80us (160 2MHz cycles)*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "6502cpu.h"
+#include "8271fdc.h"
+#include "beebit.h"
+#include "keyboard.h"
+
+#ifdef __DEVELOP__
+  extern FILE *htrace;
+#else
+  #ifdef __DEBUG__
+    extern FILE *htrace;
+  #endif
+#endif
+
+/*Intel 8271*/
+/*int i8271_writeprotect[2];*/
+char i8271_commandreg;
+char i8271_statusreg;
+char i8271_resultreg;
+char i8271_datareg;
+char i8271_select;
+char i8271_scansector;
+char i8271_scancountmsb;
+char i8271_scancountlsb;
+char i8271_currenttrack[2];
+char i8271_modereg;
+char i8271_outputport;
+char i8271_inputport;
+int i8271_steprate;
+int i8271_headsettletime;
+int i8271_indexcount;
+int i8271_headloadtime;
+char i8271_badtrack[2][2]; /*drive,track*/
+char i8271_parameter[16]; /*heaps more than we need*/
+char i8271_data[0x1000]; /*hope we don't get any sectors > 4096 bytes*/
+int i8271_timer;
+int i8271_writestart; /*indicates when writing starts*/
+
+int ncurrentdrive,CurrentTrack, CurrentSector, SectorsToGo, SectorLength, ByteWithinSector;
+
+int ncommandid,ncommandparams;
+int PresentParam=0; /* From 0 */
+int ninerror;
+
+/* The following table is used to parse commands from the command number written into
+the command register - it can't distinguish between subcommands selected from the
+first parameter */
+/*command number, mask, number of parameters*/
+int acommandlookup[20][2] = {
+  {0x00, 5}, /*Scan Data (Variable Length/Multi-Record)*/
+  {0x04, 5}, /*Scan Data & deleted data (Variable Length/Multi-Record)*/
+  {0x0A, 2}, /*Write Data (128 byte/single record)*/
+  {0x0B, 3}, /*Write Data (Variable Length/Multi-Record)*/
+  {0x0E, 2}, /*Write Deleted Data*/
+  {0x0F, 3}, /*Write Deleted Data*/
+  {0x12, 2}, /*Read Data (128 byte/single record)*/
+  {0x13, 3}, /*Read Data (Variable Length/Multi-Record)*/
+  {0x16, 2},
+  {0x17, 3}, /*Read Data and Deleted Data (Variable Length/Multi-Record)*/
+  {0x1B, 3}, /*Read ID*/
+  {0x1E, 2},
+  {0x1F, 3}, /*Verify Data and Deleted Data (Variable Length/Multi-Record)*/
+  {0x23, 5}, /*Format*/
+  {0x29, 1}, /*Seek*/
+  {0x2C, 0}, /*Read drive status*/
+  {0x35, 4}, /*Specify*/
+  {0x3A, 2}, /*Write special registers*/
+  {0x3D, 1}, /*Read special registers*/
+  {0,    0}  /*Terminator due to 0 mask matching all*/
+};
+
+void i8271setnmi(void)
+{
+  if (i8271_statusreg & 8)
+    beebit_nmi = TRUE; /*|= (1<<0);*/
+  else
+    beebit_nmi = FALSE; /*&= ~(1<<0);*/
+  /*fprintf(htrace,"NMI=&%X\n",nmiinterrupt);*/
+}
+
+void i8271reset(void)
+{
+  /*static onetime_initdisc=0;
+  char *DiscString;*/
+  i8271_resultreg = 0;
+  i8271_statusreg = 0;
+  i8271_writestart = FALSE;
+  i8271setnmi();
+  ncommandid=-1;
+  ncommandparams=0;
+  PresentParam=0;
+  ninerror = FALSE;
+  i8271_scansector = 0;
+  i8271_scancountmsb = 0;
+  i8271_scancountlsb = 0;
+  i8271_modereg = 0;
+  i8271_outputport = 0;
+  i8271_inputport = 0;
+  i8271_timer = 0;
+
+  /*0/1 for surface number*/
+  i8271_currenttrack[0] = 0;
+  i8271_currenttrack[1] = 0;
+  /*[surface 0/1][badtrack 0/1]*/
+  i8271_badtrack[0][0] = 0xFF;
+  i8271_badtrack[0][1] = 0xFF;
+  i8271_badtrack[1][0] = 0xFF;
+  i8271_badtrack[1][1] = 0xFF;
+}
+
+void i8271closedown(void)
+{
+  /*if (i8271_driveimage[0])
+    fclose(i8271_driveimage[0]);
+  if (i8271_driveimage[1])
+    fclose(i8271_driveimage[1]);*/
+}
+
+void inerror(int nerror)
+{
+  ninerror = nerror;
+  i8271_statusreg = 0x80;
+  i8271setnmi();
+  i8271_timer += (r6502_cyclestogo+50);
+}
+
+void i8271readimage(FILE *hfile, int nlocation, int nlength)
+{
+  if (hfile != NULL)
+  {
+    fseek(hfile,nlocation,SEEK_SET);
+    fread(i8271_data,1,nlength,hfile);
+  }
+}
+
+int discload(void)
+{
+  /*ncurrentdrive = drive number (0-3)*/
+  int ndrive, nlocation;
+  if (beebit_imagetype[ncurrentdrive] != DFS_NONE)
+  {
+    ndrive = ncurrentdrive;
+    switch (beebit_imagetype[ndrive])
+    {
+      case DFS_SSD:
+        nlocation = (CurrentTrack*DFS_SECTORS_PER_TRACK)+CurrentSector;
+        break;
+      case DFS_DSD_TRACK:
+        ndrive = ((ndrive>>1) & 1);
+        nlocation = ((CurrentTrack*2)*DFS_SECTORS_PER_TRACK)+CurrentSector;
+        nlocation += (ndrive*DFS_SECTORS_PER_TRACK);
+        ndrive = (ncurrentdrive & 1);
+        break;
+      case DFS_DSD_SIDE:
+        ndrive = ((ndrive>>1) & 1);
+        nlocation = (CurrentTrack*DFS_SECTORS_PER_TRACK)+CurrentSector;
+        if (ndrive > 0)
+          nlocation += beebit_sectorcount[ncurrentdrive];
+        ndrive = (ncurrentdrive & 1);
+        break;
+    }
+    nlocation = nlocation*SectorLength;
+    /*inttohex8(CurrentTrack);
+    bbcvdu(32);
+    inttohex8(CurrentSector);
+    bbcvdu(32);
+    inttohex8(SectorLength);
+    bbcvdu(32);
+    inttohex8(nlocation);
+    bbcvdu(13);
+    bbcvdu(10);*/
+    /*if (nlocation > 0x32000)
+      return (FALSE);
+    else
+    {*/
+      i8271readimage(beebit_driveimage[ndrive], nlocation, SectorLength);
+      return (TRUE);
+    /*}*/
+  }
+  else
+    return (FALSE);
+}
+
+void discsave(void)
+{
+  /*ncurrentdrive = drive number (0-3)*/
+  int ndrive, nlocation;
+  if (beebit_imagetype[ncurrentdrive] != DFS_NONE)
+  {
+    ndrive = ncurrentdrive;
+    switch (beebit_imagetype[ndrive])
+    {
+      case DFS_SSD:
+        nlocation = (CurrentTrack*DFS_SECTORS_PER_TRACK)+CurrentSector;
+        break;
+      case DFS_DSD_TRACK:
+        ndrive = ((ndrive>>1) & 1);
+        nlocation = ((CurrentTrack*2)*DFS_SECTORS_PER_TRACK)+CurrentSector;
+        nlocation += (ndrive*DFS_SECTORS_PER_TRACK);
+        ndrive = (ncurrentdrive & 1);
+        break;
+      case DFS_DSD_SIDE:
+        ndrive = ((ndrive>>1) & 1);
+        nlocation = (CurrentTrack*DFS_SECTORS_PER_TRACK)+CurrentSector;
+        if (ndrive > 0)
+          nlocation += beebit_sectorcount[ncurrentdrive];
+        ndrive = (ncurrentdrive & 1);
+        break;
+    }
+    nlocation = nlocation*SectorLength;
+    fseek(beebit_driveimage[ndrive],nlocation,SEEK_SET);
+    fwrite(i8271_data,1,SectorLength,beebit_driveimage[ndrive]);
+  }
+}
+
+/* write data interrupt
+ */
+void i8271interrupt0B(void)
+{
+  int nlastbyte;
+  if (SectorsToGo < 0)
+  {
+    /*result and interrupt*/
+    i8271_statusreg = 0x18;
+    i8271setnmi();
+    return;
+  }
+  i8271_resultreg = 0;
+  nlastbyte = FALSE;
+  if (i8271_writestart)
+    i8271_writestart = FALSE;
+  else
+  {
+    i8271_data[ByteWithinSector++] = i8271_datareg;
+    if (ByteWithinSector >= SectorLength)
+    {
+      ByteWithinSector = 0;
+      /* I don't know if this can cause the thing to step - I presume not for the moment */
+      /*fprintf(htrace,"writeinterrupt1 STG=%u\n",SectorsToGo);*/
+      /*fprintf(htrace,"WRITE %u %u %u\n",CurrentTrack,CurrentSector,SectorsToGo);*/
+      discsave();
+      /*SectorsToGo--;*/
+      if (--SectorsToGo)
+      {
+        CurrentSector++;
+      }
+      else
+      {
+        /*last sector done*/
+        nlastbyte = TRUE;
+        /*turn drive select off*/
+        /*i8271_select = (i8271_select & !(1<<ncurrentdrive));*/
+        i8271_statusreg = 0x10;
+        SectorsToGo = -1; /* To let us bail out */
+        i8271setnmi();
+        /*i8271_timer += i8271_steprate;*/
+        /*i8271_timer += (r6502_cyclestogo+160);*/
+        i8271_timer += 160;
+      }
+    }
+  }
+  /*fprintf(htrace,"LAST BYTE=&%X\n",nlastbyte);
+  fprintf(htrace,"writeinterrupt2 STG=%u\n",SectorsToGo);*/
+  if (!nlastbyte)
+  {
+    i8271_statusreg = 0x8C; /* Command busy, */
+    i8271setnmi();
+    i8271_timer += 160; /*(r6502_cyclestogo+160);*/
+  }
+  /*fprintf(htrace,"RESULTREG=%u\n",i8271_resultreg);*/
+}
+
+/* read interrupt
+ */
+void i8271interrupt13(void)
+{
+  int nlastbyte;
+  if (SectorsToGo < 0)
+  {
+    i8271_statusreg = 0x18; /* Result and interrupt */
+    i8271setnmi();
+    return;
+  }
+
+  nlastbyte = FALSE;
+  i8271_datareg = i8271_data[ByteWithinSector++];
+  i8271_resultreg = 0;
+  if (ByteWithinSector >= SectorLength)
+  {
+    ByteWithinSector = 0;
+    /*I don't know if this can cause the thing to step - I presume not for the moment*/
+    if (--SectorsToGo)
+    {
+      CurrentSector++;
+      /*fprintf(htrace,"READ %u %u\n",CurrentTrack,CurrentSector);*/
+      discload();
+    }
+    else
+    {
+      /* Last sector done */
+      nlastbyte = TRUE;
+      /*turn drive select off*/
+      i8271_select = (i8271_select & !(1<<ncurrentdrive));
+      i8271_statusreg = 0x9C;
+      SectorsToGo = -1; /* To let us bail out */
+      i8271setnmi();
+      /*i8271_timer += i8271_steprate;*/
+      /*i8271_timer += (r6502_cyclestogo+160);*/
+      i8271_timer += 160;
+    }
+  }
+
+  if (!nlastbyte)
+  {
+    i8271_statusreg = 0x8C; /* Command busy, */
+    i8271setnmi();
+    i8271_timer += (r6502_cyclestogo+160);
+  }
+}
+
+/* verify data and deleted data
+ */
+void i8271interrupt1F(void)
+{
+  /*result with interrupt*/
+  i8271_statusreg = 0x18;
+  i8271setnmi();
+  /*all ok*/
+  i8271_resultreg = 0;
+}
+
+/*format interrupt
+ */
+void i8271interrupt23(void)
+{
+  int nlastbyte;
+  if (SectorsToGo < 0)
+  {
+    /*result and interrupt*/
+    i8271_statusreg = 0x18;
+    i8271setnmi();
+    return;
+  }
+  i8271_resultreg = 0;
+  nlastbyte = FALSE;
+  if (i8271_writestart)
+    i8271_writestart = FALSE;
+  else
+  {
+    i8271_data[ByteWithinSector++] = 0xE5;
+    if (ByteWithinSector >= SectorLength)
+    {
+      ByteWithinSector = 0;
+      /* I don't know if this can cause the thing to step - I presume not for the moment */
+      /*fprintf(htrace,"writeinterrupt1 STG=%u\n",SectorsToGo);*/
+      /*fprintf(htrace,"WRITE %u %u %u\n",CurrentTrack,CurrentSector,SectorsToGo);*/
+      discsave();
+      /*SectorsToGo--;*/
+      if (--SectorsToGo)
+      {
+        CurrentSector++;
+      }
+      else
+      {
+        /*last sector done*/
+        nlastbyte = TRUE;
+        /*turn drive select off*/
+        /*i8271_select = (i8271_select & !(1<<ncurrentdrive));*/
+        i8271_statusreg = 0x10;
+        SectorsToGo = -1; /* To let us bail out */
+        i8271setnmi();
+        /*i8271_timer += i8271_steprate;*/
+        /*i8271_timer += (r6502_cyclestogo+160);*/
+        i8271_timer += 160;
+      }
+    }
+  }
+  /*fprintf(htrace,"LAST BYTE=&%X\n",nlastbyte);
+  fprintf(htrace,"writeinterrupt2 STG=%u\n",SectorsToGo);*/
+  if (!nlastbyte)
+  {
+    i8271_statusreg = 0x8C; /* Command busy, */
+    i8271setnmi();
+    i8271_timer += 160; /*(r6502_cyclestogo+160);*/
+  }
+  /*fprintf(htrace,"RESULTREG=%u\n",i8271_resultreg);*/
+}
+
+/* seek interrupt
+ */
+void i8271interrupt29(void)
+{
+  /*result with interrupt*/
+  i8271_statusreg = 0x18;
+  i8271setnmi();
+  /*all ok*/
+  i8271_resultreg = 0;
+}
+
+void i8271poll(void)
+{
+  /*fprintf(htrace,"POLL &%X\n",acommandlookup[ncommandid][0]);*/
+  i8271_statusreg |= 8;
+  if (ninerror)
+  {
+    i8271_resultreg = ninerror;
+    i8271_statusreg = 0x18;
+    i8271setnmi();
+    ninerror = 0;
+  }
+  else
+  {
+    i8271setnmi();
+    #ifdef __DEBUG__
+      fprintf(htrace,"8271poll &%X\n",acommandlookup[ncommandid][0]);
+    #endif
+    switch (acommandlookup[ncommandid][0])
+    {
+      case 0x00:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 00\n");
+        #endif
+        break;
+      case 0x04:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 04\n");
+        #endif
+        break;
+      case 0x0A:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 0A\n");
+        #endif
+        break;
+      case 0x0B:
+        /*write data interrupt*/
+        i8271interrupt0B();
+        break;
+      case 0x0E:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 0E\n");
+        #endif
+        break;
+      case 0x0F:
+        /*write deleted data*/
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 0F\n");
+        #endif
+        break;
+      case 0x12:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 12\n");
+        #endif
+        break;
+      case 0x13:
+        /*read data*/
+        i8271interrupt13();
+        break;
+      case 0x16:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 16\n");
+        #endif
+        break;
+      case 0x17:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 17\n");
+        #endif
+        break;
+      case 0x1B:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 1B\n");
+        #endif
+         break;
+      case 0x1E:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 1E\n");
+        #endif
+        break;
+      case 0x1F:
+        /*verify data and deleted data*/
+        i8271interrupt1F();
+        break;
+      case 0x23:
+        /*format interrupt*/
+        i8271interrupt23();
+        break;
+      case 0x29:
+        /*seek interrupt*/
+        i8271interrupt29();
+        break;
+      case 0x2C:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 2C\n");
+        #endif
+        break;
+      case 0x35:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 35\n");
+        #endif
+        break;
+      case 0x3A:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 3A\n");
+        #endif
+        break;
+      case 0x3D:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"NOT DONE YET! 3D\n");
+        #endif
+        break;
+      default:
+        #ifdef __DEVELOP__
+          fprintf(htrace,"UNKNOWN &%X\n",ncommandid);
+        #endif
+        break;
+    }
+  }
+}
+
+/* scan data var len
+ *
+ * param 0 = track number
+ * param 1 = sector number
+ * param 2 = length/no. of sectors
+ * param 3 = scan type
+ * param 4 = field length
+ */
+void i8271command00(void)
+{
+  int ndrive;
+
+  switch (i8271_select)
+  {
+    case 0:
+      /*drive not ready*/
+      inerror(0x10);
+      return;
+      break;
+    case 1:
+      ncurrentdrive = 0;
+      break;
+    case 2:
+      ncurrentdrive = 1;
+      break;
+    default:
+      /*sector not found*/
+      inerror(0x1E);
+      return;
+      break;
+  }
+
+  ndrive = ncurrentdrive;
+  if (beebit_imagetype[ncurrentdrive] == DFS_SSD)
+    ndrive += ((i8271_outputport & 0x20)>>4);
+
+  if (!beebit_driveimage[ndrive])
+  {
+    /*sector not found*/
+    inerror(0x1E);
+    return;
+  }
+
+  ncurrentdrive += ((i8271_outputport & 0x20)>>4);
+}
+
+/* write data
+ */
+void i8271command0B(void)
+{
+  int ndrive;
+
+  switch (i8271_select)
+  {
+    case 0:
+      /*drive not ready*/
+      inerror(0x10);
+      return;
+      break;
+    case 1:
+      ncurrentdrive = 0;
+      break;
+    case 2:
+      ncurrentdrive = 1;
+      break;
+    default:
+      /*sector not found*/
+      inerror(0x1E);
+      return;
+      break;
+  }
+
+  ndrive = ncurrentdrive;
+  if (beebit_imagetype[ncurrentdrive] == DFS_SSD)
+    ndrive += ((i8271_outputport & 0x20)>>4);
+
+  if (!beebit_driveimage[ndrive])
+  {
+    /*drive not ready*/
+    inerror(0x10);
+    return;
+  }
+  /*check write protect*/
+  if (!beebit_discwritable[ndrive])
+  {
+    /*drive write protected*/
+    inerror(0x12);
+    return;
+  }
+
+  i8271_currenttrack[ncurrentdrive] = i8271_parameter[0];
+
+  ncurrentdrive += ((i8271_outputport & 0x20)>>4);
+
+  CurrentTrack = i8271_parameter[0];
+  CurrentSector = i8271_parameter[1];
+  SectorsToGo = i8271_parameter[2] & 31;
+  SectorLength = 1<<(7+((i8271_parameter[2] >> 5) & 7));
+  ByteWithinSector=0;
+  i8271_writestart = TRUE;
+  /*command busy*/
+  i8271_statusreg = 0x80;
+  i8271setnmi();
+  i8271_timer += (r6502_cyclestogo+160);
+}
+
+/* readdatavarlen
+ *
+ * param 0 = track number
+ * param 1 = sector number
+ * param 2 = length/no. of sectors
+ */
+void i8271command13(void)
+{
+  int ndrive;
+
+  switch (i8271_select)
+  {
+    case 0:
+      /*drive not ready*/
+      inerror(0x10);
+      return;
+      break;
+    case 1:
+      ncurrentdrive = 0;
+      break;
+    case 2:
+      ncurrentdrive = 1;
+      break;
+    default:
+      /*sector not found*/
+      inerror(0x1E);
+      return;
+      break;
+  }
+
+  ndrive = ncurrentdrive;
+  if (beebit_imagetype[ncurrentdrive] == DFS_SSD)
+    ndrive += ((i8271_outputport & 0x20)>>4);
+
+  if (!beebit_driveimage[ndrive])
+  {
+    /*sector not found*/
+    inerror(0x1E);
+    return;
+  }
+
+  i8271_currenttrack[ncurrentdrive] = CurrentTrack;
+
+  ncurrentdrive += ((i8271_outputport & 0x20)>>4);
+
+  CurrentTrack = i8271_parameter[0];
+  CurrentSector = i8271_parameter[1];
+  SectorsToGo = i8271_parameter[2] & 31;
+  SectorLength = 1<<(7+((i8271_parameter[2] >> 5) & 7));
+
+  /*fprintf(htrace,"TR: &%X SR: &%X\n",CurrentTrack,CurrentSector);*/
+  /*fprintf(htrace,"SL: &%X STG: &%X\n",SectorLength,SectorsToGo);*/
+
+  if (!discload())
+  {
+    /*sector not found*/
+    inerror(0x1E);
+    return;
+  }
+
+  /*if (ValidateSector(CommandStatus.CurrentSectorPtr,CommandStatus.TrackAddr,CommandStatus.SectorLength))
+  {*/
+    ByteWithinSector = 0;
+    i8271_statusreg = 0x80; /* Command busy */
+    i8271setnmi();
+    i8271_timer += (r6502_cyclestogo+160);
+  /*}
+  else
+  {
+    DoErr(0x1e);*/ /* Sector not found */
+  /*}*/
+}
+
+/* verify data and deleted data
+ *
+ * param 0 = track number
+ * param 1 = sector number
+ * param 2 = length/no. of sectors
+ */
+void i8271command1F(void)
+{
+  int ndrive;
+
+  switch (i8271_select)
+  {
+    case 0:
+      /*drive not ready*/
+      inerror(0x10);
+      return;
+      break;
+    case 1:
+      ncurrentdrive = 0;
+      break;
+    case 2:
+      ncurrentdrive = 1;
+      break;
+    default:
+      /*sector not found*/
+      inerror(0x1E);
+      return;
+      break;
+  }
+
+  ndrive = ncurrentdrive;
+  if (beebit_imagetype[ncurrentdrive] == DFS_SSD)
+    ndrive += ((i8271_outputport & 0x20)>>4);
+
+  if (!beebit_driveimage[ndrive])
+  {
+    /*sector not found*/
+    inerror(0x1E);
+    return;
+  }
+
+  i8271_currenttrack[ncurrentdrive] = i8271_parameter[0];
+
+  ncurrentdrive += ((i8271_outputport & 0x20)>>4);
+
+  /*check track and sector range*/
+
+  /*command busy*/
+  i8271_statusreg = 0x80;
+  i8271setnmi();
+  i8271_timer += (r6502_cyclestogo+100);
+}
+
+/* format command
+ * param 0 = track number
+ * param 1 = sector number
+ * param 2 = length/no. of sectors
+ */
+void i8271command23(void)
+{
+  int ndrive;
+
+  switch (i8271_select)
+  {
+    case 0:
+      /*drive not ready*/
+      inerror(0x10);
+      return;
+      break;
+    case 1:
+      ncurrentdrive = 0;
+      break;
+    case 2:
+      ncurrentdrive = 1;
+      break;
+    default:
+      /*sector not found*/
+      inerror(0x1E);
+      return;
+      break;
+  }
+
+  ndrive = ncurrentdrive;
+  if (beebit_imagetype[ncurrentdrive] == DFS_SSD)
+    ndrive += ((i8271_outputport & 0x20)>>4);
+
+  if (!beebit_driveimage[ndrive])
+  {
+    /*drive not ready*/
+    inerror(0x10);
+    return;
+  }
+  /*check write protect*/
+  if (!beebit_discwritable[ndrive])
+  {
+    /*drive write protected*/
+    inerror(0x12);
+    return;
+  }
+
+  i8271_currenttrack[ncurrentdrive] = i8271_parameter[0];
+
+  ncurrentdrive += ((i8271_outputport & 0x20)>>4);
+
+  CurrentTrack = i8271_parameter[0];
+  CurrentSector = 0; /*i8271_parameter[1];*/
+  SectorsToGo = i8271_parameter[2] & 31;
+  SectorLength = 1<<(7+((i8271_parameter[2] >> 5) & 7));
+  ByteWithinSector=0;
+  i8271_writestart = TRUE;
+  /*command busy*/
+  i8271_statusreg = 0x80;
+  i8271setnmi();
+  i8271_timer += (r6502_cyclestogo+160);
+}
+
+/* seek command
+ */
+void i8271command29(void)
+{
+  int ndrive;
+
+  switch (i8271_select)
+  {
+    case 0:
+      /*drive not ready*/
+      inerror(0x10);
+      return;
+      break;
+    case 1:
+      ncurrentdrive = 0;
+      break;
+    case 2:
+      ncurrentdrive = 1;
+      break;
+    default:
+      /*sector not found*/
+      inerror(0x1E);
+      return;
+      break;
+  }
+
+  ndrive = ncurrentdrive;
+  if (beebit_imagetype[ncurrentdrive] == DFS_SSD)
+    ndrive += ((i8271_outputport & 0x20)>>4);
+
+  if (!beebit_driveimage[ndrive])
+  {
+    /*sector not found*/
+    inerror(0x1E);
+    return;
+  }
+
+  i8271_currenttrack[ncurrentdrive] = i8271_parameter[0];
+
+  ncurrentdrive += ((i8271_outputport & 0x20)>>4);
+
+  i8271_statusreg = 0x80; /*command busy*/
+  i8271setnmi();
+  i8271_timer += (r6502_cyclestogo+100);
+}
+
+/* read drive status command
+ * b0 = count/optional
+ * b1 = track 0
+ * b2 = ready 0
+ * b3 = write protect
+ * b4 = index
+ * b5 = write fault
+ * b6 = ready 1
+ */
+void i8271command2C(void)
+{
+  int Track0,WriteProt;
+  switch (i8271_select)
+  {
+    case 1:
+      Track0 = (i8271_currenttrack[0] == 0);
+      WriteProt = (!beebit_discwritable[0]);
+      break;
+    case 2:
+      Track0 = (i8271_currenttrack[1] == 0);
+      WriteProt = (!beebit_discwritable[1]);
+      break;
+    default:
+      Track0 = TRUE;
+      WriteProt = TRUE;
+      break;
+  }
+  i8271_resultreg = 0x80;
+  if (i8271_select & 0x02)
+    i8271_resultreg |= 0x40;
+  if (WriteProt)
+    i8271_resultreg |= 0x08;
+  if (i8271_select & 0x01)
+    i8271_resultreg |= 0x04;
+  if (Track0)
+    i8271_resultreg |= 0x02;
+
+  /*fprintf(htrace,"RES:&%X\n",i8271_resultreg);*/
+  i8271_statusreg |= 0x10; /* Result */
+}
+
+void i8271command35(void)
+{
+  /*specify command*/
+  /*fprintf(htrace,"SPECIFY &%X &%X\n",i8271_parameter[0],i8271_parameter[1]);*/
+  switch (i8271_parameter[0])
+  {
+    case 0x0D:
+      /*specify initialization*/
+      i8271_steprate = (i8271_parameter[1] << 1); /*2MHz clock*/
+      i8271_headsettletime = (i8271_parameter[2] << 1); /*2MHz clock*/
+      i8271_indexcount = ((i8271_parameter[3] & 0xF0) >> 4);
+      i8271_headloadtime = ((i8271_parameter[3] & 0x0F) << 3); /*2MHz clock*/
+      break;
+    case 0x10:
+      /*load bad tracks surface 0*/
+      i8271_badtrack[0][0] = i8271_parameter[1];
+      i8271_badtrack[0][1] = i8271_parameter[2];
+      break;
+    case 0x18:
+      /*load bad tracks surface 1*/
+      i8271_badtrack[1][0] = i8271_parameter[1];
+      i8271_badtrack[1][1] = i8271_parameter[2];
+      break;
+  }
+}
+
+/* write special command
+ */
+void i8271command3A(void)
+{
+  /*fprintf(htrace,"WS:&%X &%X\n",i8271_parameter[0],i8271_parameter[1]);*/
+  switch (i8271_parameter[0])
+  {
+    case 0x06:
+      i8271_scansector = i8271_parameter[1];
+      break;
+    case 0x14:
+      i8271_scancountmsb = i8271_parameter[1];
+      break;
+    case 0x13:
+      i8271_scancountlsb = i8271_parameter[1];
+      break;
+    case 0x12:
+      i8271_currenttrack[0]=i8271_parameter[1];
+      break;
+    case 0x1a:
+      i8271_currenttrack[1]=i8271_parameter[1];
+      break;
+    case 0x17:
+      i8271_modereg = i8271_parameter[1];
+      break;
+    case 0x23:
+      /*drive control output port*/
+      /*b0 = write enable
+       *b1 = seek/step
+       *b2 = direction
+       *b3 = load head
+       *b4 = low head current
+       *b5 = write fault reset (used to indicate head)
+       *b6 = select 0
+       *b7 = select 1*/
+      /*drive 0 = &48
+       *drive 1 = &88
+       *drive 2 = &68
+       *drive 3 = &A8*/
+      i8271_outputport = i8271_parameter[1];
+      i8271_select = (i8271_outputport & 0xC0)>>6;
+      break;
+    case 0x22:
+      i8271_inputport = i8271_parameter[1];
+      break;
+    case 0x10:
+      i8271_badtrack[0][0] = i8271_parameter[1];
+      break;
+    case 0x11:
+      i8271_badtrack[0][1] = i8271_parameter[1];
+      break;
+    case 0x18:
+      i8271_badtrack[1][0] = i8271_parameter[1];
+      break;
+    case 0x19:
+      i8271_badtrack[1][1] = i8271_parameter[1];
+      break;
+  }
+}
+
+void i8271command3D(void)
+{
+  /*read special command*/
+  switch(i8271_parameter[0])
+  {
+    case 0x06:
+      i8271_resultreg = i8271_scansector;
+      break;
+    case 0x14:
+      i8271_resultreg = i8271_scancountmsb;
+      break;
+    case 0x13:
+      i8271_resultreg = i8271_scancountlsb;
+      break;
+    case 0x12:
+      i8271_resultreg = i8271_currenttrack[0];
+      break;
+    case 0x1a:
+      i8271_resultreg = i8271_currenttrack[1];
+      break;
+    case 0x17:
+      i8271_resultreg = i8271_modereg;
+      break;
+    case 0x23:
+      i8271_resultreg = i8271_outputport;
+      break;
+    case 0x22:
+      i8271_resultreg = i8271_inputport;
+      break;
+    case 0x10:
+      i8271_resultreg = i8271_badtrack[0][0];
+      break;
+    case 0x11:
+      i8271_resultreg = i8271_badtrack[0][1];
+      break;
+    case 0x18:
+      i8271_resultreg = i8271_badtrack[1][0];
+      break;
+    case 0x19:
+      i8271_resultreg = i8271_badtrack[1][1];
+      break;
+  }
+
+  i8271_statusreg |= 16; /* Result reg full */
+  i8271setnmi();
+}
+
+void callcommand(void)
+{
+  #ifdef __DEBUG__
+  #endif
+  switch (acommandlookup[ncommandid][0])
+  {
+    case 0x00:
+      /*Scan Data (Variable Length/Multi-Record)*/
+      i8271_select = (i8271_commandreg & 0xC0)>>6;
+      i8271command00();
+      break;
+    case 0x04:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 04\n");
+      #endif
+      break;
+    case 0x0A:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 0A\n");
+      #endif
+      break;
+    case 0x0B:
+      /*write data*/
+      i8271_select = (i8271_commandreg & 0xC0)>>6;
+      i8271command0B();
+      break;
+    case 0x0E:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 0E\n");
+      #endif
+      break;
+    case 0x0F:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 0F\n");
+      #endif
+      break;
+    case 0x12:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 12\n");
+      #endif
+      break;
+    case 0x13:
+      /*read data*/
+      i8271_select = (i8271_commandreg & 0xC0)>>6;
+      i8271command13();
+      break;
+    case 0x16:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 16\n");
+      #endif
+      break;
+    case 0x17:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 17\n");
+      #endif
+      break;
+    case 0x1B:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 1B\n");
+      #endif
+      break;
+    case 0x1E:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 1E\n");
+      #endif
+      break;
+    case 0x1F:
+      /*verify data and deleted data*/
+      i8271_select = (i8271_commandreg & 0xC0)>>6;
+      i8271command1F();
+      break;
+    case 0x23:
+      /*format*/
+      #ifdef __DEVELOP__
+        fprintf(htrace,"NOT DONE YET! 23\n");
+      #endif
+      i8271command23();
+      break;
+    case 0x29:
+      /*seek*/
+      i8271_select = (i8271_commandreg & 0xC0)>>6;
+      i8271command29();
+      break;
+    case 0x2C:
+      /*read drive status*/
+      i8271command2C();
+      break;
+    case 0x35:
+      /*specify*/
+      i8271command35();
+      break;
+    case 0x3A:
+      i8271command3A();
+      break;
+    case 0x3D:
+      /*readspecialcommand*/
+      i8271command3D();
+      break;
+    default:
+      #ifdef __DEVELOP__
+        fprintf(htrace,"UNKNOWN &%X\n",ncommandid);
+      #endif
+      break;
+  }
+}
+
+void i8271commandregwrite(char nvalue)
+{
+  /*command register
+   *b0-b5=command
+   *b6-b7=drive select
+   */
+  int i;
+  i8271_commandreg = nvalue;
+  i = 0;
+  while (i < 20 AND acommandlookup[i][0] != (i8271_commandreg & 0x3F))
+    i++;
+  if (i < 20)
+  {
+    #ifdef __DEBUG__
+      fprintf(htrace,"LU: &%X\n",acommandlookup[i][0]);
+    #endif
+    ncommandid = i;
+    ncommandparams = acommandlookup[i][1];
+    PresentParam = 0;
+    i8271_statusreg |= 0x90; /*Observed on beeb for read special*/
+    i8271setnmi();
+    if (ncommandparams == 0)
+    {
+      i8271_statusreg &= 0x7E;
+      i8271setnmi();
+      callcommand();
+    }
+  }
+}
+
+void i8271paramregwrite(char nvalue)
+{
+  if (PresentParam < ncommandparams)
+  {
+    #ifdef __DEBUG__
+      fprintf(htrace,"PA: &%X &%X\n",PresentParam,nvalue);
+    #endif
+    i8271_parameter[PresentParam++] = nvalue;
+    i8271_statusreg &= 0xFE; /* Observed on beeb */
+    i8271setnmi();
+    if (PresentParam >= ncommandparams)
+    {
+      i8271_statusreg &= 0x7E; /* Observed on beeb */
+      i8271setnmi();
+      callcommand();
+    }
+  }
+}
+
+char i8271read(int naddress)
+{
+  /*Address is in the range 0-7 - with the fe80 etc stripped out*/
+  char nvalue;
+  switch (naddress & 0x07)
+  {
+    case 0:
+      nvalue = i8271_statusreg;
+      break;
+    case 1:
+      /* Clear interrupt request and result reg full flag*/
+      i8271_statusreg &= ~18;
+      i8271setnmi();
+      nvalue=i8271_resultreg;
+      /* Register goes to 0 after its read */
+      i8271_resultreg = 0;
+  #ifdef __DEBUG__
+  fprintf(htrace,"8271R=&%X",naddress);
+    fprintf(htrace,",&%X\n", nvalue);
+  #endif
+      break;
+    case 2:
+      i8271reset();
+      nvalue = 0xF9;
+      break;
+    case 3:
+      nvalue = 0xF7;
+      break;
+    case 4:
+    case 5:
+    case 6:
+    case 7:
+      /* Clear interrupt and non-dma request - not stated but DFS never looks at result reg!*/
+      i8271_statusreg &= ~0x0C;
+      i8271setnmi();
+      nvalue=i8271_datareg;
+  #ifdef __DEBUG__
+  fprintf(htrace,"8271D=&%X",naddress);
+    fprintf(htrace,",&%X %c\n", nvalue, nvalue);
+  #endif
+      break;
+    default:
+      nvalue = 0xFE;
+      break;
+  };
+  /*fprintf(htrace,"SR:&%X RR:&%X DR:&%X NMI:&%X\n",i8271_statusreg, i8271_resultreg, i8271_datareg, nmiinterrupt);*/
+  /*#ifdef __DEVELOP__
+    fprintf(htrace,"=&%X\n",nvalue);
+  #endif*/
+  return(nvalue);
+}
+
+void i8271write(int naddress, char nvalue)
+{
+  #ifdef __DEBUG__
+    fprintf(htrace,"WR:&%X,&%X\n",naddress, nvalue);
+  #endif
+  switch (naddress & 0x0F)
+  {
+    case 0:
+      /*inttohex4(0x00);
+      bbcvdu(32);
+      inttohex8(nvalue);
+      bbcvdu(13);
+      bbcvdu(10);*/
+      i8271commandregwrite(nvalue);
+      break;
+    case 1:
+      /*inttohex4(0x01);
+      bbcvdu(32);
+      inttohex8(nvalue);
+      bbcvdu(13);
+      bbcvdu(10);*/
+      i8271paramregwrite(nvalue);
+      break;
+    case 2:
+      /*The caller should write a 1 and then >10 cycles later a 0 - but I'm just going to reset on both edges*/
+      i8271reset();
+      break;
+    case 3:
+      break;
+    case 4:
+    case 5:
+    case 6:
+    case 7:
+      i8271_datareg=nvalue;
+      i8271_statusreg &= ~0x0C;
+      i8271setnmi();
+      break;
+    default:
+      break;
+  }
+  /*fprintf(htrace,"SR:&%X RR:&%X DR:&%X NMI:&%X\n",i8271_statusreg, i8271_resultreg, i8271_datareg, nmiinterrupt);*/
+}

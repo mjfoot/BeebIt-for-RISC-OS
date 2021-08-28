@@ -1,0 +1,48 @@
+/*>8172fdc.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2000
+ *
+ * Email: <mikef@voyager.co.nz>
+ */
+
+#define DFS_SECTORS_PER_TRACK 10
+#define DFS_SECTOR_SIZE 256
+#define ADFS_SECTORS_PER_TRACK 16
+#define ADFS_SECTOR_SIZE 256
+
+#define ADFS_MASK 0x10
+#define DFS_NONE 0 /*no disc image*/
+#define DFS_SSD 1 /*single sided*/
+#define DFS_DSD_TRACK 2 /*double sided, track interleave*/
+#define DFS_DSD_SIDE 3 /*double sided, side interleave*/
+#define ADFS_NON_INTERLEAVED 0x10 /*non interleaved*/
+#define ADFS_INTERLEAVED 0x11 /*interleaved*/
+
+/*Intel 8271*/
+/*extern int i8271_writeprotect[2];*/
+extern char i8271_commandreg;
+extern char i8271_statusreg;
+extern char i8271_resultreg;
+extern char i8271_datareg;
+extern char i8271_select;
+extern char i8271_scansector;
+extern char i8271_scancountmsb;
+extern char i8271_scancountlsb;
+extern char i8271_currenttrack[2];
+extern char i8271_modereg;
+extern char i8271_outputport;
+extern char i8271_inputport;
+extern char i8271_badtrack[2][2]; /*drive,track*/
+extern char i8271_parameter[16]; /*heaps more than we need*/
+extern char i8271_data[0x1000]; /*hope we don't get any sectors > 4096 bytes*/
+extern int i8271_timer;
+extern int i8271_writestart; /*indicates when writing starts*/
+
+extern void i8271readimage(FILE *hfile, int nlocation, int nlength);
+extern void i8271reset(void);
+extern void i8271poll(void);
+extern char i8271read(int naddress);
+extern void i8271write(int naddress, char nvalue);
+extern void i8271closedown(void);

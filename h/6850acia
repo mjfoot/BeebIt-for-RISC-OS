@@ -1,0 +1,32 @@
+/*6850acia.h
+ *
+ * 6850 Asynchronous Communications Interface Adaptor [1MHz]
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#define PARITY_NONE 0
+#define PARITY_ODD 1
+#define PARITY_EVEN 2
+
+extern int m6850_bits, m6850_parity, m6850_stop;
+extern int m6850_timer;
+extern int m6850_timerreset;
+
+extern char uef_buffer[0xFF];
+
+extern void aciareset(void);
+extern void aciapoll(void);
+extern void aciaresettimer(void);
+extern char aciaread(int naddress);
+extern void aciawrite(int naddress,int nvalue);
+extern char serialularead(int naddress);
+extern void serialulawrite(int naddress,int nvalue);
+extern int uefvalidate(FILE *hfile);
+extern int uefopen(void);
+extern void uefclose(void);
+extern void uefrewind(void);

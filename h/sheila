@@ -1,0 +1,19 @@
+/*>sheila.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*sheila*/
+extern char sheila_b[0x100];
+
+void sheilareset(void);
+int sheilaread_b(int);
+int sheilaread_bp(int);
+int sheilaread_m(int);
+void sheilawrite_b(unsigned int, int);
+void sheilawrite_bp(unsigned int, int);
+void sheilawrite_m(unsigned int, int);
