@@ -10,7 +10,7 @@
 /* DEFINES */
 
 #define APP_NAME "BeebIt"
-#define APP_VERSION "0.70"
+#define APP_VERSION "0.72"
 
 #define Wimp_GetMenuState 0x0400F4
 
@@ -1149,8 +1149,10 @@ void configsave(void)
       fputs("High", hfile);
     else if (beebit_displaymode == DISPLAY_MODE_12801024)
       fputs("1280 x 1024", hfile);
-    else if (beebit_displaymode == DISPLAY_MODE_16001024)
-      fputs("1600 x 1024", hfile);
+    else if (beebit_displaymode == DISPLAY_MODE_16801050)
+      fputs("1680 x 1050", hfile);
+    else if (beebit_displaymode == DISPLAY_MODE_19201080)
+      fputs("1920 x 1080", hfile);
     else
       fputs("Auto", hfile);
     fputs("\n",hfile);
@@ -1271,8 +1273,10 @@ void setoptions(int ntype)
     writeicon(hoptions,DISPLAY_MODE_EDIT,"High",0,0);
   else if (beebit_displaymode == DISPLAY_MODE_12801024)
     writeicon(hoptions,DISPLAY_MODE_EDIT,"1280 x 1024",0,0);
-  else if (beebit_displaymode == DISPLAY_MODE_16001024)
-    writeicon(hoptions,DISPLAY_MODE_EDIT,"1600 x 1024",0,0);
+  else if (beebit_displaymode == DISPLAY_MODE_16801050)
+    writeicon(hoptions,DISPLAY_MODE_EDIT,"1680 x 1050",0,0);
+  else if (beebit_displaymode == DISPLAY_MODE_19201080)
+    writeicon(hoptions,DISPLAY_MODE_EDIT,"1920 x 1080",0,0);
   else
     writeicon(hoptions,DISPLAY_MODE_EDIT,"Auto",0,0);
 
@@ -1399,7 +1403,22 @@ void gobeebit(void)
   /*regs.r[0] = 0x87;
   _kernel_swi(OS_Byte,&regs,&regs);
   nwimpmode = regs.r[2];*/
-  lredraw = beebitmain();
+  /*lredraw = beebitmain();*/
+  lredraw = beebitenter(); /*also sets lexit*/
+  if (lredraw)
+  {
+    /*rename lexit to beebit_exit- set by F12*/
+    /*have a beebit_yield var -set by poll needed*/
+    /*loop until lexit*/
+    beebit_exit = FALSE;
+    do
+    {
+      beebitpoll();
+    }
+    while (NOT beebit_exit);
+  }
+  beebitexit();
+
   if (lredraw)
   {
     screentobuffer();
@@ -1916,8 +1935,12 @@ void button(void)
           beebit_displaymode = DISPLAY_MODE_HIGH;
         else if (strcmp(cbuffer,"1280 x 1024") == 0)
           beebit_displaymode = DISPLAY_MODE_12801024;
-        else if (strcmp(cbuffer,"1600 x 1024") == 0)
-          beebit_displaymode = DISPLAY_MODE_16001024;
+        /*else if (strcmp(cbuffer,"1600 x 1200") == 0)
+          beebit_displaymode = DISPLAY_MODE_16001200;*/
+        else if (strcmp(cbuffer,"1680 x 1050") == 0)
+          beebit_displaymode = DISPLAY_MODE_16801050;
+        else if (strcmp(cbuffer,"1920 x 1080") == 0)
+          beebit_displaymode = DISPLAY_MODE_19201080;
         else
           beebit_displaymode = DISPLAY_MODE_AUTO;
         /*sound*/
@@ -2750,8 +2773,10 @@ void setup(void)
             beebit_displaymode = DISPLAY_MODE_HIGH;
           else if (strncmp(cbuffer+12,"1280 x 1024",4) == 0)
             beebit_displaymode = DISPLAY_MODE_12801024;
-          else if (strncmp(cbuffer+12,"1600 x 1024",4) == 0)
-            beebit_displaymode = DISPLAY_MODE_16001024;
+          else if (strncmp(cbuffer+12,"1680 x 1050",4) == 0)
+            beebit_displaymode = DISPLAY_MODE_16801050;
+          else if (strncmp(cbuffer+12,"1920 x 1080",4) == 0)
+            beebit_displaymode = DISPLAY_MODE_19201080;
           else
             beebit_displaymode = DISPLAY_MODE_AUTO;
         }
@@ -2940,17 +2965,16 @@ void menus(void)
   _kernel_swi(OS_CheckModeValid,&regs,&regs);
   if (regs.r[0] != -1)
   {
-    /*host_mode1280x1024 = regs.r[1];*/ /*r1 = internal screen mode to use*/
     citem = (citem+24);
     *(citem) = 0;
     setword(citem+4,-1);
     setword(citem+8,0x7009011);
     strcpy((citem+12),"1280 x 1024");
   }
-  /*1600 x 1024*/
+  /*1680 x 1050*/
   setword(cmodeblock, 1);
-  setword(cmodeblock + 4, 1600);
-  setword(cmodeblock + 8, 1024);
+  setword(cmodeblock + 4, 1680);
+  setword(cmodeblock + 8, 1050);
   setword(cmodeblock + 12, 3); /*log2bpp*/
   setword(cmodeblock + 16, -1);
   setword(cmodeblock + 20, -1);
@@ -2958,12 +2982,28 @@ void menus(void)
   _kernel_swi(OS_CheckModeValid,&regs,&regs);
   if (regs.r[0] != -1)
   {
-    /*host_mode1600x1024 = regs.r[1];*/ /*r1 = internal screen mode to use*/
     citem = (citem+24);
     *(citem) = 0;
     setword(citem+4,-1);
     setword(citem+8,0x7009011);
-    strcpy((citem+12),"1600 x 1024");
+    strcpy((citem+12),"1680 x 1050");
+  }
+  /*1920 x 1080*/
+  setword(cmodeblock, 1);
+  setword(cmodeblock + 4, 1920);
+  setword(cmodeblock + 8, 1080);
+  setword(cmodeblock + 12, 3); /*log2bpp*/
+  setword(cmodeblock + 16, -1);
+  setword(cmodeblock + 20, -1);
+  regs.r[0] = (int)cmodeblock; /*MODE block*/
+  _kernel_swi(OS_CheckModeValid,&regs,&regs);
+  if (regs.r[0] != -1)
+  {
+    citem = (citem+24);
+    *(citem) = 0;
+    setword(citem+4,-1);
+    setword(citem+8,0x7009011);
+    strcpy((citem+12),"1920 x 1080");
   }
   *(citem) = 128;
 

@@ -24,6 +24,7 @@
 #include "keyboard.h"
 #include "main.h"
 #include "riscos.h"
+#include "scrsave.h"
 #include "sheila.h"
 #include "swis.h"
 #include "video.h"
@@ -32,6 +33,9 @@
 #define OS_Sprite 0x2E
 #define ZeriBeep_Attach 0x55E40
 #define ZeriBeep_Detach 0x55E41
+#define KeyBuffer_Claim 0x65400
+#define KeyBuffer_Release 0x65401
+#define KeyBuffer_Read 0x65402
 
 /*extern int r6502_cyclecount;*/
 
@@ -96,6 +100,8 @@ int beebit_romselected;
 int beebit_rommodified;
 int beebit_leds,host_leds;
 int beebit_rommask;
+int beebit_yield; /*yield control on a vsync*/
+int beebit_exit; /*exit the emulation F12 or close window*/
 
 int beebit_irq, beebit_nmi, beebit_oldnmi;
 int lexit, lbreak, lprintscreen;
@@ -503,11 +509,10 @@ void beebitinit(void)
   #endif
 }
 
-int beebitmain(void)
+int beebitenter(void)
 {
   char /*cbuffer[128],*/cname[128];
   char cmodeblock[28];
-  char choicedir[]="<Choices$Write>.BeebIt";
   /*char *n;*/
   /*int nicon[0x10] = {49,46,43,40,37,34,31,28,25,22,19,16,13,10,7,4};*/
   int i, lredraw, nmask, nindex;
@@ -651,6 +656,9 @@ int beebitmain(void)
     zeribeep_workspace = regs.r[1];*/
     zeribeepattach();
 
+    /*if (beebit_singletask)
+    {*/
+
     /*set keyboard status*/
     regs.r[0] = 202;
     regs.r[1] = beebit_leds;
@@ -694,9 +702,13 @@ int beebitmain(void)
         beebit_graphicsmode = 12801024;
         beebit_teletextmode = 12801024;
         break;
-      case DISPLAY_MODE_16001024:
-        beebit_graphicsmode = 16001024;
-        beebit_teletextmode = 16001024;
+      case DISPLAY_MODE_16801050:
+        beebit_graphicsmode = 16801050;
+        beebit_teletextmode = 16801050;
+        break;
+      case DISPLAY_MODE_19201080:
+        beebit_graphicsmode = 19201080;
+        beebit_teletextmode = 19201080;
         break;
       case DISPLAY_MODE_AUTO:
         regs.r[0] = 12; /*MODE 12*/
@@ -725,10 +737,46 @@ int beebitmain(void)
               _kernel_swi(OS_CheckModeValid,&regs,&regs);
               if (regs.r[0] == -1)
               {
-                /*beebit_graphicsmode = 12801024;
-                beebit_teletextmode = 12801024;*/
-                wimperror("A suitable screen mode cannot be found");
-                lexit = TRUE;
+                /*mode cannot be selected*/
+                /*1680 x 1050*/
+                setword(cmodeblock, 1);
+                setword(cmodeblock + 4, 1680);
+                setword(cmodeblock + 8, 1050);
+                setword(cmodeblock + 12, 3); /*log2bpp*/
+                setword(cmodeblock + 16, -1);
+                setword(cmodeblock + 20, -1);
+                regs.r[0] = (int)cmodeblock; /*MODE block*/
+                _kernel_swi(OS_CheckModeValid,&regs,&regs);
+                if (regs.r[0] == -1)
+                {
+                  /*mode cannot be selected*/
+                  /*1920 x 1080*/
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1920);
+                  setword(cmodeblock + 8, 1080);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_CheckModeValid,&regs,&regs);
+                  if (regs.r[0] == -1)
+                  {
+                    /*beebit_graphicsmode = 12801024;
+                    beebit_teletextmode = 12801024;*/
+                    wimperror("A suitable screen mode cannot be found");
+                    lexit = TRUE;
+                  }
+                  else
+                  {
+                    beebit_graphicsmode = 19201080;
+                    beebit_teletextmode = 19201080;
+                  }
+                }
+                else
+                {
+                  beebit_graphicsmode = 16801050;
+                  beebit_teletextmode = 16801050;
+                }
               }
               else
               {
@@ -773,6 +821,9 @@ int beebitmain(void)
 
       /*fclose(hh1);*/
 
+      /*allocate space for screen buffer sprite*/
+      spritealloc();
+
       videosetplot();
 
       if (video_mode != -1)
@@ -794,11 +845,23 @@ int beebitmain(void)
                 regs.r[1] = (int)cmodeblock; /*MODE block*/
                 _kernel_swi(OS_ScreenMode,&regs,&regs);
                 break;
-              case 16001024:
-                /*1600 x 1024*/
+              case 16801050:
+                /*1680 x 1050*/
                 setword(cmodeblock, 1);
-                setword(cmodeblock + 4, 1600);
-                setword(cmodeblock + 8, 1024);
+                setword(cmodeblock + 4, 1680);
+                setword(cmodeblock + 8, 1050);
+                setword(cmodeblock + 12, 3); /*log2bpp*/
+                setword(cmodeblock + 16, -1);
+                setword(cmodeblock + 20, -1);
+                regs.r[0] = 0;
+                regs.r[1] = (int)cmodeblock; /*MODE block*/
+                _kernel_swi(OS_ScreenMode,&regs,&regs);
+                break;
+              case 19201080:
+                /*1920 x 1080*/
+                setword(cmodeblock, 1);
+                setword(cmodeblock + 4, 1920);
+                setword(cmodeblock + 8, 1080);
                 setword(cmodeblock + 12, 3); /*log2bpp*/
                 setword(cmodeblock + 16, -1);
                 setword(cmodeblock + 20, -1);
@@ -840,11 +903,23 @@ int beebitmain(void)
                   regs.r[1] = (int)cmodeblock; /*MODE block*/
                   _kernel_swi(OS_ScreenMode,&regs,&regs);
                   break;
-                case 16001024:
-                  /*1600 x 1024*/
+                case 16801050:
+                  /*1680 x 1050*/
                   setword(cmodeblock, 1);
-                  setword(cmodeblock + 4, 1600);
-                  setword(cmodeblock + 8, 1024);
+                  setword(cmodeblock + 4, 1680);
+                  setword(cmodeblock + 8, 1050);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = 0;
+                  regs.r[1] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  break;
+                case 19201080:
+                  /*1920 x 1080*/
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1920);
+                  setword(cmodeblock + 8, 1080);
                   setword(cmodeblock + 12, 3); /*log2bpp*/
                   setword(cmodeblock + 16, -1);
                   setword(cmodeblock + 20, -1);
@@ -856,7 +931,6 @@ int beebitmain(void)
             }
             break;
         }
-
         videomodechange();
         screenstart();
         cursordisable();
@@ -864,12 +938,35 @@ int beebitmain(void)
     }
     if (!lexit)
       keyclaim();
+    /*}
+    else
+    {*/
+      /*multitask*/
+      /*beebit_graphicsmode = -1;
+      beebit_teletextmode = -1;
+      videosetplot();
+      videomodechange();
+      screenstart();*/
+      /*setword((char *)nlocalscreen, (int)screen);*/
+      /*initialise keyboard handler*/
+      /*_kernel_swi(KeyBuffer_Claim,&regs,&regs);
+      keybufferid = regs.r[0];
+    }*/
   }
+  return (lredraw);
+}
 
-  if (!lexit)
+void beebitpoll(void)
+{
+  /*char *keybufferaddr;
+  char *keylookupaddr;
+  char *keystatusaddr;
+  int count, i;
+  int keycode, keydown;*/
+
+  beebit_yield = FALSE;
+  do
   {
-    do
-    {
       /*find how many cycles are needed until something happens*/
       /*fprintf(htrace,"r6522sysvia_t1=&%X\n",(r6522sysvia_t1<<1));
       fprintf(htrace,"r6522sysvia_t2=&%X\n",(r6522sysvia_t1<<1));
@@ -969,6 +1066,9 @@ int beebitmain(void)
         m6850_timer += m6850_timerreset;
       }
 
+    /*
+    videoscanline needs to return when a vsync is done and returns to the Wimp_Poll. Only exit when a vsync in detected, including when F12 is pressed
+    */
       if (video_timer <= 0)
         videoscanline();
 
@@ -1032,14 +1132,51 @@ int beebitmain(void)
           /*counter += 80;
         }*/
       /*}*/
+  }
+  while (NOT beebit_yield); /*!lexit);*/
+
+  /*if (NOT beebit_singletask)
+  {*/
+    /*read keyboard buffer*/
+    /*regs.r[0] = keybufferid;
+    _kernel_swi(KeyBuffer_Read,&regs,&regs);
+    count = regs.r[2];
+    if (count > 0)
+    {
+      keydown = FALSE;
+      keybufferaddr = (char *)regs.r[1];
+      keylookupaddr = (char *)keylookup;
+      keystatusaddr = (char *)keystatus;
+      for (i = 0; i < count; i+=2)
+      {
+        keycode = keylookupaddr[keybufferaddr[i+1]];
+        if (keybufferaddr[i] == 0)
+          keystatusaddr[keycode] = 0;*/ /*up*/
+        /*else
+          keystatusaddr[keycode] = 0xFF;*/ /*keybufferaddr[i];*/ /*up/down*/
+        /*if (NOT keydown)
+          keydown = (keybufferaddr[i] = 1);
+      }*/
+      /*only call this if a key is up*/
+      /*if (keydown)
+        systemviasetca2();
     }
-    while (!lexit);
+  }*/
+}
 
-    /*t76489closedown();*/ /*sound*/
-    /*_kernel_swi(0x4E0C1,&regs,&regs);*/
-    /*_kernel_oscli("BeebSoundCloseDown");*/
-    zeribeepdetach();
 
+void beebitexit(void)
+{
+  char choicedir[]="<Choices$Write>.BeebIt";
+  FILE *hfile;
+
+  /*t76489closedown();*/ /*sound*/
+  /*_kernel_swi(0x4E0C1,&regs,&regs);*/
+  /*_kernel_oscli("BeebSoundCloseDown");*/
+  zeribeepdetach();
+
+  /*if (beebit_singletask)
+  {*/
     keyrelease();
     /*enable <Escape>*/
     escapeenable();
@@ -1055,64 +1192,73 @@ int beebitmain(void)
     beebit_leds = (regs.r[1] & 0x10);
     regs.r[0] = 118;
     _kernel_swi(OS_Byte,&regs,&regs);
+  /*}
+  else
+  {*/
+    /*release keyboard handler*/
+    /*regs.r[0] = keybufferid;
+    _kernel_swi(KeyBuffer_Release,&regs,&regs);
+  }*/
 
-    switch (beebit_machinetype)
-    {
-      case MACHINE_MODELB:
-      case MACHINE_MODELBPLUS:
-        break;
-      case MACHINE_MASTER128:
-      case MACHINE_COMPACT:
-        regs.r[0] = 8; /* create directory*/
-        regs.r[1] = (int)choicedir;
-        regs.r[4] = 0;
-        _kernel_swi(OS_File,&regs,&regs);
-        if (beebit_machinetype == MACHINE_MASTER128)
-        {
-          /*new location*/
-          hfile = fopen("<Choices$Write>.BeebIt.CMOSM","wb");
-          if (hfile != NULL)
-            /*delete old file*/
-            remove("<BeebIt$Dir>.CMOSM");
-         }
-        else
-        {
-          /*new location*/
-          hfile = fopen("<Choices$Write>.BeebIt.CMOSC","wb");
-          if (hfile != NULL)
-            /*delete old file*/
-            remove("<BeebIt$Dir>.CMOSC");
-        }
+  switch (beebit_machinetype)
+  {
+    case MACHINE_MODELB:
+    case MACHINE_MODELBPLUS:
+      break;
+    case MACHINE_MASTER128:
+    case MACHINE_COMPACT:
+      regs.r[0] = 8; /* create directory*/
+      regs.r[1] = (int)choicedir;
+      regs.r[4] = 0;
+      _kernel_swi(OS_File,&regs,&regs);
+      if (beebit_machinetype == MACHINE_MASTER128)
+      {
+        /*new location*/
+        hfile = fopen("<Choices$Write>.BeebIt.CMOSM","wb");
         if (hfile != NULL)
-        {
-          fwrite(beebit_cmos,1,0x40,hfile);
-          fclose(hfile);
-        }
-        break;
-    }
+          /*delete old file*/
+          remove("<BeebIt$Dir>.CMOSM");
+       }
+      else
+      {
+        /*new location*/
+        hfile = fopen("<Choices$Write>.BeebIt.CMOSC","wb");
+        if (hfile != NULL)
+          /*delete old file*/
+          remove("<BeebIt$Dir>.CMOSC");
+      }
+      if (hfile != NULL)
+      {
+        fwrite(beebit_cmos,1,0x40,hfile);
+        fclose(hfile);
+      }
+      break;
+  }
 
-    uefclose();
+  uefclose();
 
-    if (beebit_driveimage[0])
-      fclose(beebit_driveimage[0]);
-    if (beebit_driveimage[1])
-      fclose(beebit_driveimage[1]);
-    if (beebit_driveimage[2])
-      fclose(beebit_driveimage[2]);
-    if (beebit_driveimage[3])
-      fclose(beebit_driveimage[3]);
+  if (beebit_driveimage[0])
+    fclose(beebit_driveimage[0]);
+  if (beebit_driveimage[1])
+    fclose(beebit_driveimage[1]);
+  if (beebit_driveimage[2])
+    fclose(beebit_driveimage[2]);
+  if (beebit_driveimage[3])
+    fclose(beebit_driveimage[3]);
 
+   /*free space for screen buffer sprite*/
+   spritefree();
+
+  /*if (beebit_singletask)*/
     cursorenable();
 
-    /*hfile = fopen("ROMSlots","wb");
-    if (hfile != NULL)
-    {
-      for (i=0;i<16;i++)
-        fwrite(roms[i],1,0x4000,hfile);
-      fclose(hfile);
-    }*/
-  }
-  return (lredraw);
+  /*hfile = fopen("ROMSlots","wb");
+  if (hfile != NULL)
+  {
+    for (i=0;i<16;i++)
+      fwrite(roms[i],1,0x4000,hfile);
+    fclose(hfile);
+  }*/
 }
 
 void beebitclosedown(void)

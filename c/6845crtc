@@ -18,7 +18,7 @@
 #include "video.h"
 #include "videoula.h"
 /*#include <time.h>*/
-/*#include "riscos.h"*/
+#include "riscos.h"
 
 /*extern int nlocalscreen;*/
 
@@ -200,6 +200,22 @@ void crtcwrite(int naddress,int nvalue)
       /*mode 0,1,2,3 = 80 (fast clock)*/
       /*mode 4,5,6,7 = 40 (slow clock)*/
       m6845_screenwidth = nvalue;
+      switch (beebit_teletextmode)
+      {
+        case 15:
+        case 21:
+        case 12801024:
+          if (m6845_screenwidth > 40)
+            teletext_screenwidth = 40;
+          else
+            teletext_screenwidth = m6845_screenwidth;
+          break;
+        case 16801050:
+        case 19201080:
+          teletext_screenwidth = m6845_screenwidth;
+          break;
+      }
+      teletext_screenextra = ((host_screenwidth - (m6845_screenwidth << 5)) >> 1);
       video_width = m6845_screenwidth << 3; /*multiply by 8*/
       m6845_fastextra = (80-m6845_screenwidth) >> 1;
       m6845_slowextra = (40-m6845_screenwidth) >> 1;
@@ -336,8 +352,11 @@ void crtcwrite(int naddress,int nvalue)
 
 void crtcwidthextra(void)
 {
+  int nwidthextra;
+
   if (videoula_clockrate)
   {
+    /*fast rate = 80 columns*/
     switch (beebit_graphicsmode)
     {
       case 12:
@@ -353,14 +372,45 @@ void crtcwidthextra(void)
         video_displaywidth = (m6845_screenwidth<<3);
         break;
       case 12801024:
-      case 16001024:
-        m6845_widthextra = (m6845_fastextra<<3);
-        video_displaywidth = (m6845_screenwidth<<3);
+      case 16801050:
+      case 19201080:
+        m6845_widthextra = (m6845_fastextra<<4); /*64*/
+        video_displaywidth = (m6845_screenwidth<<3); /*640*/
+        /*
+        m6845_fastextra = 8
+        m6845_screenwidth = 64
+        video_displaywidth = 640
+
+        m6845_widthextra = 64
+        video_displaywidth = 512
+        host_screenwidth = 1280, 1920
+        */
+
+    /*bbcvdu(32);
+    bbcvdu(47);
+    inttohex4(m6845_widthextra);
+    bbcvdu(32);
+    inttohex4(video_displaywidth);
+    bbcvdu(32);
+    inttohex4(host_screenwidth);*/
+
+
+        nwidthextra = ((host_screenwidth >> 1) - video_displaywidth - m6845_widthextra);
+        m6845_widthextra += nwidthextra;
+
+    /*inttohex4(nwidthextra);
+    bbcvdu(32);
+    inttohex4(m6845_widthextra);
+    bbcvdu(32);
+    bbcvdu(13);
+    bbcvdu(10);*/
+
         break;
     }
   }
   else
   {
+    /*slow rate = 40 columns*/
     switch (beebit_graphicsmode)
     {
       case 12:
@@ -376,9 +426,13 @@ void crtcwidthextra(void)
         video_displaywidth = (m6845_screenwidth<<4);
         break;
       case 12801024:
-      case 16001024:
-        m6845_widthextra = (m6845_slowextra<<4);
-        video_displaywidth = (m6845_screenwidth<<4);
+      case 16801050:
+      case 19201080:
+        m6845_widthextra = (m6845_slowextra<<5); /*64*/
+        video_displaywidth = (m6845_screenwidth<<4); /*640*/
+        nwidthextra = ((host_screenwidth >> 1) - video_displaywidth - m6845_widthextra);
+        m6845_widthextra += nwidthextra;
+
         break;
     }
   }
@@ -494,7 +548,8 @@ void crtccursor(void)
             cursor_x = ((n%m6845_screenwidth)<<3);
             break;
           case 12801024:
-          case 16001024:
+          case 16801050:
+          case 19201080:
             cursor_x = ((n%m6845_screenwidth)<<4);
             break;
         }
@@ -513,7 +568,8 @@ void crtccursor(void)
             cursor_x = ((n%m6845_screenwidth)<<4);
             break;
           case 12801024:
-          case 16001024:
+          case 16801050:
+          case 19201080:
             cursor_x = ((n%m6845_screenwidth)<<5);
             break;
         }

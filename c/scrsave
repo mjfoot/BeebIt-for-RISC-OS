@@ -18,6 +18,7 @@
 #define YWindLimit 12
 #define ScreenStart 148
 
+#include <stdlib.h>
 #include <stdio.h>
 #include "main.h"
 #include "beebit.h"
@@ -26,9 +27,10 @@
 
 static _kernel_swi_regs regs;
 
-static char sprite[80*8192];
+/*static char sprite[80*25920];*/
+char *sprite = NULL;
 static int sprmode =12;
-static int wrspr_size =(80*8192);
+static int wrspr_size; /* =(80*25920);*/
 static int xsize =640;
 static int ysize =256;
 static int wrbits =4; /* current version always output as 16 colour sprite*/
@@ -86,10 +88,13 @@ void screentobuffer(void)
 
   xsize = vduvars[1] + 1;
   ysize = vduvars[2] + 1;
-  if (xsize ==320)
-    sprmode =9;
+  if (xsize == 320)
+    sprmode = 9;
   else
-    sprmode =12;
+    sprmode = 12;
+  xsize = xsize + (xsize % 32);
+  /*if (xsize == 1680)
+    xsize = 1696;*/
 
   /* Iyonix fix, apparently some don't have Mode 15 defined in the MDF.
   If this is the case they default to ysize of 479 (instead of 255)*/
@@ -105,14 +110,14 @@ void screentobuffer(void)
   else*/
     naddradd = 0;
 
-  rdbits =1 <<vduvars[0];
-  screen =(int *)vduvars[3];
+  rdbits = 1 <<vduvars[0];
+  screen = (int *)vduvars[3];
 
-  rdscr_size =(xsize *ysize *rdbits) /8;
-  wrspr_size =(xsize *ysize *wrbits) /8;
+  rdscr_size = (xsize *ysize *rdbits) /8;
+  wrspr_size = (xsize *ysize *wrbits) /8;
 
-  rdp =screen;
-  wro =0;
+  rdp = screen;
+  wro = 0;
 
   readbits_remain =0;
   writebits_sofar =0;
@@ -120,7 +125,7 @@ void screentobuffer(void)
 
   mask =0;   /* mask =0xFF or 0xF*/
   for (l =0;l <rdbits;l++)
-    mask =mask | ((1<<31) >>l);
+    mask =mask | ((1 << 31) >> l);
 
   mask =mask >>(32 -rdbits);
 
@@ -224,4 +229,39 @@ int spritesave(void)
   return TRUE;
 }
 
+void spritealloc(void)
+{
+  int vduvars[5];
+  int nsize;
 
+  vduvars[0] =Log2BPP;
+  vduvars[1] =XWindLimit;
+  vduvars[2] =YWindLimit;
+  vduvars[3] =ScreenStart;
+  vduvars[4] =-1;
+
+  regs.r[0] =(int)vduvars;
+  regs.r[1] =(int)vduvars;
+  _kernel_swi(OS_ReadVduVariables,&regs,&regs);
+
+  xsize = vduvars[1] + 1;
+  ysize = vduvars[2] + 1;
+  xsize = xsize + (xsize % 32);
+
+  nsize = (xsize * ysize * (8 / wrbits)) + sizeof(arSprFileHdr);
+
+  if (*sprite == NULL)
+  {
+    sprite = malloc(nsize);
+  }
+  else
+  {
+    sprite = realloc(sprite, nsize);
+  }
+}
+
+void spritefree(void)
+{
+  if (*sprite != NULL)
+    free(sprite);
+}

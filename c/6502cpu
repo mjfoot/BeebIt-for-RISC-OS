@@ -586,7 +586,7 @@ void r6502writeb(int naddress, char nvalue)
   else if (naddress < 0xFE00)
   {
     /*&FC00 - &FDFF (FRED, JIM)*/
-    r6502_cyclestogo -= 2;
+    r6502_cyclestogo -= 4;
   }
   else if (naddress < 0xFF00)
     sheilawrite(naddress,nvalue);
