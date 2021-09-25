@@ -1,0 +1,367 @@
+BeebIt : Version 0.72 (20 Mar 2021)
+===================================
+Emulator by Michael Foot <mjfoot.nz@gmail.com>.
+Additions by James Lampard.
+Sound Emulation by John Kortink.
+
+NOTE
+----
+
+BeebIt will only work on an Acorn or RISC OS Computer with RISC OS 3.00 or above. To achieve emulation at a useable speed a StrongARM, Xscale or OMAP processor is recommended.
+
+As from version 0.25, the layout of the configuration file has changed to accommodate the new Model B+ emulation. Please read the section GETING STARTED, CONFIGURATION and OPTIONS so you are aware of these changes.
+
+BeebIt needs MDF definitions for MODE 7 and 12 (on Risc PC), MODE 15 [640x256] on Iyonix, MODE 21 [640x512] on the BeagleBoard and 1280x1024 for Raspberry Pi.
+
+Please also read the note about registration below.
+
+INTRODUCTION
+------------
+
+BeebIt attempts to emulate the behaviour of a British Broadcasting Corporation Model B, B+ and Master 128 Micro Computers.
+
+The BBC Micro was manufactured by Acorn Computers Ltd of Cambridge, England in the early and mid 1980's.
+
+GETING STARTED
+--------------
+
+BeebIt will not work as it stands. You will need a copy of the OS and BASIC ROM images that came with the original BBC Computer. Pace Micro Technology Limited still hold the copyright over these ROMs and therefore they cannot be distributed with this emulator. Here's how to get them though.
+
+If you own an original BBC Model B computer you can use either of the following programs to get the ROM images. These programs must be run on your BBC Model B computer.
+1) Use the 'GrabROM' utility which can be found at <http://bbc.nvg.org/software.php3#bbcutils>
+2) Use the 'SaveROM' program, included with BeebIt.
+3) Follow the instructions in the file 'GetROMs'.
+
+If you don't own a BBC Computer, but do have a copy of Acorns '65Host' you can use the accompanying program 'RipROMs' to extrace the ROM images. You will have to extract BeebIt to a writable disc and open the filer window that contains !65Host before you do this.
+
+The ROMs can be called anything you like as long as the file name matches what is on the configuration screen. I recommend naming your ROM files with the first part describing what the ROM is, and the second part what version it is. ie. OS120 is BBC B OS 1.20, OS200 is BBC B+ OS 2.00 and DFS120 is Acorn DFS 1.20.
+
+The RISC OS filetype for the ROM images is &BBC, filetype 'BBCSnap', and they are all 16384 bytes in size.
+
+If you wish to use DFS disc images, you will also need a copy of an 8271 or 1770 compatible disc filing system ROM.
+
+All ROM images should be stored in the same place. The ROMs directory inside the BeebIt appication is provided for this purpose.
+
+Each type of BBC Micro you wish to emulate will need to be set up. It is recommended you set BeebIt up in the following ways:
+
+Filename is the name of the ROM image in the ROMs directory and also the name entered on the configuration or option window next to each slot. ROM slot is which socket ID the ROM is located. OS is the Operating System name on the options window.
+  
+For BBC Model B emulation:
+
+  Filename      ROM slot        Description
+
+  OS120         OS              Operating System V1.20
+  BASIC200      F               BASIC ROM V2.00
+  DFS120        E               Disc Filing System V1.20
+
+For BBC Model B+ (64K) emulation:
+
+  Filename      ROM slot        Description
+
+  OS200         OS              Operating System V2.00
+  BASIC200      E               BASIC ROM V2.00
+  DFS220        B               Disc Filing System V2.20
+  ADFS130       A               Acorn ADFS V1.30
+
+For BBC Model B+ (128K) emulation:
+
+  Filename      ROM slot        Description
+
+  OS200         OS              Operating System V2.00
+  BASIC200      E               BASIC ROM V2.00
+  SWRAM         D
+  SWRAM         C
+  DFS220        B               Disc Filing System V2.20
+  ADFS130       A               Acorn ADFS V1.30
+
+For BBC Master 128 emulation:
+
+  Filename      ROM slot        Description
+
+  OS320         OS              Operating System V3.20
+  Terminl120    F               Terminal V1.20
+  View300       E               Acornsoft View B3.0
+  ADFS150       D               Acorn ADFS V1.50
+  BASIC400      C               BBC BASIC V4.00
+  EDIT100       B               Edit V1.00
+  ViewSht100    A               Acornsoft ViewSheet B1.0
+  DFS224        9               Acorn DFS V2.24
+
+or
+
+  Filename      ROM slot        Description
+
+  OS350         OS              Operating System V3.50
+  Terminal86    F               Terminal V1.20 (1986)
+  View330       E               Acornsoft View B3.3
+  ADFS203       D               Acorn ADFS V2.03
+  BASIC4r32     C               BBC BASIC V4.00 r32
+  EDIT150       B               Edit V1.50
+  ViewSht101    A               Acornsoft ViewSheet B1.01
+  DFS245        9               Acorn DFS V2.45
+
+For BBC Master ET emulation:
+
+  Filename      ROM slot        Description
+
+  OS400         OS              Operating System V4.00
+  OS400+        F               Operating System extensions V4.00
+  ANFS425       E               Acorn ANFS V4.25
+  BASIC400      D               BBC BASIC V4.00
+
+For BBC Master Compact emulation:
+
+  Filename      ROM slot        Description
+
+  OS510         OS              Operating System V5.10
+  Utils110      F               Utils V1.10
+  BASIC40086    E               BBC BASIC V4.00 (1986)
+  ADFS210       D               Acorn ADFS V2.10
+
+BeebIt has been tested with the following ROM images.
+
+Operating System:               Works?  Comments
+  Acorn OS 5.10                 Yes     (C) 1986 Acorn Computers Ltd. (BBC Compact)
+  Acorn OS 4.00                 Yes     (C) 1986 Acorn Computers Ltd. (BBC Master ET)
+  Acorn OS 3.50                 Yes     (C) 1989 Acorn Computers Ltd. (BBC Master 128)
+  Acorn OS 3.20                 Yes     (C) 1984 Acorn Computers Ltd. (BBC Master 128)
+  Acorn OS 2.00                 Yes     (C) 1981 Acorn Computers Ltd. (BBC B+)
+  Acorn OS 1.20                 Yes     (C) 1981 Acorn Computers Ltd. (BBC B)
+  Acorn OS 1.00A                Yes     US version. NTSC. (BBC B)
+  Acorn OS 1.00                 Yes     (C) 1981 Acorn Computers Ltd. (BBC B)
+
+Language:                       Works?  Comments
+  BBC BASIC 4.00                Yes     (C)1984 Acorn
+  BBC BASIC 2.00                Yes     (C)1982 Acorn
+  BBC BASIC 1.00                Yes     (C)1981 Acorn
+
+Disc Filing System:             Works?  Comments
+  Acorn ANFS 4.25               No      1770 - (C)1986 Acorn
+  Acorn ANFS                    No      1770 - (C)1985 Acorn
+  Acorn DFS 2.24                Yes     1770 - (C)1985 Acorn
+  Acorn DFS 2.20                Yes     1770 DFS
+  Acorn DFS 2.00                Yes     1770 DFS
+  Acorn DFS 1.20                Yes     8271
+  Acorn DFS 0.9E                Yes     8271
+  Acorn DFS 0.90                Yes     8271
+  Amcom DFS                     Yes     8271
+  HDFS 1.05                     Yes     8271 - (C) AJCD 1989
+  Solidisk DFS 2.00m            Yes     8271 - (C) SOLIDISK, by K.T.ACRES
+  STL0E00 DFS 1.21              Yes     8271 - Make sure ROM slot is writable.
+  STLDISC 4.00                  Yes     8271 - (C) K.T.ACRES 12.12.84
+  SWR-DISC 1.00                 No      8271 - (C) Solidisk TUE,22 JUL
+  Watford Electronics DFS 1.44  Yes     8271 - (C) 1986 A.C.Bray
+  Watford Electronics DFS 1.30  Yes     8271
+
+CONFIGURATION
+-------------
+
+The BBC can support up to 16 ROMs. Slot F has the highest priority and 0 has the lowest. When emulating the Model B+, slot F is disabled as this holds the OS ROM.
+
+The ROM configuration screen is for specifying ROM images. Type the name of the ROM image file into the edit box next to the slot you want it to appear in.
+If you want the ROM to be read only then make sure the 'Writable' option box beside the slot is not ticked. Any ROM slots that do not contain a ROM image and have the 'Writable' option set are used as Sideways RAM banks.
+
+A few programs are split into two ROM images called 'high' and 'low' instead of just one. In this case, place the 'high' image in the higher numbered slot and the 'low' image directly below it.
+
+The BBC can also support 2 double sided disc drives and 1 cassette tape.
+The Drive configuration screen is for specifying which disc images are in each of the emulated drives and which tape image to use. See the section below about using disc and tape images for more information.
+
+OPTIONS
+-------
+
+The options screen is used to set up BeebIt the way you like it.
+
+Machine Type specifies what type of computer you want to emulate. OS is for entering the name of the Operating System ROM that should be used for this configuation.
+
+ROMs path specifies the location of the BBC ROM images on your disc.
+
+CPU Speed defines how fast the emulator should run. 2MHz makes the emulator run at the same speed as the BBC ran at. Full Speed makes it run as fast as it can.
+Screen Update defines how smoothly the screen display is updated. Interlaced means that every other line will be drawn, thereby cutting down the work the emulator has to do to draw a complete screen. Non-Interlaced will draw every line.
+Frame Rate defines how often the screen should be redraw. These are in measurements of 'fields per second'.
+Keyboard layout is used to specify alternate keyboard layouts. This means you can change what keycodes each key produces. See the section below entitled 'keyboard layout' for more information.
+Mouse emulation can be changed to act as a joystick for games, or as an AMX mouse when AMX mouse ROMs and software are used.
+Display mode will see the screen resolution that BeebIt will run it. Auto will try and guess the best screen mode but sometimes on computers with higher resolutions screens, yo will need to set this manually. Medium or High is best for higher resolution screens. 1280 x 1024 is best for RISC OS 5 machines.
+
+Sound turns the sound on and off.
+Cursor turns the cursor on and off.
+Fast Tape allows UEF tape file to load at the fastest possible rate.
+
+The DIP switchs are for the setting of the keyboard links on the model B and B+. Refer to the BBC user guide for their operation.
+
+If you find the emulation is too slow on your computer, turning off features or setting the options to the lowest will help.
+
+USING DISC IMAGES
+-----------------
+
+Floppy disc drives 0 and 2 are sides 1 and 2 of the first drive. Drives 1 and 3 are the second drive.
+
+These use 'disc image files' which are assumed to be a byte for byte copy of a 40 or 80 track single sided disc. The RISC OS filetype for a DFSImage is &B22.
+These images can be loaded by either dragging the file to the appropriate icon on the drive configiration window, dragging the file to the BeebIt icon on the Iconbar or by double clicking a DFSImage file. The last two options will assign the image as drive 0 and start the BBC emulation.
+
+Troubleshooting tip: If you are using DFS 1.20 (and possibly other filing systems) and you receive the error 'Disk Fault 1E at 00/00' it probably means you haven't configured a valid disc image.
+
+Writing of files in DFS images has now been implemented. As far as I know this works correctly but I cannot guarantee the state of any disc image after it has been written to. Please inform me if you find corruption happening.
+
+A good source of disc images for you to try can be found at 'The BBC Lives' or 'The Stairway to Hell' web sites listed below. A list of what I have tested on BeebIt so far can be found in the text file 'Software', in the BeebIt directory.
+
+USING TAPE IMAGES
+-----------------
+
+Tape images are standard UEF (Unified Emulator Format) files. There is no RISC OS filetype for these.
+
+Normally the UEF file is compressed using GZip. BeebIt cannot use the file in this compressed format so you must decompress the file, using GZip or SparkFS, before it can be used. An uncompressed UEF file should begin with the text "UEF File" when examined in a text editor.
+
+The uncompressed files can be used by dragging the file to the icon labeled 'T' at the bottom of the drive configuration window.
+
+Remember you will need to type *TAPE to select the tape filing system if you have installed a disc filing system.
+
+Most programs can be loaded and then run by typing CHAIN "" although a few may have other instructions such as using *RUN or other commands.
+
+If you have "fast tape" in BeebIt's options window set, but you are having problems loading from tape images, try switching "fast tape" off.
+
+The tape image can be 'rewound' to the beginning at any time by exiting the emulator with F12, then selecting 'Reset' > 'Rewind Tape' from the icon bar menu.
+
+KEYBOARD LAYOUT
+---------------
+All keyboard layouts have the following keys always set:
+
+Print Screen - Save screen to file "BBCScreen"
+F12 - Exit the emulator
+
+The default keyboard layout is defined as:
+
+Esc      F1  F2  F3  F4   F5  F6  F7  F8   F9  F0 xxx F12   Prn xxx Brk
+
+ @   1   2   3   4   5   6   7   8   9   0   -   ^    B/S   xxx xxx xxx
+ 
+Tab    Q   W   E   R   T   Y   U   I   O   P   [   _  Ret   B/S Cpy xxx
+
+Caps    A   S   D   F   G   H   J   K   L   ;   :   [ Ret
+
+Shft  |   Z   X   C   V   B   N   M   .   .   /     Shift        Up
+
+Ctrl  ShftLk              Space                      Ctrl   Lft Dwn Rgt
+
+The 'Games' layout swaps the 'A' key and the left 'Ctrl' key so that games such as Arcadians can be played more naturally.
+
+You can define your own keyboard layouts by copying the 'Default' file in the KeyMaps directory inside the BeebIt directory to another filename. Load the new file into an editor that will allow you to change each byte in the file (ie. Zap or StrongEd) and make sure you have override mode on. Each byte in the keymap file corresponds to each location of a key up/down event in RISC OS. The table showing the location for each key is in the RISC OS PRMs under key up/down event 11 (Volume 1: Chapter 11: Events). These loations are then mapped to the corresponding BBC Internal Key number which is shown in the Advanced user Guide for the BBC in Appendix C - Key Values Summary (pages 356-458).
+For eaxmple:
+Location &00 is Escape. This contains the value &70 which is the BBC hexidecimal internal key code for Escape.
+Location &3C is A. This contains the value &41 which is the BBC hexidecimal internal key code for A.
+Please note that although the above method allows you to swap around the keys, characters generated by shift in combination with a key cannot be moved to different keys (for example: Shift and the 9 key produces an open bracket on a PC keyboard, whereas on the BBC (and hence the emulator) Shift + 9 produces a close bracket instead).
+
+The table below lists all the characters, whether generated by pressing Shift or not, which are different between a PC keyboard and the BBC keyboard. So for example to obtain the @ symbol in the emulator, press the apostrophe key on a PC keyboard.
+
+BBC chr codes BBC Teletext mode BBC graphics modes      PC keyboard
+telet   telet
++graph  only
+---           COPY                                          END
+---           f0                                            F11
+---           SHIFT LOCK                                    ALT
+35            #  hash                                   £   pound
+38      166   &  ampersand                              ^   caret
+39      167   '  apostrophe                             &   ampersand
+40      168   (  open bracket                           *   asterisk (left keys)
+41      169   )  close bracket                          (   open bracket
+42      170   *  asterisk                               @   at
+43      171   +  plus                                   :   colon
+58      186   :  colon                                  '   apostrophe (or * on num. keypad)
+59      187   ;  semi-colon                             ;   semi-colon (or + on num. keypad)
+61      189   =  equals                                 _   low dash
+64      192   @  at                                     `   apostrophe
+91      219   ˆ  left arrow     [  left sq. bracket     [   left square bracket
+92      220   ½  1/2            \  back slash           \   back slash
+93      221   ‰  right arrow    ]  right sq. bracket    #   hash
+94      222   ‹  up arrow       ^  caret                =   equals
+95            _  underscore                             ]   right square bracket
+96            £  pound                                  }   right brace
+123     251   ¼  1/4            {  left brace           {   left brace
+124     252      2 vert lines      high colon           |   pipe
+125     253   ¾  3/4            }  right brace          ~   swung dash/ tilde
+126     254   ÷  divide by      ~  swung dash/ tilde    +   plus (left keys)
+
+RESETTING THE EMULATION
+-----------------------
+
+You can press the Break key, or Ctrl + Break, within the emulation for soft resets as per the real BBC Micro.
+
+When you press F12 to exit the emulation, the BBC 'virtual machine' is left in the same state, and you may return to it later. For a hard reset, choose 'Reset' > 'Machine' from the icon bar menu.
+
+JOYSTICK EMULATION
+-------------------
+
+The mouse can be used to simulate a joystick connected to a BBC Computer. Moving the mouse in each direction acts as if a joystick was moved. The left and right mouse buttons simulate the first and second fire buttons.
+
+ADDITONAL ADD-ONS
+-----------------
+
+BeebIt64K emulates a 64K RAM chip paged into memory locations &FD00-&FDFF. To enable this, you need to uncomment the line in BeebIts !Run file. Full information can be found in the BeebIt64K directory which resides in the BeebIt directory.
+
+REGISTRATION
+------------
+
+This version of BeebIt is Emailware. If you are using this program, all I ask is that you send me a message by email, with comments or suggestion if you like. This will help me to gauge how many people are interested in the program. The more people I know are using it, the more motivation I will have to keep improving it! 
+Please let me know also what type of Acorn computer you are using and how it performs on it.
+
+TO DO
+-----
+
+This emulator has been written as a way to keep the memory of one of my favourite machines alive and has been an ongoing project since I started in December 1997.
+Below is a list of items I would very much like to see added to BeebIt but since I can only work on it when I have free time it may be a very long time before many of these get done.
+If there is anyone who would like to tackle the task of adding one of these items to BeebIt, I would be happy to distribute the source code ('C' and ARM assembler) to you and offer any help needed.
+Please email me at <mjfoot@paradise.net.nz> if you are interested. Thanks.
+
+* Emulation speed increases!
+* Cursor emulation. (done)
+* Sound emulation. (done)
+* Printer emulation. (done)
+* Serial port emulation.
+* Econet emulation
+* Joystick emulation (done)
+* Lightpen and AMX mouse emulation, probably mapping to mouse movement. (done)
+* 1770 FDC emulation. (done)
+* Tube emulation.
+* 6502 Second Processor emulation.
+* B+, Master 128 and Master Compact emulation. (done)
+* Electron emulation.
+* Key mapping to be configurable depending on whether shift is pressed or not
+
+LATER VERSIONS
+--------------
+
+The latest version can be obtained from my home page at <http://homepages.paradise.net.nz/mjfoot>.
+
+ACKNOWLEDGEMENTS
+----------------
+
+Many thanks to:
+
+* Julian Brown for supplying the initial sound driver code.
+
+* John Kortink for supplying ZeriBeep, an updated sound driver.
+
+* James Lampard for BeebItFS, BBCFiles, testing and improvements.
+
+* Simon Wilson for his help in getting BeebIt working on an Iyonix computer.
+
+* Stuart William McConnachie, author of pcBBC, for answering my questions in great detail and for sending me some disc images of games that did not work.
+
+* Michael Borcherds, author of 6502Em for his help.
+
+* David Davenport for releasing the sources to BeebInC, his BBC Emulator, which was a great starting point for this Emulator. Also thanks for his help with a number of questions I put to him.
+
+* David Alan Gilbert for relasing the sources to his emulator, BeebEm. These were another great help in getting everything working correctly.
+
+* Robert Schmidt for maintaining the excellent 'BBC Lives' web site at <http://bbc.nvg.org>
+
+* The BBC Games Archive at <http://easyweb.easynet.co.uk/~viewtronix/beeb/>
+
+* Chris Richardson at 8BS. <http://www.8bs.com>
+
+* Tom Seddon for his help in fixing an address wrap-around bug and for allowing me to distribute 'GetROMs'.
+
+* Ewen Pring for updating the Help file and for Iyonix testing.
+
+* Everyone else who has given feedback or has helped with testing - Thanks.
+
+Helpfile updated (20 Sep 2015)
