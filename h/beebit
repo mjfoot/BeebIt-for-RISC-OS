@@ -51,7 +51,8 @@
 #define DISPLAY_MODE_MEDIUM 2
 #define DISPLAY_MODE_HIGH 3
 #define DISPLAY_MODE_12801024 4
-#define DISPLAY_MODE_16001024 5
+#define DISPLAY_MODE_16801050 5
+#define DISPLAY_MODE_19201080 6
 
 /*define this for RISC OS machines*/
 #define __RISCOS__
@@ -121,6 +122,8 @@ extern int beebit_romselected;
 extern int beebit_rommodified;
 extern int beebit_leds,host_leds;
 extern int beebit_rommask;
+extern int beebit_yield;
+extern int beebit_exit;
 
 extern int beebit_irq;
 extern int beebit_nmi;
@@ -138,3 +141,6 @@ extern void beebitinit(void);
 extern void beebitreset(void);
 extern int beebitmain(void);
 extern void beebitclosedown(void);
+extern int beebitenter(void);
+extern void beebitpoll(void);
+extern void beebitexit(void);

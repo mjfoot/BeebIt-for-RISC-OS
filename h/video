@@ -12,6 +12,10 @@
 #define MODE15_X 640 /*mode 15 is 640 pixels x 8 bits wide */
 #define MODE15_Y 256
 
+/*teletext*/
+extern int teletext_screenextra;
+extern int teletext_screenwidth;
+
 /*video*/
 /*extern int video_vsync0;*/ /*start of vertical sync scan line*/
 /*extern int video_vsync1;*/ /*end of vertical sync scan line*/

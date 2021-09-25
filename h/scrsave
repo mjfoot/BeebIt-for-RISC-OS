@@ -10,4 +10,6 @@
 extern void screentobuffer(void);
 extern void sprite_printscreen(void);
 extern int spritesave(void);
+extern void spritealloc(void);
+extern void spritefree(void);
 
