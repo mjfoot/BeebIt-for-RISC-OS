@@ -582,6 +582,27 @@ r6502execute_loop
   ;SWI OS_Write0
 
   ;SWI OS_WriteI+32
+  ;MOV r0, ra ;a
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, rx ;x
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;MOV r0, ry ;y
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
   ;MOV r0, rps ;program status
   ;LDR r1,=buffer
   ;MOV r2,#16
@@ -589,7 +610,23 @@ r6502execute_loop
   ;SWI OS_Write0
 
   ;SWI OS_WriteI+32
-  ;MOV r0, ra ;a
+  ;MOV r0, rsp ;sp
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;LDR r0,=beebit_romsel
+  ;LDR r0,[r0]
+  ;LDR r1,=buffer
+  ;MOV r2,#16
+  ;SWI OS_ConvertHex2 ;BinaryToDecimal
+  ;SWI OS_Write0
+
+  ;SWI OS_WriteI+32
+  ;LDR r0,=beebit_acccon
+  ;LDR r0,[r0]
   ;LDR r1,=buffer
   ;MOV r2,#16
   ;SWI OS_ConvertHex2 ;BinaryToDecimal

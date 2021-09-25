@@ -183,8 +183,12 @@ r6512opcodeB0end
   ;LDR r11,=r6502_y
   ;LDRB ry,[r11] ;r3=y
   ADD r0,r0,ry
-
-  MOV r2,r0,LSR#8 ;r2=(r0>>8)
+  ANDS r3,r0,#&10000
+  ;mask with #&FFFF
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
+  MOV r2,r0,LSR#8 ;r2=(r0>>8) ;check for page boundary cross
   CMP r2,r1 ;if (r2<>hi)
   ;LDRNE r11,=r6502_cyclestogo
   ;LDRNE r3,[r11] ;r6502_cyclestogo

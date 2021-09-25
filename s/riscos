@@ -21,7 +21,7 @@
 ; Import global symbols
 
   IMPORT |lbreak|
-  IMPORT |lexit|
+  IMPORT |beebit_exit|
   IMPORT |lprintscreen|
   IMPORT |beebit_trace|
   IMPORT |memory|
@@ -283,7 +283,7 @@ keyupdownF12
   CMP r2,#&0C ;F12
   BNE keyupdownIns
   MOV r9,#&FF
-  LDR r11,=lexit ;quit
+  LDR r11,=beebit_exit ;quit
   STR r9,[r11]
   LDMFD sp!,{r0-r3,r8-r12,pc} ;exit
 

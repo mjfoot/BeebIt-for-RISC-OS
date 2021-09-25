@@ -198,6 +198,11 @@ r6512opcode90end
   ;LDR r11,=r6502_y
   ;LDRB ry,[r11] ;r3=y
   ADD r0,r0,ry
+  ANDS r3,r0,#&10000
+  ;mask with #&FFFF
+  MOVNE r3,#&FF00
+  ORRNE r3,r3,#&00FF
+  ANDNE r0,r0,r3
   CPU_CYCLES 4
 
   ;R6502STA ;r1=r6502_a
