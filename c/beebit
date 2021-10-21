@@ -210,14 +210,14 @@ void updatetimers(void)
 {
   int n1mhzcycles;
   /*fprintf(htrace,"UPDATE TIMERS &%X &%X\n",r6502_cyclesoriginal,r6502_cyclestogo);*/
-  if (r6502_cyclesstored == 0)
+  /*if (r6502_cyclesstored == 0)*/
     r6502_cyclesexpired = (r6502_cyclesoriginal-r6502_cyclestogo); /*+r6502_cycle;*/
-  else
+  /*else
   {
     r6502_cyclesexpired = (r6502_cyclesoriginal-r6502_cyclesstored);
     r6502_cyclesexpired += (2-r6502_cyclestogo);
     r6502_cyclesstored = 0;
-  }
+  }*/
   /*r6502_cyclesexpired -= r6502_cycle;*/ /*even cycles only*/
   /*fprintf(htrace,"expired=&%X\n",r6502_cyclesexpired);*/
   /*r6502_cyclecount += r6502_cyclesexpired;*/
@@ -1006,6 +1006,11 @@ void beebitpoll(void)
           r6502_cyclestogo = amx_timer;
       }
 
+      if (r6502_cyclestogo > 0x40)
+        /*maximum wait before update.
+          this enables ELITE screen split to look good*/
+        r6502_cyclestogo = 0x40;
+
       r6502_cyclesoriginal = r6502_cyclestogo;
 
       cpu_execute();
@@ -1177,7 +1182,8 @@ void beebitexit(void)
 
   /*if (beebit_singletask)
   {*/
-    keyrelease();
+    if (!lexit)
+      keyrelease();
     /*enable <Escape>*/
     escapeenable();
     /*enable <Break>*/

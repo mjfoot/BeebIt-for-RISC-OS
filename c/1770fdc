@@ -901,7 +901,7 @@ char w1770read(int naddress)
   if (ntotal & 1)
     r6502_cyclestogo--;*/
   /*if (ntotal & 1)
-    r6502_cyclestogo -= 3;
+    r6502_cyclestogo -= 1;
   else
     r6502_cyclestogo -= 2;*/
 
@@ -997,7 +997,7 @@ void w1770write(int naddress, char nvalue)
     r6502_cyclestogo--;*/
 
   /*if (ntotal & 1)
-    r6502_cyclestogo -= 3;
+    r6502_cyclestogo -= 1;
   else
     r6502_cyclestogo -= 2;*/
 

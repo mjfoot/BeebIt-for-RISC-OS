@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include "6502cpu.h"
+
 #include "6522sysvia.h"
 #include "6845crtc.h"
 #include "beebit.h"
@@ -230,6 +232,9 @@ void videosetplot(void)
   {
     case 7:
       videoteletext = videoteletext4;
+      bbcvdu(84);
+      bbcvdu(55);
+      bbcvdu(32);
       break;
     case 15:
       videoteletext = videoteletext8;
@@ -1191,7 +1196,16 @@ void videoteletext4(void)
   bbcvdu(31);
   bbcvdu(nx);
   bbcvdu(ny);
-  nxend = teletext_screenwidth;
+  nx = teletext_screenwidth;
+
+  /*bbcvdu(77);
+  inttohex4(beebit_machinetype);
+  bbcvdu(32);
+  inttohex4(nx);
+  bbcvdu(32);
+  inttohex4(ny);
+  bbcvdu(32);*/
+
   /*if (m6845_screenwidth > 40)
     nxend = 40;
   else
@@ -1203,6 +1217,10 @@ void videoteletext4(void)
       while (nx > 0)
       {
         bbcvdu(memory[video_address] | 0x80);
+
+      /*bbcvdu(86);
+      inttohex4(memory[video_address] | 0x80);*/
+
         if (video_address >= 0x7FFF)
           video_address = 0x7C00;
         else
@@ -2426,9 +2444,7 @@ void videoteletext8(void)
   teletext_steady = TRUE;
   teletext_character = 0x20;
 
-
   /*teletextblankchar();*/
-
 
   nx = 0;
   nxend = teletext_screenwidth;
@@ -3189,6 +3205,8 @@ void videoscanline(void)
 
   if (video_synchold == 0)
   {
+    /*r6502_cyclestogo += 4;*/
+
     /*vertical sync width*/
     if (m6845_vc == m6845_vsp && m6845_sc <= m6845_vsw)
     {

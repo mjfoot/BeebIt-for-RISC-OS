@@ -267,7 +267,7 @@ char aciaread(int naddress)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
+    r6502_cyclestogo -= 3;
   else
     r6502_cyclestogo -= 2;
 
@@ -324,7 +324,7 @@ void aciawrite(int naddress,int nvalue)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
+    r6502_cyclestogo -= 3;
   else
     r6502_cyclestogo -= 2;
 
@@ -355,7 +355,7 @@ char serialularead(int naddress)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
+    r6502_cyclestogo -= 3;
   else
     r6502_cyclestogo -= 2;
 
@@ -370,7 +370,7 @@ void serialulawrite(int naddress,int nvalue)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
+    r6502_cyclestogo -= 3;
   else
     r6502_cyclestogo -= 2;
 

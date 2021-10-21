@@ -48,7 +48,7 @@
   ;IMPORT |r6502_z|
   ;IMPORT |r6502_c|
   IMPORT |r6502_cyclestogo|
-  IMPORT |r6502_cyclesstored|
+  ;IMPORT |r6502_cyclesstored|
   IMPORT |r6502read|
   ;IMPORT |r6502writemem|
   IMPORT |r6502write|
@@ -111,16 +111,16 @@
   CPU_CYCLES 6
 
   ANDS r0,rps,#IFLAG
-  BNE r6512opcode40end
+  ;BNE r6512opcode40end
 
-  LDR r11,=beebit_irq
-  LDR r2,[r11]
-  CMP r2,#0
-  BEQ r6512opcode40end
+  ;LDR r11,=beebit_irq
+  ;LDR r2,[r11]
+  ;CMP r2,#0
+  ;BEQ r6512opcode40end
 
-  LDR r11,=r6502_cyclesstored
-  STR rcycles,[r11]
-  MOV rcycles,#1
+  ;LDR r11,=r6502_cyclesstored
+  ;STR rcycles,[r11]
+  ;MOV rcycles,#0
 
 r6512opcode40end
   R6512NEXTOPCODE
@@ -494,9 +494,9 @@ r6512opcode50end
   LDR lr, [sp], #4
 
 r6512opcode58end
-  LDR r11,=r6502_cyclesstored
-  STR rcycles,[r11]
-  MOV rcycles,#1
+  ;LDR r11,=r6502_cyclesstored
+  ;STR rcycles,[r11]
+  ;MOV rcycles,#0
 
 r6512opcode58end2
   R6512NEXTOPCODE

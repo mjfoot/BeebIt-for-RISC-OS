@@ -362,7 +362,7 @@ void videoulawrite(int naddress, char nvalue)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
+    r6502_cyclestogo -= 3;
   else
     r6502_cyclestogo -= 2;
 
@@ -639,7 +639,6 @@ void videoulawrite(int naddress, char nvalue)
           case 15:
             host_screenwidth = MODE15_X;
             cursor_bitmap = 0xFFFFFFFF;
-            videoulasetcursor();
             videoulasetcursor();
             regs.r[0] = 0;
             regs.r[1] = 15;

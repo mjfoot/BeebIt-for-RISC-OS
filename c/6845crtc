@@ -102,7 +102,7 @@ char crtcread(int naddress)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
+    r6502_cyclestogo -= 3;
   else
     r6502_cyclestogo -= 2;
 
@@ -127,7 +127,7 @@ void crtcwrite(int naddress,int nvalue)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
+    r6502_cyclestogo -= 3;
   else
     r6502_cyclestogo -= 2;
 
@@ -202,6 +202,7 @@ void crtcwrite(int naddress,int nvalue)
       m6845_screenwidth = nvalue;
       switch (beebit_teletextmode)
       {
+        case 7:
         case 15:
         case 21:
         case 12801024:

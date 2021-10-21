@@ -33,15 +33,16 @@ char r6522usrvia_orb; /*output register B*/
 char r6522usrvia_irb; /*input register B*/
 char r6522usrvia_ora; /*output register A*/
 char r6522usrvia_ira; /*input register A*/
-char r6522usrvia_ddrb;
-char r6522usrvia_ddra;
-char r6522usrvia_t1cl;
-char r6522usrvia_t1ch;
-char r6522usrvia_t1ll;
-char r6522usrvia_t1lh;
-char r6522usrvia_t2cl;
-char r6522usrvia_t2ch;
-char r6522usrvia_t2ll;
+char r6522usrvia_ddrb; /*0 bit means input, 1 means output*/
+char r6522usrvia_ddra; /*0 bit means input, 1 means output*/
+char r6522usrvia_t1cl; /*T1 low order counter*/
+char r6522usrvia_t1ch; /*T1 high order counter*/
+char r6522usrvia_t1ll; /*T1 low order latch*/
+char r6522usrvia_t1lh; /*T1 high order latch*/
+char r6522usrvia_t2cl; /*T2 low order counter*/
+char r6522usrvia_t2ch; /*T2 high order counter*/
+char r6522usrvia_t2ll; /*T2 low order latch*/
+char r6522usrvia_t2lh; /*T2 high order latch*/
 char r6522usrvia_sr; /*status register*/
 char r6522usrvia_acr;
 char r6522usrvia_pcr;
@@ -139,9 +140,7 @@ void userviasett1t2(int ncycles)
 
   if (r6522usrvia_t1 < 0)
   {
-    /*it takes 1 1Mhz cycle when the timer crosses the boundary*/
-    /*it takes 1 1MHz cycle to transfer the latches to the counter*/
-    switch (r6522usrvia_acr & 0xC0)
+    switch (r6522usrvia_acr & 0xC0) /*b7,6*/
     {
       case 0x00:
         /*output disabled and one-shot mode*/
@@ -154,17 +153,13 @@ void userviasett1t2(int ncycles)
           r6522usrvia_ifr |= 0x40;
           r6522usrvia_t1setint = FALSE;
         }
-        /*roll the timers over*/
-        r6522usrvia_t1 &= 0xFFFF;
         break;
       case 0x40:
         /*output disabled and free-run mode*/
         /*continuous interrupts*/
-        /*REVS, SKIRMISH AND RIG ATTACK USE THIS ONE!*/
         if (r6522usrvia_t1setint)
           /*T1 interrupt flag set*/
           r6522usrvia_ifr |= 0x40;
-        r6522usrvia_t1 += ((r6522usrvia_t1lh<<8) | r6522usrvia_t1ll) + 2;
         break;
       case 0x80:
         /*output enabled and one-shot mode*/
@@ -172,16 +167,57 @@ void userviasett1t2(int ncycles)
         if (r6522usrvia_t1setint)
         {
           /*PB7 goes high*/
-          /*r6522usrvia_orb ^= 0x80;
-          r6522usrvia_irb ^= 0x80;*/
+          r6522usrvia_orb ^= 0x80;
+          /*r6522usrvia_irb ^= 0x80;*/
           /*T1 interrupt flag set*/
           r6522usrvia_ifr |= 0x40;
           r6522usrvia_t1setint = FALSE;
         }
+        break;
+      case 0xC0:
+        /*output enabled and free-run mode*/
+        /*continuous interrupts*/
+        if (r6522usrvia_t1setint)
+        {
+          /*T1 interrupt flag set*/
+          r6522usrvia_ifr |= 0x40;
+        }
+        break;
+    }
+  }
+
+  if (r6522usrvia_t1 < -1)
+  {
+    /*bbcvdu(87);*/
+    /*it takes 1 1Mhz cycle when the timer crosses the boundary*/
+    /*it takes 1 1MHz cycle to transfer the latches to the counter*/
+    switch (r6522usrvia_acr & 0xC0) /*b7,6*/
+    {
+      case 0x00:
+        /*output disabled and one-shot mode*/
+        /*timed interrupt each time T1 is loaded*/
+        /*ELITE uses this one*/
+        /*roll the timers over*/
+        /*r6522usrvia_t1 &= 0xFFFF;*/
+        while (r6522usrvia_t1 < 0)
+          r6522usrvia_t1 += ((r6522usrvia_t1lh<<8) | r6522usrvia_t1ll) + 2;
+        break;
+      case 0x40:
+        /*output disabled and free-run mode*/
+        /*continuous interrupts*/
+        /*REVS, SKIRMISH AND RIG ATTACK USE THIS ONE!*/
+        while (r6522usrvia_t1 < 0)
+          r6522usrvia_t1 += ((r6522usrvia_t1lh<<8) | r6522usrvia_t1ll) + 2;
+        break;
+      case 0x80:
+        /*output enabled and one-shot mode*/
+        /*timed interrupt each time T1 is loaded*/
         /*if (r6522usrvia_ddrb & 0x80)*/
           r6522usrvia_portb |= 0x80;
         /*roll the timers over*/
-        r6522usrvia_t1 &= 0xFFFF;
+        /*r6522usrvia_t1 &= 0xFFFF;*/
+        while (r6522usrvia_t1 < 0)
+          r6522usrvia_t1 += ((r6522usrvia_t1lh<<8) | r6522usrvia_t1ll) + 2;
         break;
       case 0xC0:
         /*output enabled and free-run mode*/
@@ -189,12 +225,8 @@ void userviasett1t2(int ncycles)
         /*squarewave output on PB7*/
         /*if (r6522usrvia_ddrb & 0x80)*/
           r6522usrvia_portb ^= 0x80;
-
-        if (r6522usrvia_t1setint)
-          /*T1 interrupt flag set*/
-          r6522usrvia_ifr |= 0x40;
-
-        r6522usrvia_t1 += ((r6522usrvia_t1lh<<8) | r6522usrvia_t1ll) + 2;
+        while (r6522usrvia_t1 < 0)
+          r6522usrvia_t1 += ((r6522usrvia_t1lh<<8) | r6522usrvia_t1ll) + 2;
         break;
     }
     #ifdef __DEBUG__
@@ -208,9 +240,10 @@ void userviasett1t2(int ncycles)
     /*one shot mode only*/
     /*decrement counter by 1MHz clock cycles*/
     r6522usrvia_t2 -= ncycles;
-    if (r6522usrvia_t2 < 0)
+    if (r6522usrvia_t2 < -1)
     {
       r6522usrvia_t2 &= 0xFFFF;
+      /*r6522usrvia_t2 += 2;*/
       #ifdef __DEBUG__
         fprintf(htrace,"T2=&%X ",r6522usrvia_t2);
       #endif
@@ -234,7 +267,8 @@ void userviasett1t2(int ncycles)
       if (r6522usrvia_t2 < 0)
       {
         r6522usrvia_t2 &= 0xFFFF;
-        /*r6502_cyclestogo -= 4;*/
+        /*while (r6522usrvia_t2 < 0)
+          r6522usrvia_t2 += ((r6522usrvia_t2ch<<8) | r6522usrvia_t2cl) + 2;*/
         if (r6522usrvia_t2setint)
         {
           /*on completion of the timing interval,
@@ -246,7 +280,6 @@ void userviasett1t2(int ncycles)
       }
     }
   }
-
 
   if (beebit_mouseemulation == MOUSE_AMXMOUSE)
   {
@@ -277,6 +310,7 @@ void userviareset(int lfull)
   r6522usrvia_t1ll = 0xFF;
   r6522usrvia_t1lh = 0xFF;
   r6522usrvia_t2ll = 0xFF;
+  r6522usrvia_t2lh = 0xFF;
   r6522usrvia_acr = 0;
   r6522usrvia_pcr = 0;
   r6522usrvia_ora = 0xFF;
@@ -308,9 +342,9 @@ char userviaread(int naddress)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
-  else
     r6502_cyclestogo -= 2;
+  else
+    r6502_cyclestogo -= 3;
 
   switch (naddress & 0x0F)
   {
@@ -333,6 +367,7 @@ char userviaread(int naddress)
       /*userviasetirq();*/
       /*reads output register bit in orb. pin level has no effect*/
       nresult = (r6522usrvia_orb & r6522usrvia_ddrb);
+
       if (r6522usrvia_acr & 0x02)
       {
         /*input latching enabled*/
@@ -407,22 +442,46 @@ char userviaread(int naddress)
       break;
     case 0x04:
       /*T1 low order counter*/
+
+      /*R4*/
+      /*bbcvdu(82);
+      bbcvdu(52);
+      inttohex4(r6522usrvia_t1);
+      bbcvdu(32);
+      inttohex4(r6522usrvia_ifr);
+      bbcvdu(32);
+      inttohex8(r6502_cyclestogo);
+      bbcvdu(32);*/
+
       updatetimers();
-      if (r6522usrvia_t1 < 0)
-        r6522usrvia_t1cl = 0xFF;
-      else
+
+      /*inttohex4(r6522usrvia_t1);
+      bbcvdu(32);
+      inttohex4(r6522usrvia_ifr);
+      bbcvdu(32);
+      inttohex8(r6502_cyclestogo);
+      bbcvdu(32);*/
+
+      /*if (r6522usrvia_t1 < 0)
+        r6522usrvia_t1cl = 0x00;
+      else*/
         r6522usrvia_t1cl = (r6522usrvia_t1 & 0xFF);
       /*T1 interrupt flag is cleared (IFR b6)*/
       r6522usrvia_ifr &= 0xBF;
       userviasetirq();
       nresult = r6522usrvia_t1cl;
+
+      /*inttohex4(nresult);
+      bbcvdu(13);
+      bbcvdu(10);*/
+
       break;
     case 0x05:
       /*T1 high order counter*/
       updatetimers();
-      if (r6522usrvia_t1 < 0)
+      /*if (r6522usrvia_t1 < 0)
         r6522usrvia_t1ch = 0xFF;
-      else
+      else*/
         r6522usrvia_t1ch = ((r6522usrvia_t1 >> 8) & 0xFF);
       nresult = r6522usrvia_t1ch;
       break;
@@ -437,9 +496,9 @@ char userviaread(int naddress)
     case 0x08:
       /*T2 low order counter*/
       updatetimers();
-      if (r6522usrvia_t2 < 0)
+      /*if (r6522usrvia_t2 < 0)
         r6522usrvia_t2cl = 0xFF;
-      else
+      else*/
         r6522usrvia_t2cl = (r6522usrvia_t2 & 0xFF);
       /*T2 interrupt flag is cleared (IFR b5)*/
       r6522usrvia_ifr &= 0xDF;
@@ -449,9 +508,9 @@ char userviaread(int naddress)
     case 0x09:
       /*T2 high order counter*/
       updatetimers();
-      if (r6522usrvia_t2 < 0)
+      /*if (r6522usrvia_t2 < 0)
         r6522usrvia_t2ch = 0xFF;
-      else
+      else*/
         r6522usrvia_t2ch = ((r6522usrvia_t2 >> 8) & 0xFF);
       nresult = r6522usrvia_t2ch;
       break;
@@ -525,7 +584,7 @@ void userviawrite(int naddress, char nvalue)
   /*so a single cycle is used to synchronise instead*/
   ntotal = (r6502_cyclesoriginal-r6502_cyclestogo) + r6502_cycle;
   if (ntotal & 1)
-    r6502_cyclestogo -= 1;
+    r6502_cyclestogo -= 3;
   else
     r6502_cyclestogo -= 2;
 
@@ -553,14 +612,8 @@ void userviawrite(int naddress, char nvalue)
       break;
     case 0x01:
       /*input/output reg a*/
-
       /*VDU 21 writes &0D (%1101) only*/
       /*VDU 2 writes &OD then character*/
-
-/*  inttohex4(nvalue);
-  bbcvdu(13);
-  bbcvdu(10);*/
-
       updatetimers();
       r6522usrvia_ora = nvalue;
       r6522usrvia_porta = (r6522usrvia_ora & r6522usrvia_ddra) | (r6522usrvia_porta & ~r6522usrvia_ddra);
@@ -642,7 +695,7 @@ void userviawrite(int naddress, char nvalue)
     case 0x09:
       /*T2 high order counter*/
       updatetimers();
-      r6522usrvia_t2ch = nvalue;
+      r6522usrvia_t2lh = r6522usrvia_t2ch = nvalue;
       r6522usrvia_t2cl = r6522usrvia_t2ll;
       /*clear T2 interrupt flag (bit 5)*/
       r6522usrvia_ifr &= 0xDF;

@@ -155,14 +155,22 @@
   ANDS r0,rps,#IFLAG
   BNE r6502opcode40end
 
-  LDR r11,=beebit_irq
-  LDR r2,[r11]
-  CMP r2,#0
-  BEQ r6502opcode40end
+  ;;STMFD sp!,{lr}
+  ;STR lr,[sp, #-4]!
+  ;BL r6502saveregs
+  ;BL updatetimers
+  ;BL r6502loadregs
+  ;;LDMFD sp!,{pc}
+  ;LDR pc, [sp], #4
 
-  LDR r11,=r6502_cyclesstored
-  STR rcycles,[r11]
-  MOV rcycles,#1
+  ;LDR r11,=beebit_irq
+  ;LDR r2,[r11]
+  ;CMP r2,#0
+  ;BEQ r6502opcode40end
+
+  ;LDR r11,=r6502_cyclesstored
+  ;STR rcycles,[r11]
+  ;MOV rcycles,#0
 
 r6502opcode40end
   R6502NEXTOPCODE
@@ -533,9 +541,9 @@ r6502opcode50end
   LDR pc, [sp], #4
 
 r6502opcode58end
-  LDR r11,=r6502_cyclesstored
-  STR rcycles,[r11]
-  MOV rcycles,#1
+  ;LDR r11,=r6502_cyclesstored
+  ;STR rcycles,[r11]
+  ;MOV rcycles,#0
 
 r6502opcode58end2
   R6502NEXTOPCODE
