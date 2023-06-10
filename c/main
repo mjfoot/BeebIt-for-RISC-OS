@@ -3174,6 +3174,7 @@ void windows(void)
 void init(void)
 {
   char cname[32];
+  _kernel_oserror *err;
 /*  nbytestogo = -1;
   nbytessent = -1;*/
   lquit = FALSE;
@@ -3200,7 +3201,13 @@ void init(void)
   regs.r[1] = 0x4B534154;
   regs.r[2] = (int)cname;
   regs.r[3] = (int)cusermessages;
-  _kernel_swi(Wimp_Initialise,&regs,&regs);
+  err = _kernel_swi(Wimp_Initialise,&regs,&regs);
+  if (err)
+  {
+    /* The system did not like the Wimp version, or otherwise failed. Report it. */
+    fprintf(stderr, "Failed to initialise Wimp: %s\n", err->errmess);
+    exit(1);
+  }
   wimp_version = regs.r[0];
   ntask = regs.r[1];
 
