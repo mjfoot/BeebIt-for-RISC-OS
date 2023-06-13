@@ -143,8 +143,8 @@ int main(void)
 
  in=fopen("<65Host$Dir>.!RunImage", "rb");
  if (!in) {
-   fprintf(stderr, "Failed to open !RunImage file in the !65Host directory. Please locate 65Host and try again.");
- return 2;
+   fprintf(stderr, "Failed to open !RunImage file in the !65Host directory. Please locate 65Host and try again.\n");
+   return 2;
  }
 
  fprintf(stderr, "Ripping BASIC\n\n");
