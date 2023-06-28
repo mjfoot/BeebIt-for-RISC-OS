@@ -498,13 +498,13 @@ r65c12opcode50end
   ;BEQ r6502opcode58end
   BEQ r65c12opcode58end2
 
-  ;STMFD sp!,{lr}
-  STR lr,[sp, #-4]!
+  STMFD sp!,{lr}
+  ;STR lr,[sp, #-4]! ;error
   BL r65c12saveregs
   BL updatetimers
   BL r65c12loadregs
-  ;LDMFD sp!,{pc}
-  LDR pc, [sp], #4
+  LDMFD sp!,{pc}
+  ;LDR pc, [sp], #4 ;error
 
 r65c12opcode58end
   ;LDR r11,=r6502_cyclesstored

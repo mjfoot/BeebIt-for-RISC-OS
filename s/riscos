@@ -243,8 +243,12 @@ zeribeep_workspace
   ;STREQ r9,[r10]
   ;LDMEQFD sp!,{r0-r2,r10-r12,pc} ;exit
 
+  LDR r11,=keylookup
+  LDRB r9,[r11,r2] ;get bbc key code
+
   ;check for <Break>
-  CMP r2,#&0F ;Break
+  ;CMP r2,#&0F ;Break
+  CMP r9,#&80
   BNE keyupdownF12
 
   ;STMFD sp!,{lr}
@@ -332,8 +336,8 @@ keyupdown3
   ;LDMFD sp!,{lr}
   LDR lr, [sp], #4
 
-  LDR r11,=keylookup
-  LDRB r9,[r11,r2] ;get bbc key code
+  ;;LDR r11,=keylookup
+  ;;LDRB r9,[r11,r2] ;get bbc key code
 
   ;LDR r12,=lastkey
   ;STRB r11,[r12,#1]

@@ -66,7 +66,7 @@ void adcpoll(void)
     {
       case 0:
         /*master left/right*/
-        /*nvalue = ((1279-regs.r[0])<<9)/10;*/ /*(n*512)/10=n*51.2*/
+        nvalue = ((1279-regs.r[0])<<9)/10; /*(n*512)/10=n*51.2*/
         break;
       case 1:
         /*master up/down*/

@@ -2,15 +2,15 @@
  *
  * BeebIt - BBC Micro Model B Emulator
  *
- * (C) Copyright Michael J Foot, 1998-2007
+ * (C) Copyright Michael J Foot, 1998-2023
  *
- * Email: <mjfoot@paradise.net.nz>
+ * Email: <mjfoot.nz@gmail.com>
  */
 
 /* DEFINES */
 
 #define APP_NAME "BeebIt"
-#define APP_VERSION "0.72"
+#define APP_VERSION "0.74"
 
 #define Wimp_GetMenuState 0x0400F4
 
@@ -3175,7 +3175,8 @@ void init(void)
 {
   char cname[32];
   _kernel_oserror *err;
-/*  nbytestogo = -1;
+
+  /*nbytestogo = -1;
   nbytessent = -1;*/
   lquit = FALSE;
   nmask = 1; /*no idle*/

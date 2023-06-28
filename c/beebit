@@ -2,9 +2,9 @@
  *
  * BeebIt - BBC Micro Model B Emulator
  *
- * (C) Copyright Michael J Foot, 1998-2003
+ * (C) Copyright Michael J Foot, 1998-2023
  *
- * Email: <mjfoot@paradise.net.nz>
+ * Email: <mjfoot.nz@gmail.com>
  */
 
 #include <stdio.h>
@@ -36,6 +36,8 @@
 #define KeyBuffer_Claim 0x65400
 #define KeyBuffer_Release 0x65401
 #define KeyBuffer_Read 0x65402
+
+#define __DEVELOP__
 
 /*extern int r6502_cyclecount;*/
 
@@ -500,13 +502,13 @@ void beebitinit(void)
 
   videoinit();
 
-  #ifdef __DEVELOP__
+  /*#ifdef __DEVELOP__
     htrace = fopen("<BeebIt$Dir>.!TRACE","w");
   #else
     #ifdef __DEBUG__
       htrace = fopen("<BeebIt$Dir>.!TRACE","w");
     #endif
-  #endif
+  #endif*/
 }
 
 int beebitenter(void)
@@ -968,13 +970,17 @@ void beebitpoll(void)
   do
   {
       /*find how many cycles are needed until something happens*/
-      /*fprintf(htrace,"r6522sysvia_t1=&%X\n",(r6522sysvia_t1<<1));
+      /*if (beebit_trace)
+      {
+      fprintf(htrace,"r6522sysvia_t1=&%X\n",(r6522sysvia_t1<<1));
       fprintf(htrace,"r6522sysvia_t2=&%X\n",(r6522sysvia_t1<<1));
       fprintf(htrace,"r6522usrvia_t1=&%X\n",(r6522sysvia_t1<<1));
       fprintf(htrace,"r6522usrvia_t2=&%X\n",(r6522sysvia_t1<<1));
       fprintf(htrace,"video_timer=&%X\n",video_timer);
-      fprintf(htrace,"i8271_timer=&%X\n",i8271_timer);
+      fprintf(htrace,"m6845_horizontaltotal=&%X\n",m6845_horizontaltotal);*/
+      /*fprintf(htrace,"i8271_timer=&%X\n",i8271_timer);
       fprintf(htrace,"adc_timer=&%X\n",adc_timer);*/
+      /*}*/
       if (r6522sysvia_t1 < r6522sysvia_t2)
         r6502_cyclestogo = (r6522sysvia_t1 << 1);
       else
@@ -1007,9 +1013,18 @@ void beebitpoll(void)
       }
 
       if (r6502_cyclestogo > 0x40)
+      {
+        /*if (beebit_trace)
+        {
+          fprintf(htrace,"r6502_cyclestogo=&%X\n",r6502_cyclestogo);
+          fprintf(htrace,"> & 0x40\n");
+        }*/
         /*maximum wait before update.
           this enables ELITE screen split to look good*/
         r6502_cyclestogo = 0x40;
+      }
+      /*if (beebit_trace)
+        fprintf(htrace,"r6502_cyclestogo=&%X\n",r6502_cyclestogo);*/
 
       r6502_cyclesoriginal = r6502_cyclestogo;
 
@@ -1272,21 +1287,21 @@ void beebitclosedown(void)
   #ifdef __DEBUG__
     FILE *hfile;
   #endif
-  #ifdef __DEVELOP__
+  /*#ifdef __DEVELOP__
       fclose(htrace);
   #else
     #ifdef __DEBUG__
       fclose(htrace);
     #endif
-  #endif
-  #ifdef __DEBUG__
+  #endif*/
+  /*#ifdef __DEBUG__
     hfile = fopen("<BeebIt$Dir>.DUMP","wb");
     fwrite(memory,1,0x10000,hfile);
     fclose(hfile);
     hfile = fopen("<BeebIt$Dir>.SCREEN","wb");
     fwrite(memory+video_startaddress,1,0x2800,hfile);
     fclose(hfile);
-  #endif
+  #endif*/
 
   i8271closedown();
 }

@@ -1,4 +1,4 @@
-BeebIt : Version 0.72 (20 Mar 2021)
+BeebIt : Version 0.74 (20 May 2023)
 ===================================
 Emulator by Michael Foot <mjfoot.nz@gmail.com>.
 Additions by James Lampard.
@@ -9,7 +9,7 @@ NOTE
 
 BeebIt will only work on an Acorn or RISC OS Computer with RISC OS 3.00 or above. To achieve emulation at a useable speed a StrongARM, Xscale or OMAP processor is recommended.
 
-As from version 0.25, the layout of the configuration file has changed to accommodate the new Model B+ emulation. Please read the section GETING STARTED, CONFIGURATION and OPTIONS so you are aware of these changes.
+As from version 0.25, the layout of the configuration file has changed to accommodate the new Model B+ emulation. Please read the section GETTING STARTED, CONFIGURATION and OPTIONS so you are aware of these changes.
 
 BeebIt needs MDF definitions for MODE 7 and 12 (on Risc PC), MODE 15 [640x256] on Iyonix, MODE 21 [640x512] on the BeagleBoard and 1280x1024 for Raspberry Pi.
 
@@ -20,19 +20,19 @@ INTRODUCTION
 
 BeebIt attempts to emulate the behaviour of a British Broadcasting Corporation Model B, B+ and Master 128 Micro Computers.
 
-The BBC Micro was manufactured by Acorn Computers Ltd of Cambridge, England in the early and mid 1980's.
+The BBC Micro was manufactured by Acorn Computers Ltd of Cambridge, England in the early and mid 1980s.
 
 GETING STARTED
 --------------
 
-BeebIt will not work as it stands. You will need a copy of the OS and BASIC ROM images that came with the original BBC Computer. Pace Micro Technology Limited still hold the copyright over these ROMs and therefore they cannot be distributed with this emulator. Here's how to get them though.
+BeebIt will not work as it stands. You will need a copy of the OS and BASIC ROM images that came with the original BBC Computer. Pace Micro Technology Limited still hold the copyright over these ROMs and therefore they cannot be distributed with this emulator. Here is how to get them though.
 
 If you own an original BBC Model B computer you can use either of the following programs to get the ROM images. These programs must be run on your BBC Model B computer.
 1) Use the 'GrabROM' utility which can be found at <http://bbc.nvg.org/software.php3#bbcutils>
 2) Use the 'SaveROM' program, included with BeebIt.
 3) Follow the instructions in the file 'GetROMs'.
 
-If you don't own a BBC Computer, but do have a copy of Acorns '65Host' you can use the accompanying program 'RipROMs' to extrace the ROM images. You will have to extract BeebIt to a writable disc and open the filer window that contains !65Host before you do this.
+If you don't own a BBC Computer, but do have a copy of Acorns '65Host' you can use the accompanying program 'RipROMs' to extract the ROM images. You will have to extract BeebIt to a writable disc and open the filer window that contains !65Host before you do this.
 
 The ROMs can be called anything you like as long as the file name matches what is on the configuration screen. I recommend naming your ROM files with the first part describing what the ROM is, and the second part what version it is. ie. OS120 is BBC B OS 1.20, OS200 is BBC B+ OS 2.00 and DFS120 is Acorn DFS 1.20.
 
@@ -40,7 +40,7 @@ The RISC OS filetype for the ROM images is &BBC, filetype 'BBCSnap', and they ar
 
 If you wish to use DFS disc images, you will also need a copy of an 8271 or 1770 compatible disc filing system ROM.
 
-All ROM images should be stored in the same place. The ROMs directory inside the BeebIt appication is provided for this purpose.
+All ROM images should be stored in the same place. The ROMs directory inside the BeebIt application is provided for this purpose.
 
 Each type of BBC Micro you wish to emulate will need to be set up. It is recommended you set BeebIt up in the following ways:
 
@@ -171,7 +171,7 @@ OPTIONS
 
 The options screen is used to set up BeebIt the way you like it.
 
-Machine Type specifies what type of computer you want to emulate. OS is for entering the name of the Operating System ROM that should be used for this configuation.
+Machine Type specifies what type of computer you want to emulate. OS is for entering the name of the Operating System ROM that should be used for this configuration.
 
 ROMs path specifies the location of the BBC ROM images on your disc.
 
@@ -180,13 +180,13 @@ Screen Update defines how smoothly the screen display is updated. Interlaced mea
 Frame Rate defines how often the screen should be redraw. These are in measurements of 'fields per second'.
 Keyboard layout is used to specify alternate keyboard layouts. This means you can change what keycodes each key produces. See the section below entitled 'keyboard layout' for more information.
 Mouse emulation can be changed to act as a joystick for games, or as an AMX mouse when AMX mouse ROMs and software are used.
-Display mode will see the screen resolution that BeebIt will run it. Auto will try and guess the best screen mode but sometimes on computers with higher resolutions screens, yo will need to set this manually. Medium or High is best for higher resolution screens. 1280 x 1024 is best for RISC OS 5 machines.
+Display mode will see the screen resolution that BeebIt will run it. Auto will try and guess the best screen mode but sometimes on computers with higher resolutions screens, you will need to set this manually. Medium or High is best for higher resolution screens. 1280 x 1024 is best for RISC OS 5 machines.
 
 Sound turns the sound on and off.
 Cursor turns the cursor on and off.
 Fast Tape allows UEF tape file to load at the fastest possible rate.
 
-The DIP switchs are for the setting of the keyboard links on the model B and B+. Refer to the BBC user guide for their operation.
+The DIP switches are for the setting of the keyboard links on the model B and B+. Refer to the BBC user guide for their operation.
 
 If you find the emulation is too slow on your computer, turning off features or setting the options to the lowest will help.
 
@@ -196,7 +196,7 @@ USING DISC IMAGES
 Floppy disc drives 0 and 2 are sides 1 and 2 of the first drive. Drives 1 and 3 are the second drive.
 
 These use 'disc image files' which are assumed to be a byte for byte copy of a 40 or 80 track single sided disc. The RISC OS filetype for a DFSImage is &B22.
-These images can be loaded by either dragging the file to the appropriate icon on the drive configiration window, dragging the file to the BeebIt icon on the Iconbar or by double clicking a DFSImage file. The last two options will assign the image as drive 0 and start the BBC emulation.
+These images can be loaded by either dragging the file to the appropriate icon on the drive configuration window, dragging the file to the BeebIt icon on the Iconbar or by double clicking a DFSImage file. The last two options will assign the image as drive 0 and start the BBC emulation.
 
 Troubleshooting tip: If you are using DFS 1.20 (and possibly other filing systems) and you receive the error 'Disk Fault 1E at 00/00' it probably means you haven't configured a valid disc image.
 
@@ -211,7 +211,7 @@ Tape images are standard UEF (Unified Emulator Format) files. There is no RISC O
 
 Normally the UEF file is compressed using GZip. BeebIt cannot use the file in this compressed format so you must decompress the file, using GZip or SparkFS, before it can be used. An uncompressed UEF file should begin with the text "UEF File" when examined in a text editor.
 
-The uncompressed files can be used by dragging the file to the icon labeled 'T' at the bottom of the drive configuration window.
+The uncompressed files can be used by dragging the file to the icon labelled 'T' at the bottom of the drive configuration window.
 
 Remember you will need to type *TAPE to select the tape filing system if you have installed a disc filing system.
 
@@ -244,10 +244,11 @@ Ctrl  ShftLk              Space                      Ctrl   Lft Dwn Rgt
 
 The 'Games' layout swaps the 'A' key and the left 'Ctrl' key so that games such as Arcadians can be played more naturally.
 
-You can define your own keyboard layouts by copying the 'Default' file in the KeyMaps directory inside the BeebIt directory to another filename. Load the new file into an editor that will allow you to change each byte in the file (ie. Zap or StrongEd) and make sure you have override mode on. Each byte in the keymap file corresponds to each location of a key up/down event in RISC OS. The table showing the location for each key is in the RISC OS PRMs under key up/down event 11 (Volume 1: Chapter 11: Events). These loations are then mapped to the corresponding BBC Internal Key number which is shown in the Advanced user Guide for the BBC in Appendix C - Key Values Summary (pages 356-458).
-For eaxmple:
-Location &00 is Escape. This contains the value &70 which is the BBC hexidecimal internal key code for Escape.
-Location &3C is A. This contains the value &41 which is the BBC hexidecimal internal key code for A.
+You can define your own keyboard layouts by copying the 'Default' file in the KeyMaps directory inside the BeebIt directory to another filename. Load the new file into an editor that will allow you to change each byte in the file (ie. Zap or StrongEd) and make sure you have override mode on. Each byte in the keymap file corresponds to each location of a key up/down event in RISC OS. The table showing the location for each key is in the RISC OS PRMs under key up/down event 11 (Volume 1: Chapter 11: Events). These locations are then mapped to the corresponding BBC Internal Key number which is shown in the Advanced user Guide for the BBC in Appendix C - Key Values Summary (pages 356-458).
+For example:
+Location &00 is Escape. This contains the value &70 which is the BBC hexadecimal internal key code for Escape.
+Location &3C is A. This contains the value &41 which is the BBC hexadecimal internal key code for A.
+The keycode for break is &80. Usually this is in location &0F of the key map file. If you use a Pi-Top or other cutdown keyboard, you can modify a key map file to put &80 in a suitable position.
 Please note that although the above method allows you to swap around the keys, characters generated by shift in combination with a key cannot be moved to different keys (for example: Shift and the 9 key produces an open bracket on a PC keyboard, whereas on the BBC (and hence the emulator) Shift + 9 produces a close bracket instead).
 
 The table below lists all the characters, whether generated by pressing Shift or not, which are different between a PC keyboard and the BBC keyboard. So for example to obtain the @ symbol in the emulator, press the apostrophe key on a PC keyboard.
@@ -292,10 +293,10 @@ JOYSTICK EMULATION
 
 The mouse can be used to simulate a joystick connected to a BBC Computer. Moving the mouse in each direction acts as if a joystick was moved. The left and right mouse buttons simulate the first and second fire buttons.
 
-ADDITONAL ADD-ONS
------------------
+ADDITIONAL ADD-ONS
+------------------
 
-BeebIt64K emulates a 64K RAM chip paged into memory locations &FD00-&FDFF. To enable this, you need to uncomment the line in BeebIts !Run file. Full information can be found in the BeebIt64K directory which resides in the BeebIt directory.
+BeebIt64K emulates a 64K RAM chip paged into memory locations &FD00-&FDFF. To enable this, you need to uncomment the line in BeebIt's !Run file. Full information can be found in the BeebIt64K directory which resides in the BeebIt directory.
 
 REGISTRATION
 ------------
@@ -350,7 +351,7 @@ Many thanks to:
 
 * David Davenport for releasing the sources to BeebInC, his BBC Emulator, which was a great starting point for this Emulator. Also thanks for his help with a number of questions I put to him.
 
-* David Alan Gilbert for relasing the sources to his emulator, BeebEm. These were another great help in getting everything working correctly.
+* David Alan Gilbert for releasing the sources to his emulator, BeebEm. These were another great help in getting everything working correctly.
 
 * Robert Schmidt for maintaining the excellent 'BBC Lives' web site at <http://bbc.nvg.org>
 

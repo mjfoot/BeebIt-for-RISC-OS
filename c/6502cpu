@@ -347,7 +347,7 @@ int r6502_cyclesexpired;
 int r6502_cyclesstored;
 int r6502_cycle;
 /*int r6502_cyclecount;*/
-unsigned int r6502_cyclesmonotonic = 0;
+unsigned int r6502_cyclesmonotonic = 0; /*used by zeribeepwrite*/
 
 /*int ltrace=FALSE;*/
 int n;

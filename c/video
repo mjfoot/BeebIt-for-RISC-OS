@@ -1929,25 +1929,38 @@ void teletextgraphicscontiguous(void)
 
 void teletextgraphicsseparated1(int address, int pointer, int row)
 {
-  unsigned int data;
+  unsigned int data,data0,data1;
   char *cscreen;
 
   cscreen = (char *)pointer + (row << 3);
-  data = getword(cscreen);
+  /*data = getword(cscreen);*/
   /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
-  data = (data & teletext_graphiccolourmask);
+  /*data = (data & teletext_graphiccolourmask);*/
+
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_graphiccolourmask | data1);
+
   cscreen = (char *)address;
   /*0xFFFF0000 is used to blank out half of the first block*/
-  setword(cscreen,(data & 0xFFFF0000));
+  /*setword(cscreen,(data & 0xFFFF0000));*/
+  setword(cscreen,((data & 0xFFFF0000) | (teletext_backcolourmask & 0x0000FFFF)));
+  /*setword(cscreen,(data & 0xFFFF0000));*/
   cscreen = (char *)address+4;
   setword(cscreen,data);
 
   cscreen = (char *)pointer + (row << 3) + 4;
-  data = getword(cscreen);
+  /*data = getword(cscreen);*/
   /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
-  data = (data & teletext_graphiccolourmask);
+  /*data = (data & teletext_graphiccolourmask);*/
+
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_graphiccolourmask | data1);
+
   cscreen = (char *)address+8;
-  setword(cscreen,(data & 0xFFFF0000));
+  setword(cscreen,((data & 0xFFFF0000) | (teletext_backcolourmask & 0x0000FFFF)));
+  /*setword(cscreen,(data & 0xFFFF0000));*/
   cscreen = (char *)address+12;
   setword(cscreen,data);
 }
@@ -1955,18 +1968,23 @@ void teletextgraphicsseparated1(int address, int pointer, int row)
 /*double width, single height*/
 void teletextgraphicsseparated2(int address, int pointer, int row)
 {
-  unsigned int data;
+  unsigned int data,data0,data1;
   char *cscreen;
 
   cscreen = (char *)pointer + (row << 3);
-  data = getword(cscreen);
+  /*data = getword(cscreen);*/
   /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
-  data = (data & teletext_graphiccolourmask);
+  /*data = (data & teletext_graphiccolourmask);*/
+
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_graphiccolourmask | data1);
+
   /*data0 = data0 | (data0 >> 16);
   data1 = data | (data << 16);*/
   cscreen = (char *)address;
-  /*0x00 is used to blank out half of the first block*/
-  setword(cscreen,0x00);
+  /*teletext_backcolourmask is used to blank out half of the first block*/
+  setword(cscreen,teletext_backcolourmask);
   cscreen = (char *)address+0x04;
   setword(cscreen,data);
   cscreen = (char *)address+0x08;
@@ -1975,14 +1993,20 @@ void teletextgraphicsseparated2(int address, int pointer, int row)
   setword(cscreen,data);
 
   cscreen = (char *)pointer + (row << 3) + 4;
-  data = getword(cscreen);
+
+  /*data = getword(cscreen);*/
   /*data = (data ^ 0xFFFFFFFF) & teletext_backcolourmask;*/
-  data = (data & teletext_graphiccolourmask);
+  /*data = (data & teletext_graphiccolourmask);*/
+
+  data0 = getword(cscreen);
+  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data = (data0 & teletext_graphiccolourmask | data1);
+
   /*data0 = data0 | (data0 >> 16);
   data1 = data | (data << 16);*/
   cscreen = (char *)address+0x10;
-  /*0x00 is used to blank out half of the first block*/
-  setword(cscreen,0x00);
+  /*teletext_backcolourmask is used to blank out half of the first block*/
+  setword(cscreen,teletext_backcolourmask);
   cscreen = (char *)address+0x14;
   setword(cscreen,data);
   cscreen = (char *)address+0x18;
@@ -2006,8 +2030,8 @@ void teletextgraphicsseparated2x2(int address, int pointer, int row)
   cscreen = (char *)address;
   cscreen1 = (char *)address + host_screenwidth;
   /*0x00 is used to blank out half of the first block*/
-  setword(cscreen,0x00);
-  setword(cscreen1,0x00);
+  setword(cscreen,teletext_backcolourmask);
+  setword(cscreen1,teletext_backcolourmask);
   cscreen = (char *)address+4;
   cscreen1 += 4;
   setword(cscreen,data);
@@ -2029,7 +2053,7 @@ void teletextgraphicsseparated2x2(int address, int pointer, int row)
   data1 = data | (data << 16);*/
   cscreen = (char *)address+16;
   cscreen1 = cscreen + host_screenwidth;
-  setword(cscreen,0x00);
+  setword(cscreen,teletext_backcolourmask);
   setword(cscreen1,data);
   cscreen = (char *)address+20;
   cscreen1 = cscreen + host_screenwidth;
@@ -2064,10 +2088,10 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth;
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       for (row = 3; row <= 5; row++)
       {
@@ -2076,10 +2100,10 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth;
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       for (row = 7; row <= 8; row++)
       {
@@ -2088,10 +2112,10 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth;
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       break;
     case 21:
       for (row = 0; row <= 1; row++)
@@ -2103,16 +2127,16 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth;
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       for (row = 3; row <= 5; row++)
       {
@@ -2123,16 +2147,16 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth;
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       for (row = 7; row <= 8; row++)
       {
@@ -2143,16 +2167,16 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth;
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       break;
     case 12801024:
     case 16801050:
@@ -2170,56 +2194,56 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth; /* * 2;*/
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       /*cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;*/
       for (row = 3; row <= 5; row++)
       {
@@ -2234,56 +2258,56 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth; /* * 2;*/
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       /*cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;
       cscreen = (char *)address;
-      setword(cscreen,0x00000000);
-      setword(cscreen+0x04,0x00000000);
-      setword(cscreen+0x08,0x00000000);
-      setword(cscreen+0x0C,0x00000000);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
       address = address + host_screenwidth;*/
       for (row = 7; row <= 8; row++)
       {
@@ -2298,44 +2322,44 @@ void teletextgraphicsseparated(void)
         address = address + host_screenwidth; /* * 2;*/
       }
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       address = address + host_screenwidth; /* * 2;*/
       cscreen = (char *)address;
-      setword(cscreen,0x00);
-      setword(cscreen+0x04,0x00);
-      setword(cscreen+0x08,0x00);
-      setword(cscreen+0x0C,0x00);
-      setword(cscreen+0x10,0x00);
-      setword(cscreen+0x14,0x00);
-      setword(cscreen+0x18,0x00);
-      setword(cscreen+0x1C,0x00);
+      setword(cscreen,teletext_backcolourmask);
+      setword(cscreen+0x04,teletext_backcolourmask);
+      setword(cscreen+0x08,teletext_backcolourmask);
+      setword(cscreen+0x0C,teletext_backcolourmask);
+      setword(cscreen+0x10,teletext_backcolourmask);
+      setword(cscreen+0x14,teletext_backcolourmask);
+      setword(cscreen+0x18,teletext_backcolourmask);
+      setword(cscreen+0x1C,teletext_backcolourmask);
       break;
   }
 }
@@ -2478,6 +2502,9 @@ void videoteletext8(void)
           video_n = memory[video_address];
         break;
     }
+
+    if (video_n >= 0xA0)
+      video_n &= 0x7F;
 
     switch (video_n)
     {
@@ -2683,14 +2710,22 @@ void videoteletext8(void)
             case TELETEXT_GRAPHICS_CONTIGUOUS:
               if (!teletext_steady AND teletext_timer >= 36)
                 teletextblankchar();
-              else
-                teletextgraphicscontiguous();
+              else {
+                if (teletext_character == 0x20)
+                  teletextblankchar();
+                else
+                  teletextgraphicscontiguous();
+              }
               break;
             case TELETEXT_GRAPHICS_SEPARATED:
               if (!teletext_steady AND teletext_timer >= 36)
                 teletextblankchar();
-              else
-                teletextgraphicsseparated();
+              else {
+                if (teletext_character == 0x20)
+                  teletextblankchar();
+                else
+                  teletextgraphicsseparated();
+              }
               break;
           }
         }
@@ -3414,7 +3449,7 @@ void videoscanline(void)
   {
     /*if (video_field == 1)
       video_timer += m6845_horizontaltotal;*/
-    video_timer += (m6845_horizontaltotal>>1);
+    /*video_timer += (m6845_horizontaltotal>>1);*/
   }
 
   /*---reset---*/

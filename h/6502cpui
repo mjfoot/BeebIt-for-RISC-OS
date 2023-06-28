@@ -79,7 +79,7 @@
 ;rockwell 65C12 cpu
 ;
   MACRO
-  R65C12NEXTOPCODE_SLOW
+  R65C12NEXTOPCODE ;_SLOW
   MOV pc,lr
   MEND
 
@@ -87,7 +87,7 @@
 ;rockwell 65C12 cpu
 ;
   MACRO
-  R65C12NEXTOPCODE
+  R65C12NEXTOPCODE_FAST
   CMP rcycles,#0
   MOVLE pc,lr
   CMP rpc,#&3000
