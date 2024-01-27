@@ -265,8 +265,9 @@ void videoreset(int lfull)
   video_drawline = 0;
   nclock = clock()+TIME_50HZ;
   m6845_vc = 0; /*m6845_vsp;*/
-  m6845_sc = video_currentrow = 0;
-  video_scanline = 0;
+  m6845_sc = -1;
+  video_currentrow = 0;
+  video_scanline = -1;
   /*video_onscreen = FALSE;*/
   video_de = FALSE;
   video_display = FALSE;
@@ -3073,6 +3074,295 @@ void videoscanline(void)
 {
   char cmodeblock[24];
   int naddress;
+
+  /*---counter---*/
+
+  /*increase internal scanline count by 1*/
+  video_scanline++;
+
+  /*increase 6845 scanline count by 1*/
+  m6845_sc++;
+
+  if (m6845_sc >= m6845_sl)
+  {
+    /*scanline count >= scan lines per character row*/
+    m6845_vc++;
+    m6845_sc = 0;
+    /*scanline count = 0*/
+    if (m6845_vc == m6845_vd)
+    {
+      /*curent row == vertical display rows*/
+      video_de = video_display = FALSE;
+    }
+    video_offset += video_width;
+  }
+
+  /*---vertical sync---*/
+
+  if (video_synchold == 0)
+  {
+    /*r6502_cyclestogo += 4;*/
+
+    /*vertical sync width*/
+    if (m6845_vc == m6845_vsp && m6845_sc <= m6845_vsw)
+    {
+      video_synchold = m6845_vsw;
+
+      video_scanline = 0;
+      if (video_framerate == beebit_framerate)
+        video_field ^= 1;
+
+      video_currentrow = 0;
+      if (beebit_videospeed == VIDEO_SLOW)
+        video_drawline = 0;
+      else
+      {
+        if (m6845_interlaceon AND video_field == 1)
+          video_drawline = 1;
+        else
+          video_drawline = 0;
+      }
+
+      /*VSYNC pulse is delayed on interlace even frame*/
+      if (m6845_interlaceon && video_field == 0)
+        video_timer += (m6845_horizontaltotal>>1);
+
+      /*print screen during vertical sync*/
+      if (lprintscreen !=0)
+      {
+        sprite_printscreen();
+        lprintscreen = 0;
+      }
+
+    }
+  }
+  else
+  {
+    video_synchold--;
+
+    if (video_synchold == 0)
+    {
+      /*Take off time VSYNC end was delayed*/
+      if (m6845_interlaceon && video_field == 0)
+        video_timer -= (m6845_horizontaltotal>>1);
+
+      if (video_mode != ncurrentmode)
+      {
+        /*screen mode has changed*/
+        switch (beebit_graphicsmode)
+        {
+          case 12:
+            if (lteletextmode)
+            {
+              switch (beebit_teletextmode)
+              {
+                case 7:
+                  host_screenwidth = MODE12_X;
+                  cursor_bitmap = 0x77777777;
+                  videoulasetcursor();
+                  regs.r[0] = 0;
+                  regs.r[1] = 7;
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  /*bbcvdu(22);
+                  bbcvdu(7);*/
+                  break;
+                case 15:
+                  host_screenwidth = MODE15_X;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  regs.r[0] = 0;
+                  regs.r[1] = 15;
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  /*bbcvdu(22);
+                  bbcvdu(15);*/
+                  break;
+                case 21:
+                  host_screenwidth = MODE15_X;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  regs.r[0] = 0;
+                  regs.r[1] = 21;
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  /*bbcvdu(22);
+                  bbcvdu(21);*/
+                  break;
+                case 12801024:
+                  /*1280 x 1024*/
+                  host_screenwidth = 1280;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1280);
+                  setword(cmodeblock + 8, 1024);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = 0;
+                  regs.r[1] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  break;
+                case 16801050:
+                  /*1680 x 1050*/
+                  host_screenwidth = 1696;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1680);
+                  setword(cmodeblock + 8, 1050);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = 0;
+                  regs.r[1] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  break;
+                case 19201080:
+                  /*1920 x 1080*/
+                  host_screenwidth = 1920;
+                  cursor_bitmap = 0xFFFFFFFF;
+                  videoulasetcursor();
+                  setword(cmodeblock, 1);
+                  setword(cmodeblock + 4, 1920);
+                  setword(cmodeblock + 8, 1080);
+                  setword(cmodeblock + 12, 3); /*log2bpp*/
+                  setword(cmodeblock + 16, -1);
+                  setword(cmodeblock + 20, -1);
+                  regs.r[0] = 0;
+                  regs.r[1] = (int)cmodeblock; /*MODE block*/
+                  _kernel_swi(OS_ScreenMode,&regs,&regs);
+                  break;
+              }
+              screenstart();
+              cursordisable();
+            }
+            else
+            {
+              videoulasetpalette();
+              if (ncurrentmode == 7 OR ncurrentmode == -1)
+              {
+                /*mode 12 will suit all modes*/
+                regs.r[0] = 0;
+                regs.r[1] = 12;
+                _kernel_swi(OS_ScreenMode,&regs,&regs);
+                /*bbcvdu(22);
+                bbcvdu(12); */
+                host_screenwidth = MODE12_X;
+                cursor_bitmap = 0x77777777;
+                screenstart();
+                cursordisable();
+              }
+            }
+            break;
+          case 15:
+            if (!lteletextmode)
+              videoulasetpalette();
+            break;
+          case 21:
+            if (!lteletextmode)
+              videoulasetpalette();
+            break;
+          case 12801024:
+          case 16801050:
+          case 19201080:
+            if (!lteletextmode)
+              videoulasetpalette();
+            break;
+        }
+
+        ncurrentmode = video_mode;
+        videomodechange();
+        crtcscreen();
+        crtccursor();
+        video_startaddress = video_storeaddress;
+        video_offset = 0;
+      }
+
+      r6522sysvia_ifr |= 0x02; /*CA1 flag*/
+      systemviasetirq();
+      r6522sysvia_ira = (r6522sysvia_ora & r6522sysvia_ddra) + (r6522sysvia_porta & ~r6522sysvia_ddra);
+
+      beebit_yield = TRUE;
+
+      /*if (singletask)
+      {*/
+      /*sync emulated BBC clock with PC clock*/
+      if (beebit_cpuspeed == CPU_2MHZ)
+      {
+        vsync(); /*wait for native scren vsync*/
+        while (clock() < nclock)
+        {
+        }
+        nclock = clock()+TIME_50HZ;
+      }
+      /*}*/
+    }
+  }
+
+  /*---timing---*/
+
+  /*if (lteletextmode)
+  {
+    video_timer += (m6845_horizontaltotal*m6845_sl);
+    video_timer += m6845_horizontaltotal + 32;
+  }
+  else
+  {*/
+  /*if (videoula_clockrate)
+    video_timer += m6845_horizontaltotal;
+  else
+    video_timer += (m6845_horizontaltotal << 1);*/
+  video_timer += m6845_horizontaltotal;
+  /*}*/
+
+  /*---reset---*/
+
+  /*if (video_mode == 2)
+    fprintf(htrace,"vc=%u vt=%u sc=%u adj=%u\n",m6845_vc,m6845_vt,m6845_sc,m6845_adj);*/
+  /*if (m6845_vc >= m6845_vt && m6845_sc >= m6845_adj)*/
+  if (((m6845_vc << 8) | m6845_sc) >= video_totalend)
+  {
+    /*Dummy line brings sum of even + odd field time to 40 ms for Revs*/
+    if (m6845_interlaceon && video_field == 0)
+      video_timer += m6845_horizontaltotal;
+
+    videorecalc();
+    m6845_vc = m6845_sc = 0;
+    /*vertical count = 0*/
+    video_de = TRUE;
+    /*video_display = TRUE;*/
+    video_display = (m6845_displayskew != 3);
+
+    /*cursor timer counts up to 50 fields*/
+    if (cursor_timer <= 0)
+    {
+      cursor_timer = cursor_blinktime;
+      if (cursor_blink)
+        cursor_on = (!cursor_on);
+      else
+        cursor_on = TRUE;
+    }
+    else
+      cursor_timer--;
+
+    /*teletext timer counts 50 fields*/
+    if (teletext_timer >= 50)
+      teletext_timer = 0;
+    else
+      teletext_timer ++;
+
+    /*video_framerate counts 0-2 fields*/
+    /*if (video_framerate >= 255)*/
+    if (video_framerate >= beebit_framerate)
+      video_framerate = 0;
+    else
+      video_framerate++;
+
+    video_startaddress = video_storeaddress;
+    video_offset = 0;
+  /*if (video_mode == 2)
+    fprintf(htrace,"videostart=&%X\n",video_startaddress);*/
+  }
+
   /*---plot---*/
 
   if (lteletextmode)
@@ -3301,288 +3591,5 @@ void videoscanline(void)
         /*toggle the line drawing flag*/
         video_drawline ^= 1;
     }
-  }
-
-  /*---counter---*/
-
-  /*increase internal scanline count by 1*/
-  video_scanline++;
-
-  /*increase 6845 scanline count by 1*/
-  m6845_sc++;
-
-  if (m6845_sc >= m6845_sl)
-  {
-    /*scanline count >= scan lines per character row*/
-    m6845_vc++;
-    m6845_sc = 0;
-    /*scanline count = 0*/
-    if (m6845_vc == m6845_vd)
-    {
-      /*curent row == vertical display rows*/
-      video_de = video_display = FALSE;
-    }
-    video_offset += video_width;
-  }
-
-  /*---vertical sync---*/
-
-  if (video_synchold == 0)
-  {
-    /*r6502_cyclestogo += 4;*/
-
-    /*vertical sync width*/
-    if (m6845_vc == m6845_vsp && m6845_sc <= m6845_vsw)
-    {
-      video_synchold = m6845_vsw+1;
-
-      video_scanline = 0;
-      if (video_framerate == beebit_framerate)
-        video_field ^= 1;
-
-      video_currentrow = 0;
-      if (beebit_videospeed == VIDEO_SLOW)
-        video_drawline = 0;
-      else
-      {
-        if (m6845_interlaceon AND video_field == 1)
-          video_drawline = 1;
-        else
-          video_drawline = 0;
-      }
-
-      /*print screen during vertical sync*/
-      if (lprintscreen !=0)
-      {
-        sprite_printscreen();
-        lprintscreen = 0;
-      }
-
-    }
-  }
-  else
-  {
-    video_synchold--;
-
-    if (video_synchold == 0)
-    {
-      if (video_mode != ncurrentmode)
-      {
-        /*screen mode has changed*/
-        switch (beebit_graphicsmode)
-        {
-          case 12:
-            if (lteletextmode)
-            {
-              switch (beebit_teletextmode)
-              {
-                case 7:
-                  host_screenwidth = MODE12_X;
-                  cursor_bitmap = 0x77777777;
-                  videoulasetcursor();
-                  regs.r[0] = 0;
-                  regs.r[1] = 7;
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  /*bbcvdu(22);
-                  bbcvdu(7);*/
-                  break;
-                case 15:
-                  host_screenwidth = MODE15_X;
-                  cursor_bitmap = 0xFFFFFFFF;
-                  videoulasetcursor();
-                  regs.r[0] = 0;
-                  regs.r[1] = 15;
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  /*bbcvdu(22);
-                  bbcvdu(15);*/
-                  break;
-                case 21:
-                  host_screenwidth = MODE15_X;
-                  cursor_bitmap = 0xFFFFFFFF;
-                  videoulasetcursor();
-                  regs.r[0] = 0;
-                  regs.r[1] = 21;
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  /*bbcvdu(22);
-                  bbcvdu(21);*/
-                  break;
-                case 12801024:
-                  /*1280 x 1024*/
-                  host_screenwidth = 1280;
-                  cursor_bitmap = 0xFFFFFFFF;
-                  videoulasetcursor();
-                  setword(cmodeblock, 1);
-                  setword(cmodeblock + 4, 1280);
-                  setword(cmodeblock + 8, 1024);
-                  setword(cmodeblock + 12, 3); /*log2bpp*/
-                  setword(cmodeblock + 16, -1);
-                  setword(cmodeblock + 20, -1);
-                  regs.r[0] = 0;
-                  regs.r[1] = (int)cmodeblock; /*MODE block*/
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  break;
-                case 16801050:
-                  /*1680 x 1050*/
-                  host_screenwidth = 1696;
-                  cursor_bitmap = 0xFFFFFFFF;
-                  videoulasetcursor();
-                  setword(cmodeblock, 1);
-                  setword(cmodeblock + 4, 1680);
-                  setword(cmodeblock + 8, 1050);
-                  setword(cmodeblock + 12, 3); /*log2bpp*/
-                  setword(cmodeblock + 16, -1);
-                  setword(cmodeblock + 20, -1);
-                  regs.r[0] = 0;
-                  regs.r[1] = (int)cmodeblock; /*MODE block*/
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  break;
-                case 19201080:
-                  /*1920 x 1080*/
-                  host_screenwidth = 1920;
-                  cursor_bitmap = 0xFFFFFFFF;
-                  videoulasetcursor();
-                  setword(cmodeblock, 1);
-                  setword(cmodeblock + 4, 1920);
-                  setword(cmodeblock + 8, 1080);
-                  setword(cmodeblock + 12, 3); /*log2bpp*/
-                  setword(cmodeblock + 16, -1);
-                  setword(cmodeblock + 20, -1);
-                  regs.r[0] = 0;
-                  regs.r[1] = (int)cmodeblock; /*MODE block*/
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  break;
-              }
-              screenstart();
-              cursordisable();
-            }
-            else
-            {
-              videoulasetpalette();
-              if (ncurrentmode == 7 OR ncurrentmode == -1)
-              {
-                /*mode 12 will suit all modes*/
-                regs.r[0] = 0;
-                regs.r[1] = 12;
-                _kernel_swi(OS_ScreenMode,&regs,&regs);
-                /*bbcvdu(22);
-                bbcvdu(12); */
-                host_screenwidth = MODE12_X;
-                cursor_bitmap = 0x77777777;
-                screenstart();
-                cursordisable();
-              }
-            }
-            break;
-          case 15:
-            if (!lteletextmode)
-              videoulasetpalette();
-            break;
-          case 21:
-            if (!lteletextmode)
-              videoulasetpalette();
-            break;
-          case 12801024:
-          case 16801050:
-          case 19201080:
-            if (!lteletextmode)
-              videoulasetpalette();
-            break;
-        }
-
-        ncurrentmode = video_mode;
-        videomodechange();
-        crtcscreen();
-        crtccursor();
-        video_startaddress = video_storeaddress;
-        video_offset = 0;
-      }
-
-      r6522sysvia_ifr |= 0x02; /*CA1 flag*/
-      systemviasetirq();
-      r6522sysvia_ira = (r6522sysvia_ora & r6522sysvia_ddra) + (r6522sysvia_porta & ~r6522sysvia_ddra);
-
-      beebit_yield = TRUE;
-
-      /*if (singletask)
-      {*/
-      /*sync emulated BBC clock with PC clock*/
-      if (beebit_cpuspeed == CPU_2MHZ)
-      {
-        vsync(); /*wait for native scren vsync*/
-        while (clock() < nclock)
-        {
-        }
-        nclock = clock()+TIME_50HZ;
-      }
-      /*}*/
-    }
-  }
-
-  /*---timing---*/
-
-  /*if (lteletextmode)
-  {
-    video_timer += (m6845_horizontaltotal*m6845_sl);
-    video_timer += m6845_horizontaltotal + 32;
-  }
-  else
-  {*/
-  /*if (videoula_clockrate)
-    video_timer += m6845_horizontaltotal;
-  else
-    video_timer += (m6845_horizontaltotal << 1);*/
-  video_timer += m6845_horizontaltotal;
-  /*}*/
-
-  if (m6845_interlaceon AND video_scanline == 0)
-  {
-    /*if (video_field == 1)
-      video_timer += m6845_horizontaltotal;*/
-    /*video_timer += (m6845_horizontaltotal>>1);*/
-  }
-
-  /*---reset---*/
-
-  /*if (video_mode == 2)
-    fprintf(htrace,"vc=%u vt=%u sc=%u adj=%u\n",m6845_vc,m6845_vt,m6845_sc,m6845_adj);*/
-  /*if (m6845_vc >= m6845_vt && m6845_sc >= m6845_adj)*/
-  if (((m6845_vc << 8) | m6845_sc) >= video_totalend)
-  {
-    videorecalc();
-    m6845_vc = m6845_sc = 0;
-    /*vertical count = 0*/
-    video_de = TRUE;
-    /*video_display = TRUE;*/
-    video_display = (m6845_displayskew != 3);
-
-    /*cursor timer counts up to 50 fields*/
-    if (cursor_timer <= 0)
-    {
-      cursor_timer = cursor_blinktime;
-      if (cursor_blink)
-        cursor_on = (!cursor_on);
-      else
-        cursor_on = TRUE;
-    }
-    else
-      cursor_timer--;
-
-    /*teletext timer counts 50 fields*/
-    if (teletext_timer >= 50)
-      teletext_timer = 0;
-    else
-      teletext_timer ++;
-
-    /*video_framerate counts 0-2 fields*/
-    /*if (video_framerate >= 255)*/
-    if (video_framerate >= beebit_framerate)
-      video_framerate = 0;
-    else
-      video_framerate++;
-
-    video_startaddress = video_storeaddress;
-    video_offset = 0;
-  /*if (video_mode == 2)
-    fprintf(htrace,"videostart=&%X\n",video_startaddress);*/
   }
 }
