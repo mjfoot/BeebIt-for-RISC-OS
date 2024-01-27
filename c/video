@@ -3074,6 +3074,7 @@ void videoscanline(void)
 {
   char cmodeblock[24];
   int naddress;
+  int charstodisplayline;
 
   /*---counter---*/
 
@@ -3123,6 +3124,18 @@ void videoscanline(void)
           video_drawline = 0;
       }
 
+      /*Take CPU back to horizontal sync*/
+      charstodisplayline = m6845_r[0x00] - m6845_r[0x02];
+      if (charstodisplayline > 0)
+      {
+        if (videoula_clockrate)
+          /*fast clock mode (2MHz cycles) */
+          video_timer -= charstodisplayline;
+        else
+          /*slow clock mode (milliseconds)*/
+          video_timer -= (charstodisplayline << 1);
+      }
+
       /*VSYNC pulse is delayed on interlace even frame*/
       if (m6845_interlaceon && video_field == 0)
         video_timer += (m6845_horizontaltotal>>1);
@@ -3145,6 +3158,18 @@ void videoscanline(void)
       /*Take off time VSYNC end was delayed*/
       if (m6845_interlaceon && video_field == 0)
         video_timer -= (m6845_horizontaltotal>>1);
+
+      /*Run CPU forward to horizontal display*/
+      charstodisplayline = m6845_r[0x00] - m6845_r[0x02];
+      if (charstodisplayline > 0)
+      {
+        if (videoula_clockrate)
+          /*fast clock mode (2MHz cycles) */
+          video_timer += charstodisplayline;
+        else
+          /*slow clock mode (milliseconds)*/
+          video_timer += (charstodisplayline << 1);
+      }
 
       if (video_mode != ncurrentmode)
       {
