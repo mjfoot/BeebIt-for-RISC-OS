@@ -813,7 +813,7 @@ void r6502donmi(void)
   #ifdef __RISCOS__
     r6502nmi();
   #else
-    STACK_PUSH((r6502_pc & 0xFF00)>>8);
+    STACK_PUSH((r6502_pc & 0xFF00)>>8);
     STACK_PUSH(r6502_pc & 0x00FF);
     CLEARFLAG(BFLAG);
     n = PROCESSORSTATUS(0);
