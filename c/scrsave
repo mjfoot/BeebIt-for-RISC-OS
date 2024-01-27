@@ -67,7 +67,7 @@ void screentobuffer(void)
   int vduvars[5];
   int rdbits,rdscr_size;
   int *screen,*rdp;
-  int wro,readbits_remain,writebits_sofar,read,l,readpixel;
+  int wro,readbits_remain,writebits_sofar,read,readpixel;
   int nx, ny, naddradd;
   unsigned char write;
   unsigned int mask;
@@ -123,11 +123,7 @@ void screentobuffer(void)
   writebits_sofar =0;
   write =0;
 
-  mask =0;   /* mask =0xFF or 0xF*/
-  for (l =0;l <rdbits;l++)
-    mask =mask | ((1 << 31) >> l);
-
-  mask =mask >>(32 -rdbits);
+  mask =~0U >> (32 -rdbits);   /* mask =0xFF or 0xF*/
 
   limit = screen +(rdscr_size>> 2); /* /4. screen is an int pointer*/
 

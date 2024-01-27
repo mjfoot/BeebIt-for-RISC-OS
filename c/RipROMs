@@ -13,7 +13,8 @@ _kernel_swi_regs regs;
 
 typedef struct
 {
- long offset, length;
+ long offset;
+ size_t length;
 } Basic;
 
 typedef struct
@@ -149,7 +150,7 @@ int main(void)
 
  fprintf(stderr, "Ripping BASIC\n\n");
 
- if (fseek(in, 0x3CL, SEEK_SET) || fread(BASIC, 0x31L, 1, in)!=1)
+ if (fseek(in, 0x3CL, SEEK_SET) || fread(BASIC, 0x31, 1, in)!=1)
  Error("65Host", in, 2);
  if (strcmp(BASIC, "6502 Emulator\t1.20 (18 May 1992) (BBC emulation)"))
  flag|=1;
