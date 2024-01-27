@@ -13,6 +13,9 @@
  * -or forcing cursor off immediately
  */
 
+#define XEigFactor 4
+#define YEigFactor 5
+#define LineLength 6
 #define Log2BPP 9
 #define XWindLimit 11
 #define YWindLimit 12
@@ -64,21 +67,23 @@ static unsigned int arSprFileHdr[46] ={1, /* number of sprites in area*/
 
 void screentobuffer(void)
 {
-  int vduvars[5];
-  int rdbits,rdscr_size;
+  int vduvars[8];
+  int xeig, yeig;
+  int rdbits,rdwords,wrwords;
   int *screen,*rdp;
   int wro,readbits_remain,writebits_sofar,read,readpixel;
   int nx, ny, naddradd;
   unsigned char write;
   unsigned int mask;
 
-  int *limit;
-
-  vduvars[0] =Log2BPP;
-  vduvars[1] =XWindLimit;
-  vduvars[2] =YWindLimit;
-  vduvars[3] =ScreenStart;
-  vduvars[4] =-1;
+  vduvars[0] =XEigFactor;
+  vduvars[1] =YEigFactor;
+  vduvars[2] =LineLength;
+  vduvars[3] =Log2BPP;
+  vduvars[4] =XWindLimit;
+  vduvars[5] =YWindLimit;
+  vduvars[6] =ScreenStart;
+  vduvars[7] =-1;
 
   regs.r[0] =(int)vduvars;
   regs.r[1] =(int)vduvars;
@@ -86,15 +91,32 @@ void screentobuffer(void)
 
   _kernel_swi(OS_RemoveCursors,&regs,&regs);
 
-  xsize = vduvars[1] + 1;
-  ysize = vduvars[2] + 1;
-  if (xsize == 320)
-    sprmode = 9;
+  xeig = vduvars[0];
+  yeig = vduvars[1];
+  xsize = vduvars[4] + 1;
+  ysize = vduvars[5] + 1;
+  if (xeig < yeig)
+  {
+    if (xeig > 0)
+      sprmode = 12;
+    else
+      sprmode = 22;
+  }
   else
-    sprmode = 12;
-  xsize = xsize + (xsize % 32);
-  /*if (xsize == 1680)
-    xsize = 1696;*/
+  {
+    if (xeig > 1)
+      sprmode = 9;
+    else
+      sprmode = 20;
+  }
+
+  rdbits = 1 <<vduvars[3];
+  screen = (int *)vduvars[6];
+  
+  rdwords = (xsize * rdbits + 31)/32;
+  wrwords = (xsize * wrbits + 31)/32;
+  
+  naddradd = (vduvars[2]>>2) - rdwords;
 
   /* Iyonix fix, apparently some don't have Mode 15 defined in the MDF.
   If this is the case they default to ysize of 479 (instead of 255)*/
@@ -102,36 +124,25 @@ void screentobuffer(void)
   {
     if (ysize > 480)*/
       /*skip every second line*/
-      /*naddradd = (xsize / 4);
-    else
-      naddradd = 0;*/
+      /*naddradd += (vduvars[2]>>2);*/
     /*ysize = 256;*/
-  /*}
-  else*/
-    naddradd = 0;
+  /*}*/
 
-  rdbits = 1 <<vduvars[0];
-  screen = (int *)vduvars[3];
-
-  rdscr_size = (xsize *ysize *rdbits) /8;
-  wrspr_size = (xsize *ysize *wrbits) /8;
+  wrspr_size = ysize * 4 * wrwords;
 
   rdp = screen;
   wro = 0;
 
-  readbits_remain =0;
   writebits_sofar =0;
   write =0;
 
   mask =~0U >> (32 -rdbits);   /* mask =0xFF or 0xF*/
 
-  limit = screen +(rdscr_size>> 2); /* /4. screen is an int pointer*/
-
   ny = 0;
   while (ny < ysize)
   {
+    readbits_remain =0;
     nx = 0;
-    /*while (rdp <limit)*/
     while (nx < xsize)
     {
       if (readbits_remain ==0) /* read another word from screen?*/
@@ -165,6 +176,18 @@ void screentobuffer(void)
         writebits_sofar =0;
       }
       nx++;
+    }
+    while (wro & 3)
+    {
+      write =write >>4;
+      writebits_sofar =writebits_sofar +wrbits;
+      
+      if (writebits_sofar ==8)
+      {
+        sprite[wro] =write;
+        wro++;
+        writebits_sofar =0;
+      }
     }
     ny++;
     rdp += naddradd;
@@ -227,26 +250,62 @@ int spritesave(void)
 
 void spritealloc(void)
 {
-  int vduvars[5];
-  int nsize;
+  int xwindlimit,ywindlimit;
+  int wrwords,nsize;
+  char cmodeblock[28];
 
-  vduvars[0] =Log2BPP;
-  vduvars[1] =XWindLimit;
-  vduvars[2] =YWindLimit;
-  vduvars[3] =ScreenStart;
-  vduvars[4] =-1;
+  if (beebit_graphicsmode <= 0xFF)
+  {
+    regs.r[0] = beebit_graphicsmode;
+  }
+  else
+  {
+    switch (beebit_graphicsmode)
+    {
+      case 12801024:
+        /*1280 x 1024*/
+        setword(cmodeblock, 1);
+        setword(cmodeblock + 4, 1280);
+        setword(cmodeblock + 8, 1024);
+        setword(cmodeblock + 12, 3); /*log2bpp*/
+        setword(cmodeblock + 16, -1);
+        setword(cmodeblock + 20, -1);
+        break;
+      case 16801050:
+        /*1680 x 1050*/
+        setword(cmodeblock, 1);
+        setword(cmodeblock + 4, 1680);
+        setword(cmodeblock + 8, 1050);
+        setword(cmodeblock + 12, 3); /*log2bpp*/
+        setword(cmodeblock + 16, -1);
+        setword(cmodeblock + 20, -1);
+        break;
+      case 19201080:
+        /*1920 x 1080*/
+        setword(cmodeblock, 1);
+        setword(cmodeblock + 4, 1920);
+        setword(cmodeblock + 8, 1080);
+        setword(cmodeblock + 12, 3); /*log2bpp*/
+        setword(cmodeblock + 16, -1);
+        setword(cmodeblock + 20, -1);
+        break;
+    }
+    regs.r[0] = (int)cmodeblock; /*MODE block*/
+  }
+  regs.r[1] = 11;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  xwindlimit = regs.r[2];
+  regs.r[1] = 12;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  ywindlimit = regs.r[2];
 
-  regs.r[0] =(int)vduvars;
-  regs.r[1] =(int)vduvars;
-  _kernel_swi(OS_ReadVduVariables,&regs,&regs);
+  xsize = xwindlimit + 1;
+  ysize = ywindlimit + 1;
 
-  xsize = vduvars[1] + 1;
-  ysize = vduvars[2] + 1;
-  xsize = xsize + (xsize % 32);
+  wrwords = (xsize * wrbits + 31)/32;
+  nsize = ysize * 4 * wrwords + sizeof(arSprFileHdr);
 
-  nsize = (xsize * ysize * (8 / wrbits)) + sizeof(arSprFileHdr);
-
-  if (*sprite == NULL)
+  if (sprite == NULL)
   {
     sprite = malloc(nsize);
   }
@@ -258,6 +317,9 @@ void spritealloc(void)
 
 void spritefree(void)
 {
-  if (*sprite != NULL)
+  if (sprite != NULL)
+  {
     free(sprite);
+    sprite = NULL;
+  }
 }

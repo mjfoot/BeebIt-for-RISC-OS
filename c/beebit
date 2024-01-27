@@ -1267,9 +1267,6 @@ void beebitexit(void)
   if (beebit_driveimage[3])
     fclose(beebit_driveimage[3]);
 
-   /*free space for screen buffer sprite*/
-   spritefree();
-
   /*if (beebit_singletask)*/
     cursorenable();
 
@@ -1304,6 +1301,9 @@ void beebitclosedown(void)
   #endif*/
 
   i8271closedown();
+
+   /*free space for screen buffer sprite*/
+   spritefree();
 }
 
 /*void updateCaI(void)
