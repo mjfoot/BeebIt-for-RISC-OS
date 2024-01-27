@@ -47,7 +47,7 @@ extern void videoteletext4(void);
 extern void videoteletext8(void);
 extern void sprite_printscreen(void);
 
-extern int ncurrentmode, lteletextmode, llargecursor;
+extern int ncurrentmode, llargecursor;
 extern int lprintscreen;
 
 /*teletext*/
@@ -68,10 +68,12 @@ int teletext_doubleheight;
 int teletext_doubleheightstyle;
 int teletext_graphicstyle;
 int teletext_holdgraphics;
-int teletext_screenextra;
 int teletext_screenwidth;
 int teletext_steady;
 int teletext_timer; /*flashing timer*/
+int teletext_leftoffscreen;
+int teletext_leftextra;
+int teletext_rightextra;
 
 /*video*/
 /*int video_vsync0;*/ /*start of vertical sync scan line*/
@@ -101,7 +103,7 @@ int host_screenwidth2; /*screen width of the screen mode on the host x 2*/
 unsigned int cursor_bitmap;
 
 clock_t nclock;
-int nx,ny,nxend;
+int nx,ny,nxoffscreen,nxend;
 char video_n;
 int nscreen;
 
@@ -345,13 +347,13 @@ void videodrawline0(void)
   {
     /*blank lines > 8*/
     #ifdef __RISCOS__
-      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      /*nx = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       blankrow(nscreen,nx,0);*/
       blankrow(nscreen,host_screenwidth2,0);
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      nxend = (m6854_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       while (nx < nxend) /*80*/
       {
         cscreen[nx++] = 0;
@@ -364,18 +366,17 @@ void videodrawline0(void)
   else
   {
     #ifdef __RISCOS__
-      /*blankrow(nscreen,m6845_widthextra,0);*/
       nscreen_temp = nscreen;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_leftextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
-      nx = m6845_widthextra;
+      nx = m6845_leftextra;
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = m6845_widthextra;
+      nxend = m6845_leftextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -384,12 +385,18 @@ void videodrawline0(void)
         cscreen[nx++] = 0;
       }
     #endif
+    video_address += (m6845_leftoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     /*draw displayed data*/
     #ifdef __RISCOS__
       mode0plot(nscreen+nx,video_displaywidth);
       nx += (video_displaywidth*video_scale);
     #else
-      /*nxend = nx+(int m6854_screenwidth<<2);*/
+      /*nxend = nx+(m6854_screenwidth<<2);*/
       nxend = nx+video_displaywidth;
       while (nx < nxend) /*80*/
       {
@@ -418,16 +425,22 @@ void videodrawline0(void)
         }
       }
     #endif
+    video_address += (m6845_rightoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     /*draw trailing blank area on this line*/
     #ifdef __RISCOS__
       nscreen_temp = nscreen+nx;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_rightextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
     #else
-      nxend = nx+m6845_widthextra;
+      nxend = nx+m6845_rightextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -450,13 +463,13 @@ void videodrawline1(void)
   {
     /*blank lines > 8*/
     #ifdef __RISCOS__
-      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      /*nx = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       blankrow(nscreen,nx,0);*/
       blankrow(nscreen,host_screenwidth2,0);
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      nxend = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       while (nx < nxend) /*80*/
       {
         cscreen[nx++] = 0;
@@ -469,18 +482,17 @@ void videodrawline1(void)
   else
   {
     #ifdef __RISCOS__
-      /*blankrow(nscreen,m6845_widthextra,0);*/
       nscreen_temp = nscreen;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_leftextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
-      nx = m6845_widthextra;
+      nx = m6845_leftextra;
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = m6845_widthextra;
+      nxend = m6845_leftextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -489,6 +501,12 @@ void videodrawline1(void)
         cscreen[nx++] = 0;
       }
     #endif
+    video_address += (m6845_leftoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
       mode1plot(nscreen+nx,video_displaywidth);
       nx += (video_displaywidth*video_scale);
@@ -522,16 +540,21 @@ void videodrawline1(void)
         }
       }
     #endif
+    video_address += (m6845_rightoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
-      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
       nscreen_temp = nscreen+nx;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_rightextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
     #else
-      nxend = nx+m6845_widthextra;
+      nxend = nx+m6845_rightextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -554,13 +577,13 @@ void videodrawline2(void)
   {
     /*blank lines > 8*/
     #ifdef __RISCOS__
-      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      /*nx = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       blankrow(nscreen,nx,0);*/
       blankrow(nscreen,host_screenwidth2,0x00);
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      nxend = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       while (nx < nxend) /*80*/
       {
         cscreen[nx++] = 0;
@@ -573,18 +596,17 @@ void videodrawline2(void)
   else
   {
     #ifdef __RISCOS__
-      /*blankrow(nscreen,m6845_widthextra,0);*/
       nscreen_temp = nscreen;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_leftextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
-      nx = m6845_widthextra;
+      nx = m6845_leftextra;
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = m6845_widthextra;
+      nxend = m6845_leftextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -593,6 +615,12 @@ void videodrawline2(void)
         cscreen[nx++] = 0;
       }
     #endif
+    video_address += (m6845_leftoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
       mode2plot(nscreen+nx,video_displaywidth);
       nx += (video_displaywidth*video_scale);
@@ -620,16 +648,21 @@ void videodrawline2(void)
         }
       }
     #endif
+    video_address += (m6845_rightoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
-      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
       nscreen_temp = nscreen+nx;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_rightextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
     #else
-      nxend = nx+m6845_widthextra;
+      nxend = nx+m6845_rightextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -643,7 +676,6 @@ void videodrawline2(void)
 
 void videodrawline3(void)
 {
-  /*int nscreentemp, i;*/
   /*
    *mode 3 - 80x25, Text only, 1 bpp, 40k
    */
@@ -653,7 +685,7 @@ void videodrawline3(void)
   {
     /*blank lines > 8*/
     #ifdef __RISCOS__
-      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      /*nx = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       blankrow(nscreen,nx,0);*/
       /*nscreentemp = nscreen;
       for (i=0;i < video_scale; i++)
@@ -665,7 +697,7 @@ void videodrawline3(void)
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      nxend = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       while (nx < nxend) /*80*/
       {
         cscreen[nx++] = 0;
@@ -678,17 +710,17 @@ void videodrawline3(void)
   else
   {
     #ifdef __RISCOS__
-      /*blankrow(nscreen,m6845_widthextra,0);*/
       nscreen_temp = nscreen;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_leftextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
-      nx = m6845_widthextra;
+      nx = m6845_leftextra;
     #else
+      cscreen = (char *)nscreen;
       nx = 0;
-      nxend = m6845_widthextra;
+      nxend = m6845_leftextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -697,6 +729,12 @@ void videodrawline3(void)
         cscreen[nx++] = 0;
       }
     #endif
+    video_address += (m6845_leftoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
       /*screen code is the same as mode 0*/
       mode0plot(nscreen+nx,video_displaywidth);
@@ -731,16 +769,21 @@ void videodrawline3(void)
         }
       }
     #endif
+    video_address += (m6845_rightoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
-      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
       nscreen_temp = nscreen+nx;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_rightextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
     #else
-      nxend = nx+m6845_widthextra;
+      nxend = nx+m6845_rightextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -763,13 +806,13 @@ void videodrawline4(void)
   {
     /*blank lines > 8*/
     #ifdef __RISCOS__
-      /*nx = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      /*nx = (m6845_screenwidth<<3) + m6845_leftextra + m6845_rightextra;
       blankrow(nscreen,nx,0);*/
       blankrow(nscreen,host_screenwidth2,0);
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      nxend = (m6845_screenwidth<<3) + m6845_leftextra + m6845_rightextra;
       while (nx < nxend) /*80*/
       {
         cscreen[nx++] = 0;
@@ -782,18 +825,17 @@ void videodrawline4(void)
   else
   {
     #ifdef __RISCOS__
-      /*blankrow(nscreen,m6845_widthextra,0);*/
       nscreen_temp = nscreen;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_leftextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
-      nx = m6845_widthextra;
+      nx = m6845_leftextra;
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = m6845_widthextra;
+      nxend = m6845_leftextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -802,6 +844,12 @@ void videodrawline4(void)
         cscreen[nx++] = 0;
       }
     #endif
+    video_address += m6845_leftoffscreen;
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
       mode4plot(nscreen+nx,video_displaywidth);
       nx += (video_displaywidth*video_scale);
@@ -843,16 +891,21 @@ void videodrawline4(void)
         }
       }
     #endif
+    video_address += m6845_rightoffscreen;
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
-      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
       nscreen_temp = nscreen+nx;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_rightextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
     #else
-      nxend = nx+m6845_widthextra;
+      nxend = nx+m6845_rightextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -875,13 +928,13 @@ void videodrawline5(void)
   {
     /*blank lines > 8*/
     #ifdef __RISCOS__
-      /*nx = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      /*nx = (m6845_screenwidth<<3) + m6845_leftextra + m6845_rightextra;
       blankrow(nscreen,nx,0);*/
       blankrow(nscreen,host_screenwidth2,0);
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      nxend = (m6845_screenwidth<<3) + m6845_leftextra + m6845_rightextra;
       while (nx < nxend) /*80*/
       {
         cscreen[nx++] = 0;
@@ -894,20 +947,17 @@ void videodrawline5(void)
   else
   {
     #ifdef __RISCOS__
-      /*blankrow(nscreen,m6845_widthextra,0);
-      nx = m6845_widthextra;*/
       nscreen_temp = nscreen;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_leftextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
-      nx = m6845_widthextra;
-
+      nx = m6845_leftextra;
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = m6845_widthextra;
+      nxend = m6845_leftextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -916,6 +966,12 @@ void videodrawline5(void)
         cscreen[nx++] = 0;
       }
     #endif
+    video_address += m6845_leftoffscreen;
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
       mode5plot(nscreen+nx,video_displaywidth);
       nx += (video_displaywidth*video_scale);
@@ -953,16 +1009,21 @@ void videodrawline5(void)
         }
       }
     #endif
+    video_address += m6845_rightoffscreen;
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
-      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
       nscreen_temp = nscreen+nx;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_rightextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
     #else
-      nxend = nx+m6845_widthextra;
+      nxend = nx+m6845_rightextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -985,13 +1046,13 @@ void videodrawline6(void)
   {
     /*blank lines > 8*/
     #ifdef __RISCOS__
-      /*nx = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      /*nx = (m6845_screenwidth<<3) + m6845_leftextra + m6845_rightextra;
       blankrow(nscreen,nx,0);*/
       blankrow(nscreen,host_screenwidth2,0);
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = (m6845_screenwidth<<3)+(m6845_widthextra<<1);
+      nxend = (m6845_screenwidth<<3) + m6845_leftextra + m6845_rightextra;
       while (nx < nxend) /*80*/
       {
         cscreen[nx++] = 0;
@@ -1004,17 +1065,17 @@ void videodrawline6(void)
   else
   {
     #ifdef __RISCOS__
-      /*blankrow(nscreen,m6845_widthextra,0);*/
       nscreen_temp = nscreen;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_leftextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
-      nx = m6845_widthextra;
+      nx = m6845_leftextra;
     #else
+      cscreen = (char *)nscreen;
       nx = 0;
-      nxend = m6845_widthextra;
+      nxend = m6845_leftextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -1023,6 +1084,12 @@ void videodrawline6(void)
         cscreen[nx++] = 0;
       }
     #endif
+    video_address += m6845_leftoffscreen;
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
       /*screen code is the same as mode 4*/
       mode4plot(nscreen+nx,video_displaywidth);
@@ -1065,16 +1132,21 @@ void videodrawline6(void)
         }
       }
     #endif
+    video_address += m6845_rightoffscreen;
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
-      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
       nscreen_temp = nscreen+nx;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_rightextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
     #else
-      nxend = nx+m6845_widthextra;
+      nxend = nx+m6845_rightextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -1097,13 +1169,13 @@ void videodrawline8(void)
   {
     /*blank lines > 8*/
     #ifdef __RISCOS__
-      /*nx = (m6845_screenwidth<<2)+(m6845_widthextra<<1);
+      /*nx = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       blankrow(nscreen,nx,0);*/
       blankrow(nscreen,host_screenwidth2,0);
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = (m6854_screenwidth<<2)+(m6845_widthextra<<1);
+      nxend = (m6845_screenwidth<<2) + m6845_leftextra + m6845_rightextra;
       while (nx < nxend) /*80*/
       {
         cscreen[nx++] = 0;
@@ -1119,14 +1191,14 @@ void videodrawline8(void)
       nscreen_temp = nscreen;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_leftextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
-      nx = m6845_widthextra;
+      nx = m6845_leftextra;
     #else
       cscreen = (char *)nscreen;
       nx = 0;
-      nxend = m6845_widthextra;
+      nxend = m6845_leftextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -1135,6 +1207,12 @@ void videodrawline8(void)
         cscreen[nx++] = 0;
       }
     #endif
+    video_address += (m6845_leftoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
       mode8plot(nscreen+nx,video_displaywidth);
       nx += (video_displaywidth*video_scale);
@@ -1162,16 +1240,21 @@ void videodrawline8(void)
         }
       }
     #endif
+    video_address += (m6845_rightoffscreen<<1);
+    if (video_address >= 0x8000)
+    {
+      video_address &= 0x7FFF;
+      video_address += video_baseaddress;
+    }
     #ifdef __RISCOS__
-      /*blankrow(nscreen+nx,m6845_widthextra,0);*/
       nscreen_temp = nscreen+nx;
       for (i=0; i<video_scale; i++)
       {
-        blankrow(nscreen_temp,m6845_widthextra,0x00);
+        blankrow(nscreen_temp,m6845_rightextra,0x00);
         nscreen_temp = nscreen_temp + host_screenwidth;
       }
     #else
-      nxend = nx+m6845_widthextra;
+      nxend = nx+m6845_rightextra;
       while (nx < nxend)
       {
         cscreen[nx++] = 0;
@@ -2439,17 +2522,17 @@ void videoteletext8(void)
       /*left padding*/
       for (row = 0; row <= 9; row++)
       {
-        blankrow(nscreen,teletext_screenextra,0x00);
+        blankrow(nscreen,teletext_leftextra,0x00);
         nscreen = nscreen + host_screenwidth;
-        blankrow(nscreen,teletext_screenextra,0x00);
+        blankrow(nscreen,teletext_leftextra,0x00);
         nscreen = nscreen + host_screenwidth;
-        blankrow(nscreen,teletext_screenextra,0x00);
+        blankrow(nscreen,teletext_leftextra,0x00);
         nscreen = nscreen + host_screenwidth;
-        blankrow(nscreen,teletext_screenextra,0x00);
+        blankrow(nscreen,teletext_leftextra,0x00);
         nscreen = nscreen + host_screenwidth;
       }
 
-      nscreen = teletext_screenaddress + teletext_screenextra;
+      nscreen = teletext_screenaddress + teletext_leftextra;
       /*((host_screenwidth - (video_width << 2)) >> 1);*/
 
       break;
@@ -2471,7 +2554,8 @@ void videoteletext8(void)
   /*teletextblankchar();*/
 
   nx = 0;
-  nxend = teletext_screenwidth;
+  nxoffscreen = teletext_leftoffscreen;
+  nxend = nxoffscreen+teletext_screenwidth;
   /*if (m6845_screenwidth > 40)
     nxend = 40;
   else
@@ -2627,48 +2711,11 @@ void videoteletext8(void)
         break;
     }
 
-    switch (teletext_style)
+    if (nx >= nxoffscreen)
     {
-      case TELETEXT_ALPHA:
-        if (teletext_doubleheight)
-        {
-          switch (teletext_doubleheightstyle)
-          {
-            case TELETEXT_ALPHA_DOUBLETOP:
-              if (!teletext_steady AND teletext_timer >= 36)
-                teletextblankchar();
-              else
-                teletextalphadoubletop();
-              break;
-            case TELETEXT_ALPHA_DOUBLEBOTTOM:
-              if (!teletext_steady AND teletext_timer >= 36)
-                teletextblankchar();
-              else
-                teletextalphadoublebottom();
-              break;
-          }
-        }
-        else
-        {
-          if (!teletext_steady AND teletext_timer >= 36)
-            teletextblankchar();
-          else
-          {
-            if (teletext_doubleheightstyle == TELETEXT_ALPHA_DOUBLEBOTTOM)
-              teletextblankchar();
-            else
-              teletextalphanormal();
-          }
-        }
-        break;
-      case TELETEXT_GRAPHICS:
-        if (teletext_character >= 0x40 AND teletext_character < 0x60)
-        {
-          /*teletext_character >= 0x40 and < 0x60 are alpha*/
-          teletext_oldcolour = teletext_alphacolour;
-          teletext_oldcolourmask = teletext_alphacolourmask;
-          teletext_alphacolour = teletext_graphiccolour;
-          teletext_alphacolourmask = teletext_colourmap8[teletext_alphacolour];
+      switch (teletext_style)
+      {
+        case TELETEXT_ALPHA:
           if (teletext_doubleheight)
           {
             switch (teletext_doubleheightstyle)
@@ -2699,41 +2746,95 @@ void videoteletext8(void)
                 teletextalphanormal();
             }
           }
-          teletext_alphacolourmask = teletext_oldcolourmask;
-          teletext_alphacolour = teletext_oldcolour;
-        }
-        else
-        {
-          /*teletext_character < &40 or >= &60 are graphics*/
-          switch (teletext_graphicstyle)
+          break;
+        case TELETEXT_GRAPHICS:
+          if (teletext_character >= 0x40 AND teletext_character < 0x60)
           {
-            case TELETEXT_GRAPHICS_CONTIGUOUS:
+            /*teletext_character >= 0x40 and < 0x60 are alpha*/
+            teletext_oldcolour = teletext_alphacolour;
+            teletext_oldcolourmask = teletext_alphacolourmask;
+            teletext_alphacolour = teletext_graphiccolour;
+            teletext_alphacolourmask = teletext_colourmap8[teletext_alphacolour];
+            if (teletext_doubleheight)
+            {
+              switch (teletext_doubleheightstyle)
+              {
+                case TELETEXT_ALPHA_DOUBLETOP:
+                  if (!teletext_steady AND teletext_timer >= 36)
+                    teletextblankchar();
+                  else
+                    teletextalphadoubletop();
+                  break;
+                case TELETEXT_ALPHA_DOUBLEBOTTOM:
+                  if (!teletext_steady AND teletext_timer >= 36)
+                    teletextblankchar();
+                  else
+                    teletextalphadoublebottom();
+                  break;
+              }
+            }
+            else
+            {
               if (!teletext_steady AND teletext_timer >= 36)
                 teletextblankchar();
-              else {
-                if (teletext_character == 0x20)
+              else
+              {
+                if (teletext_doubleheightstyle == TELETEXT_ALPHA_DOUBLEBOTTOM)
                   teletextblankchar();
                 else
-                  teletextgraphicscontiguous();
+                  teletextalphanormal();
               }
-              break;
-            case TELETEXT_GRAPHICS_SEPARATED:
-              if (!teletext_steady AND teletext_timer >= 36)
-                teletextblankchar();
-              else {
-                if (teletext_character == 0x20)
-                  teletextblankchar();
-                else
-                  teletextgraphicsseparated();
-              }
-              break;
+            }
+            teletext_alphacolourmask = teletext_oldcolourmask;
+            teletext_alphacolour = teletext_oldcolour;
           }
-        }
-        break;
-      case TELETEXT_CONCEAL:
-        if (!teletext_holdgraphics)
-          teletextblankchar();
-        break;
+          else
+          {
+            /*teletext_character < &40 or >= &60 are graphics*/
+            switch (teletext_graphicstyle)
+            {
+              case TELETEXT_GRAPHICS_CONTIGUOUS:
+                if (!teletext_steady AND teletext_timer >= 36)
+                  teletextblankchar();
+                else {
+                  if (teletext_character == 0x20)
+                    teletextblankchar();
+                  else
+                    teletextgraphicscontiguous();
+                }
+                break;
+              case TELETEXT_GRAPHICS_SEPARATED:
+                if (!teletext_steady AND teletext_timer >= 36)
+                  teletextblankchar();
+                else {
+                  if (teletext_character == 0x20)
+                    teletextblankchar();
+                  else
+                    teletextgraphicsseparated();
+                }
+                break;
+            }
+          }
+          break;
+        case TELETEXT_CONCEAL:
+          if (!teletext_holdgraphics)
+            teletextblankchar();
+          break;
+      }
+
+      /*increment screen address*/
+      switch (beebit_teletextmode)
+      {
+        case 15:
+        case 21:
+          nscreen = nscreen + 16;
+          break;
+        case 12801024:
+        case 16801050:
+        case 19201080:
+          nscreen = nscreen + 32;
+          break;
+      }
     }
 
     if (teletext_holdgraphics)
@@ -2742,20 +2843,8 @@ void videoteletext8(void)
       teletext_alphacolourmask = teletext_colourmap8[teletext_alphacolour];
       teletext_graphiccolourmask = teletext_colourmap8[teletext_graphiccolour];
     }
-
-    /*increment screen address and x counter*/
-    switch (beebit_teletextmode)
-    {
-      case 15:
-      case 21:
-        nscreen = nscreen + 16;
-        break;
-      case 12801024:
-      case 16801050:
-      case 19201080:
-        nscreen = nscreen + 32;
-        break;
-    }
+    
+    /*increment x counter*/
     nx++;
 
     if (video_address >= 0x7FFF)
@@ -2804,13 +2893,13 @@ void videoteletext8(void)
 
       for (row = 0; row <= 9; row++)
       {
-        blankrow(nscreen,teletext_screenextra,0x00);
+        blankrow(nscreen,teletext_rightextra,0x00);
         nscreen = nscreen + host_screenwidth;
-        blankrow(nscreen,teletext_screenextra,0x00);
+        blankrow(nscreen,teletext_rightextra,0x00);
         nscreen = nscreen + host_screenwidth;
-        blankrow(nscreen,teletext_screenextra,0x00);
+        blankrow(nscreen,teletext_rightextra,0x00);
         nscreen = nscreen + host_screenwidth;
-        blankrow(nscreen,teletext_screenextra,0x00);
+        blankrow(nscreen,teletext_rightextra,0x00);
         nscreen = nscreen + host_screenwidth;
       }
 
@@ -2912,7 +3001,7 @@ void videoteletext8(void)
       case 16801050:
       case 19201080:
           nscreen = nlocalscreen+((((m6845_vc+1) * 40) + 1) * host_screenwidth);
-          nscreen += teletext_screenextra;
+          nscreen += teletext_leftextra;
           nscreen += (cursor_x << 5);
           #ifdef __RISCOS__
             blankrow(nscreen,cursor_width,cursor_bitmap);
@@ -2991,11 +3080,11 @@ void videoscanline(void)
     /*if (video_framerate == beebit_framerate)*/
     if (video_framerate == beebit_framerate)
     {
-      if (m6845_sc == 0 AND m6845_vc < m6845_vd)
+      if (m6845_sc == 0 AND m6845_vc < m6845_vd AND m6845_vc < 25)
         videoteletext();
     }
   }
-  else
+  else if (video_currentrow < MODE12_Y)
   {
     if (video_scanline >= video_display0 && video_scanline < video_display1)
     {
@@ -3133,7 +3222,7 @@ void videoscanline(void)
           {
             /*nscreen = nlocalscreen+(video_currentrow*host_screenwidth)+cursor_x;*/
             nscreen += cursor_x;
-            nscreen += m6845_widthextra;
+            nscreen += m6845_leftextra;
             #ifdef __RISCOS__
               if (videoula_clockrate)
               {

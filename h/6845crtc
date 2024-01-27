@@ -20,9 +20,10 @@ extern int m6845_adj;
 extern int m6845_hsw;
 extern int m6845_vsw;
 extern int m6845_horizontaltotal;
-extern int m6845_fastextra; /*extra pixels for fast clock modes*/
-extern int m6845_slowextra; /*extra pixels for slow clock modes*/
-extern int m6845_widthextra; /*extra pixels*/
+extern int m6845_leftoffscreen;
+extern int m6845_rightoffscreen;
+extern int m6845_leftextra; /*extra pixels on the left*/
+extern int m6845_rightextra; /*extra pixels on the right*/
 extern int m6845_interlaceon;
 extern int m6845_displayskew;
 extern int m6845_cursorskew;
@@ -53,6 +54,7 @@ extern int cursor_blinktime;
 void crtcreset(void);
 char crtcread(int Address);
 void crtcwrite(int Address,int Value);
+void crtcteletextwidthextra(void);
 void crtcwidthextra(void);
 void crtchorizontal(void);
 void crtcvertical(void);

@@ -13,8 +13,10 @@
 #define MODE15_Y 256
 
 /*teletext*/
-extern int teletext_screenextra;
 extern int teletext_screenwidth;
+extern int teletext_leftoffscreen;
+extern int teletext_leftextra;
+extern int teletext_rightextra;
 
 /*video*/
 /*extern int video_vsync0;*/ /*start of vertical sync scan line*/
