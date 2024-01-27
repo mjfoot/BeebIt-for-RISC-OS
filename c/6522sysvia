@@ -891,17 +891,15 @@ void systemviawrite(int naddress, char nvalue)
           regs.r[2] = 255;
           _kernel_swi(OS_Byte,&regs,&regs);
 
-          if ((regs.r[1] & 0x10) != beebit_leds)
+          beebit_leds = (beebit_leds & 0xEF) | (lenabled ? 0x10 : 0x00);
+
+          if ((regs.r[1] ^ beebit_leds) & 0x10)
           {
-            /*only update the keyboard leds if the have changed*/
-            beebit_leds = (regs.r[1] & 0x10);
+            /*only update the keyboard leds if they differ*/
 
             /*set keyboard status*/
             regs.r[0] = 202;
-            if (lenabled)
-              regs.r[1] = 0x10;
-            else
-              regs.r[1] = 0x00;
+            regs.r[1] = beebit_leds & 0x10;
             regs.r[2] = 0xEF;
             _kernel_swi(OS_Byte,&regs,&regs);
 

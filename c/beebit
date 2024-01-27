@@ -479,13 +479,8 @@ void beebitinit(void)
   fclose(hh1);*/
 
   beebit_trace = FALSE;
-  /*get keyboard status*/
-  regs.r[0] = 202;
-  regs.r[1] = 0;
-  regs.r[2] = 255;
-  _kernel_swi(OS_Byte,&regs,&regs);
   /*set caps lock on*/
-  beebit_leds = (regs.r[1] & 0xEF);
+  beebit_leds = 0x00;
   /*set up default configuration*/
   beebit_machinetype = beebit_currenttype = -1;
   beebit_sound = TRUE;
@@ -663,8 +658,8 @@ int beebitenter(void)
 
     /*set keyboard status*/
     regs.r[0] = 202;
-    regs.r[1] = beebit_leds;
-    regs.r[2] = 0;
+    regs.r[1] = beebit_leds & 0x10;
+    regs.r[2] = 0xEF;
     _kernel_swi(OS_Byte,&regs,&regs);
     /*save current status*/
     host_leds = regs.r[1];
@@ -1204,13 +1199,11 @@ void beebitexit(void)
     /*enable <Break>*/
     breakenable();
 
-    /*get/set keyboard status*/
+    /*set keyboard status*/
     regs.r[0] = 202;
-    regs.r[1] = host_leds;
-    regs.r[2] = 0;
+    regs.r[1] = host_leds & 0x10;
+    regs.r[2] = 0xEF;
     _kernel_swi(OS_Byte,&regs,&regs);
-    /*save current status*/
-    beebit_leds = (regs.r[1] & 0x10);
     regs.r[0] = 118;
     _kernel_swi(OS_Byte,&regs,&regs);
   /*}
