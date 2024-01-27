@@ -61,6 +61,7 @@
 ScreenBlanker_Control EQU &43100
 ZeriBeep_Attach EQU &55E40
 ZeriBeep_Detach EQU &55E41
+XScreenBlanker_Control EQU &73100
 XZeriBeep_Attach EQU &75E40
 XZeriBeep_Detach EQU &75E41
 
@@ -210,11 +211,6 @@ inttohexb
   SWI XZeriBeep_Detach
   MOV pc,lr
 
-zeribeep_writebyte
-  DCD 0
-zeribeep_workspace
-  DCD 0
-
 |keyupdown|
   ;r0=event number (&0B)
   ;r1=0 for up, 1 for down
@@ -223,9 +219,9 @@ zeribeep_workspace
   CMP r0,#&0B
   ;LDMNEFD sp!,{r10-r12,pc} ;exit
   ;LDMNEFD r13!,{pc}
-  MOVNE pc,r14  ;jdl** changed for 32bit
+  MOVNE pc,lr  ;jdl** changed for 32bit
 
-  STMFD sp!,{r0-r3,r8-r12}
+  STMFD sp!,{r0-r3,r8-r12,lr}
   ;LDR r12,=lastkey
   ;STRB r2,[r12]
   ;STRB r2,[r12,#1]
@@ -241,7 +237,7 @@ zeribeep_workspace
   ;MOVEQ r9,#&FF
   ;LDREQ r10,=ltrace
   ;STREQ r9,[r10]
-  ;LDMEQFD sp!,{r0-r2,r10-r12,pc} ;exit
+  ;LDMEQFD sp!,{r0-r3,r8-r12,pc} ;exit
 
   LDR r11,=keylookup
   LDRB r9,[r11,r2] ;get bbc key code
@@ -251,31 +247,25 @@ zeribeep_workspace
   CMP r9,#&80
   BNE keyupdownF12
 
-  ;STMFD sp!,{lr}
-  STR lr,[sp, #-4]!
+  ;STR lr,[sp, #-4]!  ;STMFD sp!,{lr}
   MOV r0,#129 ;scan kbd for single key
   MOV r1,#&F7 ;(8 EOR &FF) right alt
   MOV r2,#&FF
   SWI OS_Byte
-  ;LDMFD sp!,{lr}
-  LDR lr, [sp], #4
+  ;LDR lr, [sp], #4   ;LDMFD sp!,{lr}
 
   TEQ r1,#&FF ;pressed?
-  LDMEQFD sp!,{r0-r3,r8-r12} ;yes pass event on for watchdog.
-  MOVEQ pc,lr
+  LDMEQFD sp!,{r0-r3,r8-r12,pc} ;yes pass event on for watchdog.
 
-  ;STMFD sp!,{lr}
-  STR lr,[sp, #-4]!
+  ;STR lr,[sp, #-4]!  ;STMFD sp!,{lr}
   MOV r0,#129 ;scan kbd for single key
   MOV r1,#&FA ;(5 EOR &FF) right alt
   MOV r2,#&FF
   SWI OS_Byte
-  ;LDMFD sp!,{lr}
-  LDR lr, [sp], #4
+  ;LDR lr, [sp], #4   ;LDMFD sp!,{lr}
 
   TEQ r1,#&FF ;pressed?
-  LDMEQFD sp!,{r0-r3,r8-r12} ;yes pass event on for watchdog.
-  MOVEQ pc,lr
+  LDMEQFD sp!,{r0-r3,r8-r12,pc} ;yes pass event on for watchdog.
 
   MOV r9,#&FF
   LDR r11,=lbreak
@@ -328,13 +318,14 @@ keyupdown3
   ;SWI OS_WriteN
 
   ;stop the screen blanker from kicking in
-  ;STMFD sp!,{lr}
-  STR lr,[sp, #-4]!
-  CMP r1,#1
-  MOVEQ r0,#1
-  SWIEQ ScreenBlanker_Control
-  ;LDMFD sp!,{lr}
-  LDR lr, [sp], #4
+  ;STR lr,[sp, #-4]!  ;STMFD sp!,{lr}
+  LDR r11,=screenblankdelay
+  CMP r1,#0
+  MOVNE r0,#1
+  LDRNE r8,[r11]
+  CMPNE r8,#0
+  SWINE XScreenBlanker_Control
+  ;LDR lr, [sp], #4   ;LDMFD sp!,{lr}
 
   ;;LDR r11,=keylookup
   ;;LDRB r9,[r11,r2] ;get bbc key code
@@ -386,8 +377,7 @@ keyupdown4
   ;AND r9,r11,#&0F ;bbc col
 
   BL systemviasetca2
-  LDMFD sp!,{r0-r3,r8-r12,pc}
-  ;MOVS pc,r14
+  LDMFD sp!,{r0-r3,r8-r12,pc} ; exit
 
 ;do_screendump
 ;  STMFD sp!,{r0-r3,r14}
@@ -415,6 +405,11 @@ keyupdown4
 ;  MOV r1,#&FF
 ;  MOV r2,#0
 ;  SWI OS_Byte
+
+  MOV r0,#4
+  SWI XScreenBlanker_Control
+  LDR r3,=screenblankdelay
+  STRVC r1,[r3]
 
   MOV r0,#&0b ;exit handler
   LDR r1,=tidy_exit
@@ -491,6 +486,14 @@ keyrelease1
 ;Data Area
 
   AREA    |C$$data|, DATA
+
+zeribeep_writebyte
+  DCD 0
+zeribeep_workspace
+  DCD 0
+
+screenblankdelay
+  DCD 0
 
 nbreakstatus
   DCD 0

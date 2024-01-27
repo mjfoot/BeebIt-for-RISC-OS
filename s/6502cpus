@@ -586,24 +586,6 @@ r6502readbpFE00
   LDR rcycles,[r11]
   LDMFD sp!,{r1-r9,r11-r12,pc}
 
-r6502readbpoffset
-  DCD r6502readbp0000 ;0
-  DCD r6502readbp0000 ;1
-  DCD r6502readbp0000 ;2
-  DCD r6502readbp3000 ;3
-  DCD r6502readbp3000 ;4
-  DCD r6502readbp3000 ;5
-  DCD r6502readbp3000 ;6
-  DCD r6502readbp3000 ;7
-  DCD r6502readbp8000 ;8
-  DCD r6502readbp8000 ;9
-  DCD r6502readbp8000 ;A
-  DCD r6502readbpB000 ;B
-  DCD r6502readbpC000 ;C
-  DCD r6502readbpC000 ;D
-  DCD r6502readbpC000 ;E
-  DCD r6502readbpF000 ;F
-
 ;
 ;rockwell 6502 cpu
 ;
@@ -786,24 +768,6 @@ r6502readmFE00
   LDR r11,=r6502_cyclestogo
   LDR rcycles,[r11]
   LDMFD sp!,{r1-r9,r11-r12,pc}
-
-|r6502readmoffset|
-  DCD r6502readm0000 ;0
-  DCD r6502readm0000 ;1
-  DCD r6502readm0000 ;2
-  DCD r6502readm3000 ;3
-  DCD r6502readm3000 ;4
-  DCD r6502readm3000 ;5
-  DCD r6502readm3000 ;6
-  DCD r6502readm3000 ;7
-  DCD r6502readm8000 ;8
-  DCD r6502readm9000 ;9
-  DCD r6502readm9000 ;A
-  DCD r6502readm9000 ;B
-  DCD r6502readmC000 ;C
-  DCD r6502readmC000 ;D
-  DCD r6502readmE000 ;E
-  DCD r6502readmF000 ;F
 
 ;buffer2
 ;  DCD 0
@@ -1118,24 +1082,6 @@ r6502writebpFE00
   LDR rcycles,[r11]
   LDMFD sp!,{r0-r9,r11-r12,pc}
 
-r6502writebpoffset
-  DCD r6502writebp0000 ;0
-  DCD r6502writebp0000 ;1
-  DCD r6502writebp0000 ;2
-  DCD r6502writebp3000 ;3
-  DCD r6502writebp3000 ;4
-  DCD r6502writebp3000 ;5
-  DCD r6502writebp3000 ;6
-  DCD r6502writebp3000 ;7
-  DCD r6502writebp8000 ;8
-  DCD r6502writebp8000 ;9
-  DCD r6502writebp8000 ;A
-  DCD r6502writebpB000 ;B
-  DCD r6502writebpC000 ;C
-  DCD r6502writebpC000 ;D
-  DCD r6502writebpC000 ;E
-  DCD r6502writebpF000 ;F
-
 ;
 ;rockwell 6502 cpu
 ;
@@ -1428,24 +1374,6 @@ r6502writemFE00
 
   LDMFD sp!,{r0-r9,r11-r12,pc}
 
-r6502writemoffset
-  DCD r6502writem0000 ;0
-  DCD r6502writem0000 ;1
-  DCD r6502writem0000 ;2
-  DCD r6502writem3000 ;3
-  DCD r6502writem3000 ;4
-  DCD r6502writem3000 ;5
-  DCD r6502writem3000 ;6
-  DCD r6502writem3000 ;7
-  DCD r6502writem8000 ;8
-  DCD r6502writem9000 ;9
-  DCD r6502writem9000 ;A
-  DCD r6502writem9000 ;B
-  DCD r6502writemC000 ;C
-  DCD r6502writemC000 ;D
-  DCD r6502writemE000 ;E
-  DCD r6502writemF000 ;F
-
 ;
 ;rockwell 6502 cpu
 ;
@@ -1478,13 +1406,85 @@ r6502writemoffset
 
 ;Data Area
 
-;  AREA    |C$$data|, DATA
+  AREA    |C$$data|, DATA
 
-buffermem
-  DCD 0
-  DCD 0
-  DCD 0
-  DCD 0
+r6502readbpoffset
+  DCD r6502readbp0000 ;0
+  DCD r6502readbp0000 ;1
+  DCD r6502readbp0000 ;2
+  DCD r6502readbp3000 ;3
+  DCD r6502readbp3000 ;4
+  DCD r6502readbp3000 ;5
+  DCD r6502readbp3000 ;6
+  DCD r6502readbp3000 ;7
+  DCD r6502readbp8000 ;8
+  DCD r6502readbp8000 ;9
+  DCD r6502readbp8000 ;A
+  DCD r6502readbpB000 ;B
+  DCD r6502readbpC000 ;C
+  DCD r6502readbpC000 ;D
+  DCD r6502readbpC000 ;E
+  DCD r6502readbpF000 ;F
+
+r6502writebpoffset
+  DCD r6502writebp0000 ;0
+  DCD r6502writebp0000 ;1
+  DCD r6502writebp0000 ;2
+  DCD r6502writebp3000 ;3
+  DCD r6502writebp3000 ;4
+  DCD r6502writebp3000 ;5
+  DCD r6502writebp3000 ;6
+  DCD r6502writebp3000 ;7
+  DCD r6502writebp8000 ;8
+  DCD r6502writebp8000 ;9
+  DCD r6502writebp8000 ;A
+  DCD r6502writebpB000 ;B
+  DCD r6502writebpC000 ;C
+  DCD r6502writebpC000 ;D
+  DCD r6502writebpC000 ;E
+  DCD r6502writebpF000 ;F
+
+|r6502readmoffset|
+  DCD r6502readm0000 ;0
+  DCD r6502readm0000 ;1
+  DCD r6502readm0000 ;2
+  DCD r6502readm3000 ;3
+  DCD r6502readm3000 ;4
+  DCD r6502readm3000 ;5
+  DCD r6502readm3000 ;6
+  DCD r6502readm3000 ;7
+  DCD r6502readm8000 ;8
+  DCD r6502readm9000 ;9
+  DCD r6502readm9000 ;A
+  DCD r6502readm9000 ;B
+  DCD r6502readmC000 ;C
+  DCD r6502readmC000 ;D
+  DCD r6502readmE000 ;E
+  DCD r6502readmF000 ;F
+
+r6502writemoffset
+  DCD r6502writem0000 ;0
+  DCD r6502writem0000 ;1
+  DCD r6502writem0000 ;2
+  DCD r6502writem3000 ;3
+  DCD r6502writem3000 ;4
+  DCD r6502writem3000 ;5
+  DCD r6502writem3000 ;6
+  DCD r6502writem3000 ;7
+  DCD r6502writem8000 ;8
+  DCD r6502writem9000 ;9
+  DCD r6502writem9000 ;A
+  DCD r6502writem9000 ;B
+  DCD r6502writemC000 ;C
+  DCD r6502writemC000 ;D
+  DCD r6502writemE000 ;E
+  DCD r6502writemF000 ;F
+
+;buffermem
+;  DCD 0
+;  DCD 0
+;  DCD 0
+;  DCD 0
 
 
   END
