@@ -88,9 +88,10 @@ static int writemodevariables(int mode)
 static void detectscreenmodesbyenumeration(int writeaction)
 {
   const char *formatcolumnname = "\nFMT ";
+  const char *available = " AVAILABLE";
   char buffer[128];
   int modeblock[10];
-  SCREENMODERECORD r;
+  SCREENMODERECORD r,r2;
   char *cnext;
   int enumblock[32];
   int nallocated,ntoskip,nread;
@@ -182,6 +183,35 @@ static void detectscreenmodesbyenumeration(int writeaction)
       if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) != NULL || c != 0)
       {
         continue;
+      }
+
+      if (r.fmt == 0 && r.modeflags == 0 && r.ncolour == 63)
+      {
+        r2 = r;
+        r2.fmt = 1;
+        r2.modeflags = 0x80;
+        r2.ncolour = 255;
+
+        screenmodesetblock(&r2,&modeblock);
+
+        regs.r[0] = (int)modeblock;
+        if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) != NULL || c != 0)
+        {
+          screenmodesetblock(&r,&modeblock);
+        }
+        else
+        {
+          r = r2;
+
+          if (writeaction == DETECTMODE_WRITELONGLIST)
+          {
+            snprintf(buffer,sizeof(buffer),"%2d  ",r.fmt);
+            wimpwrite(buffer,1,strlen(buffer));
+            writemodevariables((int)modeblock);
+            wimpwrite(available,1,strlen(available));
+            wimpwrite("\n",1,1);
+          }
+        }
       }
       
       if (!get256linezoomavailabilityformode((int)modeblock))
@@ -418,11 +448,15 @@ int writeusedscreenmode(int mode)
 int writenumberedmodelist(void)
 {
   int c;
+  int modeblock[10];
+  int mode;
 
   const char *modecolumnname = "\nMODE ";
   const char *padded12 = " 12  ";
   const char *padded15 = " 15  ";
   const char *padded21 = " 21  ";
+  const char *paddedNoNumber = "     ";
+  const char *available = " AVAILABLE";
 
   wimpwrite(modecolumnname,1,strlen(modecolumnname));
   wimpwrite(modevarcolumnnames,1,strlen(modevarcolumnnames));
@@ -439,6 +473,14 @@ int writenumberedmodelist(void)
   {
     wimpwrite(padded15,1,strlen(padded15));
     writemodevariables(15);
+    mode = screenmodespecifymedium(&modeblock);
+    if (mode != 15)
+    {
+      wimpwrite("\n",1,1);
+      wimpwrite(paddedNoNumber,1,strlen(paddedNoNumber));
+      writemodevariables(mode);
+      wimpwrite(available,1,strlen(available));
+    }
     wimpwrite("\n",1,1);
   }
   regs.r[0] = 21;
@@ -446,6 +488,14 @@ int writenumberedmodelist(void)
   {
     wimpwrite(padded21,1,strlen(padded21));
     writemodevariables(21);
+    mode = screenmodespecifyhigh(&modeblock);
+    if (mode != 21)
+    {
+      wimpwrite("\n",1,1);
+      wimpwrite(paddedNoNumber,1,strlen(paddedNoNumber));
+      writemodevariables(mode);
+      wimpwrite(available,1,strlen(available));
+    }
     wimpwrite("\n",1,1);
   }
 
@@ -562,4 +612,48 @@ void screenmodesetblock(SCREENMODERECORD* r, int (*modeblock)[10])
   {
     (*modeblock)[5] = -1;
   }
+}
+
+int screenmodespecifymedium(int (*modeblock)[10])
+{
+  int c;
+
+  (*modeblock)[0] = 1;
+  (*modeblock)[1] = 640;
+  (*modeblock)[2] = 256;
+  (*modeblock)[3] = 3;
+  (*modeblock)[4] = -1;
+  (*modeblock)[5] = 0;
+  (*modeblock)[6] = 0x80;
+  (*modeblock)[7] = 3;
+  (*modeblock)[8] = 255;
+  (*modeblock)[9] = -1;
+
+  regs.r[0] = (int)modeblock;
+  if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) != NULL || c != 0)
+    return 15;
+  else
+    return (int)modeblock;
+}
+
+int screenmodespecifyhigh(int (*modeblock)[10])
+{
+  int c;
+
+  (*modeblock)[0] = 1;
+  (*modeblock)[1] = 640;
+  (*modeblock)[2] = 512;
+  (*modeblock)[3] = 3;
+  (*modeblock)[4] = -1;
+  (*modeblock)[5] = 0;
+  (*modeblock)[6] = 0x80;
+  (*modeblock)[7] = 3;
+  (*modeblock)[8] = 255;
+  (*modeblock)[9] = -1;
+
+  regs.r[0] = (int)modeblock;
+  if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) != NULL || c != 0)
+    return 21;
+  else
+    return (int)modeblock;
 }

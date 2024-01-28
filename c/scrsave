@@ -69,7 +69,6 @@ static unsigned int arSprFileHdr[46] ={1, /* number of sprites in area*/
 void screentobuffer(void)
 {
   int vduvars[8];
-  int colournumbers[8];
   int xeig, yeig;
   int rdbits,rdwords,wrwords;
   int *screen,*rdp;
@@ -92,22 +91,6 @@ void screentobuffer(void)
   _kernel_swi(OS_ReadVduVariables,&regs,&regs);
 
   _kernel_swi(OS_RemoveCursors,&regs,&regs);
-
-  if (vduvars[3] > 2)
-  {
-    videogetcolournumbers(&colournumbers);
-  }
-  else
-  {
-    colournumbers[0] = 0x00;
-    colournumbers[1] = 0x01;
-    colournumbers[2] = 0x02;
-    colournumbers[3] = 0x03;
-    colournumbers[4] = 0x04;
-    colournumbers[5] = 0x05;
-    colournumbers[6] = 0x06;
-    colournumbers[7] = 0x07;
-  }
 
   xeig = vduvars[0];
   yeig = vduvars[1];
@@ -171,14 +154,14 @@ void screentobuffer(void)
 
       readpixel =read & mask;
 
-      if (readpixel == colournumbers[0]) readpixel=0;
-      else if (readpixel == colournumbers[1]) readpixel=1;
-      else if (readpixel == colournumbers[2]) readpixel=2;
-      else if (readpixel == colournumbers[3]) readpixel=3;
-      else if (readpixel == colournumbers[4]) readpixel=4;
-      else if (readpixel == colournumbers[5]) readpixel=5;
-      else if (readpixel == colournumbers[6]) readpixel=6;
-      else if (readpixel == colournumbers[7]) readpixel=7;
+      if (readpixel == host_colournumbers[0]) readpixel=0;
+      else if (readpixel == host_colournumbers[1]) readpixel=1;
+      else if (readpixel == host_colournumbers[2]) readpixel=2;
+      else if (readpixel == host_colournumbers[3]) readpixel=3;
+      else if (readpixel == host_colournumbers[4]) readpixel=4;
+      else if (readpixel == host_colournumbers[5]) readpixel=5;
+      else if (readpixel == host_colournumbers[6]) readpixel=6;
+      else if (readpixel == host_colournumbers[7]) readpixel=7;
 
       write =write >>4;
       write =write | (readpixel <<4);

@@ -641,6 +641,8 @@ int modereportsave(void)
     wimpwrite(buffer,1,strlen(buffer));
     if (!writeusedscreenmode(beebit_graphicsmodespecifier))
       return FALSE;
+    if (!writeusedcolours())
+      return FALSE;
   }
 
   snprintf(buffer,sizeof(buffer),headingformat,"Numbered list");

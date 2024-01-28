@@ -39,3 +39,5 @@ extern int getscreenmodeoverscalezoomavailability(SCREENMODERECORD* r);
 extern int getscreenmode256linezoomavailability(SCREENMODERECORD* r);
 extern int pickascreenmode(int xresmin,int yresmin);
 extern void screenmodesetblock(SCREENMODERECORD* r, int (*modeblock)[10]);
+extern int screenmodespecifymedium(int (*modeblock)[10]);
+extern int screenmodespecifyhigh(int (*modeblock)[10]);

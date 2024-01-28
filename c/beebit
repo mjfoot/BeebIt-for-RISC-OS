@@ -690,11 +690,11 @@ int beebitenter(void)
         break;
       case DISPLAY_MODE_MEDIUM:
         if (numberedscreenmodeflags & (1<<15))
-          beebit_graphicsmodespecifier = 15;
+          beebit_graphicsmodespecifier = screenmodespecifymedium(&beebit_graphicsmodeselector);
         break;
       case DISPLAY_MODE_HIGH:
         if (numberedscreenmodeflags & (1<<21))
-          beebit_graphicsmodespecifier = 21;
+          beebit_graphicsmodespecifier = screenmodespecifyhigh(&beebit_graphicsmodeselector);
         break;
       default:
         i = beebit_displaymode - DISPLAY_MODE_FIRST_IN_TABLE;

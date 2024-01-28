@@ -249,8 +249,6 @@ int getentrysizeforbarrelshiftedlookup(VIDEOSCALELUTPARAMETERS *lutparams, int l
 
 void video4lutinit(VIDEOSCALELUTPARAMETERS *lutparams)
 {
-  const int colourmasks[8] = {0x00000000,0x11111111,0x22222222,0x33333333,
-                              0x44444444,0x55555555,0x66666666,0x77777777};
   int i,j,n,nstop;
   unsigned int leftmask,rightmask,v;
   int shift;
@@ -262,8 +260,8 @@ void video4lutinit(VIDEOSCALELUTPARAMETERS *lutparams)
 
   for (i=0; i<256; i++)
   {
-    leftmask = (unsigned int)colourmasks[i&7];
-    rightmask = (unsigned int)colourmasks[(i>>4)&7];
+    leftmask = (unsigned int)host_colourmasks[i&7];
+    rightmask = (unsigned int)host_colourmasks[(i>>4)&7];
 
     for (j=0,n=lutparams->leftpixel;j+7<n;j+=8)
     {
@@ -310,27 +308,18 @@ void video4lutinit(VIDEOSCALELUTPARAMETERS *lutparams)
 
 void video8lutinit(VIDEOSCALELUTPARAMETERS *lutparams)
 {
-  int colourmasks[8];
   int i,j,n,nstop;
   unsigned int leftmask,rightmask,v;
   int shift;
   int *ilut;
 
   nstop = getentrysizeforbarrelshiftedlookup(lutparams,3);
-  videogetcolournumbers(&colourmasks);
-
-  for (i=0; i<8; i++)
-  {
-    colourmasks[i] = (colourmasks[i]<<8) | colourmasks[i];
-    colourmasks[i] = (colourmasks[i]<<16) | colourmasks[i];
-  }
-
   ilut = (int*)((int)videoscale_workspace+lutparams->offset);
 
   for (i=0; i<256; i++)
   {
-    leftmask = (unsigned int)colourmasks[i&7];
-    rightmask = (unsigned int)colourmasks[(i>>4)&7];
+    leftmask = (unsigned int)host_colourmasks[i&7];
+    rightmask = (unsigned int)host_colourmasks[(i>>4)&7];
 
     for (j=0,n=lutparams->leftpixel;j+3<n;j+=4)
     {
@@ -377,26 +366,18 @@ void video8lutinit(VIDEOSCALELUTPARAMETERS *lutparams)
 
 void video16lutinit(VIDEOSCALELUTPARAMETERS *lutparams)
 {
-  int colourmasks[8];
   int i,j,n,nstop;
   unsigned int leftmask,rightmask,v;
   int shift;
   int *ilut;
 
   nstop = getentrysizeforbarrelshiftedlookup(lutparams,4)>>1;
-  videogetcolournumbers(&colourmasks);
-  
-  for (i=0; i<8; i++)
-  {
-    colourmasks[i] = (colourmasks[i]<<16) | colourmasks[i];
-  }
-
   ilut = (int*)((int)videoscale_workspace+lutparams->offset);
 
   for (i=0; i<256; i++)
   {
-    leftmask = (unsigned int)colourmasks[i&7];
-    rightmask = (unsigned int)colourmasks[(i>>4)&7];
+    leftmask = (unsigned int)host_colourmasks[i&7];
+    rightmask = (unsigned int)host_colourmasks[(i>>4)&7];
 
     for (j=0,n=lutparams->leftpixel;j+1<n;j+=2)
     {
@@ -443,20 +424,17 @@ void video16lutinit(VIDEOSCALELUTPARAMETERS *lutparams)
 
 void video32lutinit(VIDEOSCALELUTPARAMETERS *lutparams)
 {
-  int colourmasks[8];
   int i,j,n,nstop;
   unsigned int leftmask,rightmask;
   int *ilut;
 
   nstop = getentrysizeforbarrelshiftedlookup(lutparams,5)>>2;
-  videogetcolournumbers(&colourmasks);
-
   ilut = (int*)((int)videoscale_workspace+lutparams->offset);
 
   for (i=0; i<256; i++)
   {
-    leftmask = (unsigned int)colourmasks[i&7];
-    rightmask = (unsigned int)colourmasks[(i>>4)&7];
+    leftmask = (unsigned int)host_colourmasks[i&7];
+    rightmask = (unsigned int)host_colourmasks[(i>>4)&7];
 
     for (j=0,n=lutparams->leftpixel;j<n;j++)
     {
@@ -581,11 +559,14 @@ void videoscalechoose(int mode, VIDEOSCALECHOICE *choice)
   scaleselector |= log2bpp;
 
   //check whether the mode is directly supported
-  if (modeflags == 0)
+  if (modeflags == 0 || modeflags == 0x80)
   {
     switch (scaleselector)
     {
       case 0x0102:
+        if (modeflags == 0x80)
+          break;
+
         if (ratioshift == 0)
         {
           choice->mode = 12;
@@ -598,8 +579,16 @@ void videoscalechoose(int mode, VIDEOSCALECHOICE *choice)
         }
         break;
       case 0x0103:
-        if (ncolour != 63)
-          break;
+        if (modeflags == 0x80)
+        {
+          if (ncolour != 255)
+            break;
+        }
+        else
+        {
+          if (ncolour != 63)
+            break;
+        }
 
         if (ratioshift == 0)
         {

@@ -18,6 +18,9 @@ typedef struct {
   int roundedteletext;
 } VERTICALLYSCALEDLINELENGTHS;
 
+/*palette*/
+extern const unsigned int palette_rgb[8];
+
 /*teletext*/
 extern int teletext_screenwidth;
 extern int teletext_leftoffscreen;
@@ -53,6 +56,8 @@ extern int nlocalscreenlinelength;
 extern int local_linelengthfloor; /*line length compatible with optimised blank, plot and scale routines*/
 extern int local_teletextform; /*line ratio, pixel depth and graphics separation*/
 extern int local_teletextlinelength;
+extern int host_colournumbers[8];
+extern int host_colourmasks[8];
 extern int host_scaledlinelengthfloor;
 extern int host_scaledlinelength;
 extern int host_scaledteletextrowlength;
@@ -64,7 +69,7 @@ extern void videoinit(void);
 extern void videosetscale(void);
 extern void videosetplot(void);
 extern void videohostmodevars(void);
-extern void videogetcolournumbers(int (*numbers)[8]);
+extern int writeusedcolours(void);
 extern void videofreeworkspace(void);
 extern void videoreset(int lfull);
 extern void videomodechange(void);
