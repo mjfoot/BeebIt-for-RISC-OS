@@ -91,6 +91,7 @@ int beebit_framerate;
 int beebit_mouseemulation;
 int beebit_displaymode;
 int beebit_displayzoom;
+int beebit_palette;
 int beebit_sound;
 int beebit_cursor;
 int beebit_fasttape;
@@ -755,6 +756,7 @@ int beebitenter(void)
       /*allocate space for screen buffer sprite*/
       spritealloc();
 
+      videosetpalette();
       videosetscale();
       videosetplot();
       

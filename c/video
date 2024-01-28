@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <time.h>
 #include "6502cpu.h"
 
@@ -69,6 +70,7 @@ const unsigned int palette_rgb[8] =
   0xFFFF0000, /*cyan*/
   0xFFFFFF00  /*white*/
 };
+unsigned int palette_specified[8];
 
 /*teletext*/
 struct {
@@ -185,6 +187,71 @@ void videoinit(void)
   {
     fread(teletext_graphics,1,sizeof(teletext_graphics),hfile);
     fclose(hfile);
+  }
+}
+
+void videosetpalette(void)
+{
+  int i;
+  unsigned int u;
+  float weights[8],gamma;
+
+  if (beebit_palette == PALETTE_RGB)
+  {
+    for (i=0; i<8; i++)
+    {
+      palette_specified[i] = palette_rgb[i];
+    }
+  }
+  else
+  {
+    weights[0] = 0.0f;
+    weights[7] = 1.0f;
+
+    switch (beebit_palette)
+    {
+      case PALETTE_COLOUR:
+        weights[1] = 0.4716f;
+        weights[2] = 0.6118f;
+        weights[3] = 0.8922f;
+        weights[4] = 0.2990f;
+        weights[5] = 0.5794f;
+        weights[6] = 0.7196f;
+        gamma = 0.45f;
+        break;
+      case PALETTE_GREY:
+      case PALETTE_GREEN:
+        weights[1] = 0.2657f;
+        weights[2] = 0.5845f;
+        weights[3] = 0.8501f;
+        weights[4] = 0.1499f;
+        weights[5] = 0.4155f;
+        weights[6] = 0.7343f;
+        gamma = 1.0f;
+        break;
+    }
+
+    for (i=0; i<8; i++)
+    {
+      u = (unsigned int)nearbyintf(255.0f * powf(weights[i],gamma));
+      palette_specified[i] = (u<<24)|(u<<16)|(u<<8);
+    }
+
+    switch (beebit_palette)
+    {
+      case PALETTE_COLOUR:
+        for (i=0; i<8; i++)
+        {
+          palette_specified[i] &= palette_rgb[i];
+        }
+        break;
+      case PALETTE_GREEN:
+        for (i=0; i<8; i++)
+        {
+          palette_specified[i] &= 0x00FF0000;
+        }
+        break;
+    }
   }
 }
 
@@ -333,7 +400,7 @@ void videohostmodevars(void)
 
     for (i=0; i<8; i++)
     {
-      fullpalette[i] = palette_rgb[i];
+      fullpalette[i] = palette_specified[i];
       host_colournumbers[i] = i;
     }
     for (i=8; i<ncolour; i++)
@@ -352,7 +419,7 @@ void videohostmodevars(void)
   {
     for (i=0; i<8; i++)
     {
-      regs.r[0] = palette_rgb[i];
+      regs.r[0] = palette_specified[i];
       _kernel_swi(ColourTrans_ReturnColourNumber,&regs,&regs);
       host_colournumbers[i] = regs.r[0];
     }
@@ -451,7 +518,7 @@ int writeusedcolours(void)
   {
     snprintf(buffer,sizeof(buffer),"%7s  &%8X  &%08X  &%08X\n",
       names[i],host_colournumbers[i],host_colourmasks[i],
-      palette_rgb[i]);
+      palette_specified[i]);
     wimpwrite(buffer,1,strlen(buffer));
   }
 

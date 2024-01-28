@@ -198,11 +198,19 @@ void screentobuffer(void)
 
 void spritecommon(void)
 {
+  int i;
+
   arSprFileHdr[2] =wrspr_size +0xbc; /* offset of first free word*/
   arSprFileHdr[3] =wrspr_size +0xac; /* offset to next sprite*/
   arSprFileHdr[7] =((xsize *wrbits) /32) -1; /* width in words*/
   arSprFileHdr[8] =(ysize -1); /* height in scan lines*/
   arSprFileHdr[13] =sprmode; /* mode 9/12*/
+
+  for (i=0; i<8; i++)
+  {
+    arSprFileHdr[14+(i<<1)] = palette_specified[i] | 0x10;
+    arSprFileHdr[15+(i<<1)] = palette_specified[i] | 0x10;
+  }
 }
 
 int file_exists(char *obj_name)

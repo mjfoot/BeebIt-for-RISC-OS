@@ -41,6 +41,8 @@
 #define DISPLAY_MODE_MENU 46
 #define DISPLAY_ZOOM_EDIT 48
 #define DISPLAY_ZOOM_MENU 49
+#define PALETTE_EDIT 51
+#define PALETTE_MENU 52
 #define OPTION_SOUND 28
 #define OPTION_CURSOR 29
 #define OPTION_FASTTAPE 30
@@ -109,6 +111,7 @@ char b[256],cusermessages[0x08],cresetmenu[128],cmainmenu[256];
 char cconfigmenu[128], ckeymapmenu[2048], cmousemenu[128];
 char cspeedmenu[128], cscreenmenu[128], cframemenu[128];
 char cmachinemenu[128];
+char cpalettemenu[256];
 char *cdisplaymenu,*czoommenu;
 char cscreentitle[16],ckeymaptitle[16],cmousetitle[16];
 char cscreenitem1[16],cscreenitem2[16];
@@ -935,6 +938,10 @@ int helprequest(int hwindow, int hicon, char *cbuffer)
       case DISPLAY_ZOOM_MENU:
         nlen = messagefilelookupb(hmessages, cbuffer, "OptionsDisplayZoom");
         break;
+      case PALETTE_EDIT:
+      case PALETTE_MENU:
+        nlen = messagefilelookupb(hmessages, cbuffer, "OptionsPalette");
+        break;
       case OPTION_SOUND:
         nlen = messagefilelookupb(hmessages, cbuffer, "OptionsSound");
         break;
@@ -1231,6 +1238,18 @@ void configsave(void)
       fputs("Auto", hfile);
     }
     fputs("\n", hfile);
+    /*palette*/
+    strcpy(cname,"Palette=");
+    fputs(cname, hfile);
+    if (beebit_palette == PALETTE_COLOUR)
+      fputs("Colour", hfile);
+    else if (beebit_palette == PALETTE_GREY)
+      fputs("Grey", hfile);
+    else if (beebit_palette == PALETTE_GREEN)
+      fputs("Green", hfile);
+    else
+      fputs("RGB", hfile);
+    fputs("\n", hfile);
     /*sound*/
     strcpy(cname,"Sound=");
     fputs(cname, hfile);
@@ -1444,6 +1463,16 @@ void setoptions(int ntype)
     writeicon(hoptions,DISPLAY_ZOOM_EDIT,displayzoomicons[i],0,0);
   else
     writeicon(hoptions,DISPLAY_ZOOM_EDIT,"Auto",0,0);
+
+  /*palette*/
+  if (beebit_palette == PALETTE_COLOUR)
+    writeicon(hoptions,PALETTE_EDIT,"Colour",0,0);
+  else if (beebit_palette == PALETTE_GREY)
+    writeicon(hoptions,PALETTE_EDIT,"Grey",0,0);
+  else if (beebit_palette == PALETTE_GREEN)
+    writeicon(hoptions,PALETTE_EDIT,"Green",0,0);
+  else
+    writeicon(hoptions,PALETTE_EDIT,"RGB",0,0);
 
   setbutton(hoptions,OPTION_SOUND,beebit_sound);
   setbutton(hoptions,OPTION_CURSOR,beebit_cursor);
@@ -1855,6 +1884,18 @@ void select(void)
   {
     writeicon(hoptions,DISPLAY_ZOOM_EDIT,czoommenu+40+(nmain*24),0,0);
   }
+  else if (ncurmenu == (int)cpalettemenu)
+  {
+    if (getword(cpalettemenu+36+(nmain*24)) & 0x0100)
+    {
+      nchar = (char*)getword(cpalettemenu+40+(nmain*24));
+    }
+    else
+    {
+      nchar = cpalettemenu+40+(nmain*24);
+    }
+    writeicon(hoptions,PALETTE_EDIT,nchar,0,0);
+  }
 }
 
 void keypress(void)
@@ -2072,6 +2113,15 @@ void button(void)
         _kernel_swi(Wimp_CreateMenu,&regs,&regs);
         ncurmenu = regs.r[1];
         break;
+      case PALETTE_MENU:
+        /*palette*/
+        /*96+(menuitems*44)*/
+        regs.r[1] = (int)cpalettemenu;
+        regs.r[2] = nmousex-64;
+        regs.r[3] = nmousey;
+        _kernel_swi(Wimp_CreateMenu,&regs,&regs);
+        ncurmenu = regs.r[1];
+        break;
       case OPTIONS_CANCEL:
         /*cancel*/
         beebit_machinetype = nlastmachinetype;
@@ -2146,6 +2196,16 @@ void button(void)
             break;
           }
         }
+        /*palette*/
+        cbuffer = readicon(hoptions,PALETTE_EDIT);
+        if (strcmp(cbuffer,"Colour") == 0)
+          beebit_palette = PALETTE_COLOUR;
+        else if (strcmp(cbuffer,"Grey") == 0)
+          beebit_palette = PALETTE_GREY;
+        else if (strcmp(cbuffer,"Green") == 0)
+          beebit_palette = PALETTE_GREEN;
+        else
+          beebit_palette = PALETTE_RGB;
         /*sound*/
         if (buttonset(hoptions,OPTION_SOUND))
           beebit_sound = TRUE;
@@ -3050,6 +3110,17 @@ void setup(void)
             }
           }
         }
+        else if (strncmp(cbuffer,"Palette",7) == 0)
+        {
+          if (strncmp(cbuffer+8,"Colour",7) == 0)
+            beebit_palette = PALETTE_COLOUR;
+          else if (strncmp(cbuffer+8,"Grey",4) == 0)
+            beebit_palette = PALETTE_GREY;
+          else if (strncmp(cbuffer+8,"Green",5) == 0)
+            beebit_palette = PALETTE_GREEN;
+          else
+            beebit_palette = PALETTE_RGB;
+        }
         else if (strncmp(cbuffer,"Sound",5) == 0)
         {
           /*setbutton(hoptions,13,(cbuffer[6] == 84));*/
@@ -3262,6 +3333,33 @@ void menus(void)
   setword(citem+4,-1);
   setword(citem+8,0x7009011);
   strcpy((citem+12),"Auto");
+
+  strcpy(cpalettemenu,"Palette");
+  setword(cpalettemenu+12,0x00070207);
+  *(cpalettemenu+16) = 208;
+  *(cpalettemenu+20) = 44;
+  *(cpalettemenu+24) = 0;
+  citem = (cpalettemenu+28);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"RGB");
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Colour");
+  citem = (citem+24);
+  *(citem) = 0;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Grey");
+  citem = (citem+24);
+  *(citem) = 128;
+  setword(citem+4,-1);
+  setword(citem+8,0x7009011);
+  strcpy((citem+12),"Green");
+  citem = (citem+24);
 
   /*strcpy(cmachinecompact,NAME_MASTERCOMPACT);*/
 

@@ -53,6 +53,10 @@
 #define DISPLAY_MODE_FIRST_IN_TABLE 4
 #define DISPLAY_ZOOM_AUTO 0
 #define DISPLAY_ZOOM_FIRST_IN_TABLE 1
+#define PALETTE_RGB 0
+#define PALETTE_COLOUR 1
+#define PALETTE_GREY 2
+#define PALETTE_GREEN 3
 
 /*define this for RISC OS machines*/
 #define __RISCOS__
@@ -109,6 +113,7 @@ extern int beebit_framerate;
 extern int beebit_mouseemulation;
 extern int beebit_displaymode;
 extern int beebit_displayzoom;
+extern int beebit_palette;
 extern int beebit_sound;
 extern int beebit_cursor;
 extern int beebit_fasttape;

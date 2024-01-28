@@ -20,6 +20,7 @@ typedef struct {
 
 /*palette*/
 extern const unsigned int palette_rgb[8];
+extern unsigned int palette_specified[8];
 
 /*teletext*/
 extern int teletext_screenwidth;
@@ -66,6 +67,7 @@ extern int host_screenoffsetremainder;
 extern unsigned int cursor_bitmap;
 
 extern void videoinit(void);
+extern void videosetpalette(void);
 extern void videosetscale(void);
 extern void videosetplot(void);
 extern void videohostmodevars(void);
