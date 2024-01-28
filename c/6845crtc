@@ -243,7 +243,7 @@ void crtcwrite(int naddress,int nvalue)
       /* 0  0=normal sync mode (non-interlace)*/
       /* 1  0=normal sync mode (non-interlace)*/
       /* 0  1=interlace sync mode*/
-      /* 1  1=normal sync and video mode*/
+      /* 1  1=interlace sync and video mode*/
       /*b5+b4 (display skew)*/
       /* 0  0=No delay*/
       /* 0  1=One character delay*/
