@@ -55,6 +55,5 @@ extern void videomodechange(void);
 extern void videoscanline(void);
 extern void videoteletext4(void);
 extern void videoteletext8(void);
-extern void videoteletext8x2(void);
 
 extern void (*videoteletext)(void);

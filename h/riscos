@@ -21,6 +21,7 @@ extern void escapedisable(void);
 extern void escapeenable(void);
 extern void cursordisable(void);
 extern void cursorenable(void);
+extern void roundteletextalpha(int naddress, int nupperhalfaddress, int nlowerhalfaddress);
 extern void blankrow(int naddress, int ncount, int nvalue);
 extern void blankrowx(unsigned int naddress, unsigned int ncount, unsigned int nvalue, unsigned int nscreen_width, unsigned int nlines);
 extern void swapbanks(int naddress, int ncount);

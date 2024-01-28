@@ -43,18 +43,18 @@ extern _kernel_swi_regs regs;
 #define TELETEXT_GRAPHICS_SEPARATED 1
 
 extern void videodrawline0(void);
-extern void videoteletext4(void);
-extern void videoteletext8(void);
 extern void sprite_printscreen(void);
 
 extern int ncurrentmode, llargecursor;
 extern int lprintscreen;
 
 /*teletext*/
-char teletext_alpha[8*10*224];
-char teletext_alphad1[8*10*224];
-char teletext_alphad2[8*10*224];
-char teletext_graphics[8*10*224];
+struct {
+  int field0[2*10*224];
+  int normal[2*10*224];
+  int field1[2*10*224];
+} teletext_alpha;
+int teletext_graphics[2*10*224];
 unsigned int teletext_colourmap8[0x08] = {
   0x00000000,0x15151515,0x62626262,0x77777777,0x88888888,0x9D9D9D9D,0xEAEAEAEA,0xFFFFFFFF};
 int teletext_alphacolour;
@@ -122,24 +122,20 @@ void (*videoteletext)(void);
 void videoinit(void)
 {
   FILE *hfile;
+  int pointer,i;
 
   hfile = fopen("<BeebIt$Dir>.Resources.MODE7A","rb");
   if (hfile != NULL)
   {
-    fread(teletext_alpha,1,sizeof(teletext_alpha),hfile);
+    fread(teletext_alpha.normal,1,sizeof(teletext_alpha.normal),hfile);
     fclose(hfile);
   }
-  hfile = fopen("<BeebIt$Dir>.Resources.MODE7D1","rb");
-  if (hfile != NULL)
+  pointer = (int)teletext_alpha.normal;
+  for (i=0; i<224; i++)
   {
-    fread(teletext_alphad1,1,sizeof(teletext_alphad1),hfile);
-    fclose(hfile);
-  }
-  hfile = fopen("<BeebIt$Dir>.Resources.MODE7D2","rb");
-  if (hfile != NULL)
-  {
-    fread(teletext_alphad2,1,sizeof(teletext_alphad2),hfile);
-    fclose(hfile);
+    roundteletextalpha(pointer, pointer - sizeof(teletext_alpha.field0),
+                                pointer + sizeof(teletext_alpha.normal));
+    pointer += 80;
   }
   hfile = fopen("<BeebIt$Dir>.Resources.MODE7G","rb");
   if (hfile != NULL)
@@ -1519,6 +1515,44 @@ void teletextalphanormal1(int address, int pointer, int row)
   data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
   setword(cscreen,data2);
 }
+/*single width, single height*/
+void teletextalpharounded1(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1,data2;
+  char *cscreen;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 & 0xF0000000) | ((data0>>4) & 0xF00000) | ((data0>>8) & 0xF000) | ((data0>>12) & 0xF0);
+  data0 = ((data0<<12) & 0xF000000) | ((data0<<8) & 0xF0000) | ((data0<<4) & 0xF00) | (data0 & 0xF);
+  data1 = data1 | (data1>>4);
+  data0 = (data0<<4) | data0;
+
+  cscreen = (char *)address;
+  data = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data0 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  cscreen = (char *)address+4;
+  data = (data1 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data1 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+
+  cscreen = (char *)pointer + ((row << 3) + 4);
+  data0 = getword(cscreen);
+  data1 = (data0 & 0xF0000000) | ((data0>>4) & 0xF00000) | ((data0>>8) & 0xF000) | ((data0>>12) & 0xF0);
+  data0 = ((data0<<12) & 0xF000000) | ((data0<<8) & 0xF0000) | ((data0<<4) & 0xF00) | (data0 & 0xF);
+  data1 = data1 | (data1>>4);
+  data0 = (data0<<4) | data0;
+
+  cscreen = (char *)address+8;
+  data = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data0 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  cscreen = (char *)address+12;
+  data = (data1 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data1 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+}
 
 /*double width, single height*/
 void teletextalphanormal2(int address, int pointer, int row)
@@ -1588,13 +1622,101 @@ void teletextalphanormal2(int address, int pointer, int row)
   setword(cscreen,data2);
   setword(cscreen2,data2);
 }
+/*double width, single height*/
+void teletextalpharounded2(int address, int pointer, int row)
+{
+  unsigned int data,data0,data1,data2;
+  char *cscreen, *cscreen2;
+
+  cscreen = (char *)pointer + (row << 3);
+  data0 = getword(cscreen);
+  data1 = (data0 & 0xF0000000) | ((data0>>4) & 0xF00000) | ((data0>>8) & 0xF000) | ((data0>>12) & 0xF0);
+  data0 = ((data0<<12) & 0xF000000) | ((data0<<8) & 0xF0000) | ((data0<<4) & 0xF00) | (data0 & 0xF);
+  data1 = data1 | (data1>>4);
+  data0 = (data0<<4) | data0;
+
+  cscreen = (char *)address;
+  cscreen2 = (char *)(address + host_screenwidth);
+  data2 = ((data0 & 0xFF00) << 8) | (data0 & 0x00FF);
+  data2 |= (data2 << 8);
+  data = (data2 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data2 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+  cscreen = (char *)address+4;
+  cscreen2 = (char *)(address + 4 + host_screenwidth);
+  data2 = (data0 & 0xFF000000) | ((data0 & 0x00FF0000) >> 8);
+  data2 |= (data2 >> 8);
+  data = (data2 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data2 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+
+  cscreen = (char *)address+8;
+  cscreen2 = (char *)(address + 8 + host_screenwidth);
+  data2 = ((data1 & 0xFF00) << 8) | (data1 & 0x00FF);
+  data2 |= (data2 << 8);
+  data = (data2 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data2 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+  cscreen = (char *)address+12;
+  cscreen2 = (char *)(address + 12 + host_screenwidth);
+  data2 = (data1 & 0xFF000000) | ((data1 & 0x00FF0000) >> 8);
+  data2 |= (data2 >> 8);
+  data = (data2 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data2 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+
+  cscreen = (char *)pointer + ((row << 3) + 4);
+  data0 = getword(cscreen);
+  data1 = (data0 & 0xF0000000) | ((data0>>4) & 0xF00000) | ((data0>>8) & 0xF000) | ((data0>>12) & 0xF0);
+  data0 = ((data0<<12) & 0xF000000) | ((data0<<8) & 0xF0000) | ((data0<<4) & 0xF00) | (data0 & 0xF);
+  data1 = data1 | (data1>>4);
+  data0 = (data0<<4) | data0;
+
+  cscreen = (char *)address+16;
+  cscreen2 = (char *)(address + 16 + host_screenwidth);
+  data2 = ((data0 & 0xFF00) << 8) | (data0 & 0x00FF);
+  data2 |= (data2 << 8);
+  data = (data2 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data2 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+  cscreen = (char *)address+20;
+  cscreen2 = (char *)(address + 20 + host_screenwidth);
+  data2 = (data0 & 0xFF000000) | ((data0 & 0x00FF0000) >> 8);
+  data2 |= (data2 >> 8);
+  data = (data2 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data2 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+
+  cscreen = (char *)address+24;
+  cscreen2 = (char *)(address + 24 + host_screenwidth);
+  data2 = ((data1 & 0xFF00) << 8) | (data1 & 0x00FF);
+  data2 |= (data2 << 8);
+  data = (data2 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data2 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+  cscreen = (char *)address+28;
+  cscreen2 = (char *)(address + 28 + host_screenwidth);
+  data2 = (data1 & 0xFF000000) | ((data1 & 0x00FF0000) >> 8);
+  data2 |= (data2 >> 8);
+  data = (data2 ^ 0xFFFFFFFF) & teletext_backcolourmask;
+  data2 = (data2 & teletext_alphacolourmask | data);
+  setword(cscreen,data2);
+  setword(cscreen2,data2);
+}
 
 void teletextalphanormal(void)
 {
   int row;
   int pointer, address;
 
-  pointer = (int)teletext_alpha + (((teletext_character | 0x80) - 0x20) * 80);
+  pointer = (int)teletext_alpha.normal + (((teletext_character | 0x80) - 0x20) * 80);
   address = nscreen;
 
   switch (beebit_teletextmode)
@@ -1611,9 +1733,9 @@ void teletextalphanormal(void)
       for (row = 0; row <= 9; row++)
       {
         /*20 lines of 8 pixels*/
-        teletextalphanormal1(address, pointer, row);
+        teletextalpharounded1(address, pointer - sizeof(teletext_alpha.field0), row);
         address = address + host_screenwidth;
-        teletextalphanormal1(address, pointer, row);
+        teletextalpharounded1(address, pointer + sizeof(teletext_alpha.normal), row);
         address = address + host_screenwidth;
       }
       break;
@@ -1623,104 +1745,13 @@ void teletextalphanormal(void)
       for (row = 0; row <= 9; row++)
       {
         /*40 lines of 8 pixels*/
-        teletextalphanormal2(address, pointer, row);
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
         address = address + host_screenwidth2; /* * 2;*/
-        teletextalphanormal2(address, pointer, row);
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
         address = address + host_screenwidth2; /* * 2;*/
       }
       break;
   }
-}
-
-/*single width, single height*/
-void teletextalphadoubletop1(int address, int pointer, int row)
-{
-  unsigned int data,data0,data1, data2;
-  char *cscreen;
-
-  cscreen = (char *)pointer + (row << 3);
-  data0 = getword(cscreen);
-  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
-  data = (data0 & teletext_alphacolourmask | data1);
-
-  data1 = (data & 0xFF00);
-  data0 = (data & 0x00FF);
-  cscreen = (char *)address;
-  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
-  setword(cscreen,data2);
-  data1 = (data & 0xFF000000);
-  data0 = (data & 0x00FF0000);
-  cscreen = (char *)address+4;
-  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
-  setword(cscreen,data2);
-
-  cscreen = (char *)pointer + ((row << 3) + 4);
-  data0 = getword(cscreen);
-  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
-  data = (data0 & teletext_alphacolourmask | data1);
-  data1 = (data & 0xFF00);
-  data0 = (data & 0x00FF);
-  cscreen = (char *)address+8;
-  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
-  setword(cscreen,data2);
-  data1 = (data & 0xFF000000);
-  data0 = (data & 0x00FF0000);
-  cscreen = (char *)address+12;
-  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
-  setword(cscreen,data2);
-}
-
-/*double width, single height*/
-void teletextalphadoubletop2(int address, int pointer, int row)
-{
-  unsigned int data,data0,data1, data2;
-  char *cscreen;
-
-  cscreen = (char *)pointer + (row << 3);
-  data0 = getword(cscreen);
-  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
-  data = (data0 & teletext_alphacolourmask | data1);
-
-  data1 = (data & 0xFF00);
-  data0 = (data & 0x00FF);
-  cscreen = (char *)address;
-  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
-  setword(cscreen,data2);
-  cscreen = (char *)address+4;
-  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
-  setword(cscreen,data2);
-
-  data1 = (data & 0xFF000000);
-  data0 = (data & 0x00FF0000);
-  cscreen = (char *)address+8;
-  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
-  setword(cscreen,data2);
-  cscreen = (char *)address+12;
-  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
-  setword(cscreen,data2);
-
-  cscreen = (char *)pointer + ((row << 3) + 4);
-  data0 = getword(cscreen);
-  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
-  data = (data0 & teletext_alphacolourmask | data1);
-
-  data1 = (data & 0xFF00);
-  data0 = (data & 0x00FF);
-  cscreen = (char *)address+16;
-  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
-  setword(cscreen,data2);
-  cscreen = (char *)address+20;
-  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
-  setword(cscreen,data2);
-
-  data1 = (data & 0xFF000000);
-  data0 = (data & 0x00FF0000);
-  cscreen = (char *)address+24;
-  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
-  setword(cscreen,data2);
-  cscreen = (char *)address+28;
-  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
-  setword(cscreen,data2);
 }
 
 void teletextalphadoubletop(void)
@@ -1728,136 +1759,60 @@ void teletextalphadoubletop(void)
   int row;
   int pointer, address;
 
-  pointer = (int)teletext_alphad1 + (((teletext_character | 0x80) - 0x20) * 80);
+  pointer = (int)teletext_alpha.normal + (((teletext_character | 0x80) - 0x20) * 80);
   address = nscreen;
 
   switch (beebit_teletextmode)
   {
     case 15:
-      for (row = 0; row <= 9; row++)
+      for (row = 0; row <= 4; row++)
       {
         /*10 lines of 8 pixels*/
-        teletextalphadoubletop1(address, pointer, row);
+        teletextalphanormal1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextalphanormal1(address, pointer, row);
         address = address + host_screenwidth;
       }
       break;
     case 21:
-      for (row = 0; row <= 9; row++)
+      for (row = 0; row <= 4; row++)
       {
         /*20 lines of 8 pixels*/
-        teletextalphadoubletop1(address, pointer, row);
+        teletextalpharounded1(address, pointer - sizeof(teletext_alpha.field0), row);
         address = address + host_screenwidth;
-        teletextalphadoubletop1(address, pointer, row);
+        teletextalpharounded1(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded1(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
+        teletextalpharounded1(address, pointer + sizeof(teletext_alpha.normal), row);
         address = address + host_screenwidth;
       }
       break;
     case 12801024:
     case 16801050:
     case 19201080:
-      for (row = 0; row <= 9; row++)
+      for (row = 0; row <= 4; row++)
       {
         /*40 lines of 8 pixels*/
-        teletextalphadoubletop2(address, pointer, row);
-        address = address + host_screenwidth; /* *2;*/
-        teletextalphadoubletop2(address, pointer, row);
-        address = address + host_screenwidth; /* *2;*/
-        teletextalphadoubletop2(address, pointer, row);
-        address = address + host_screenwidth; /* *2;*/
-        teletextalphadoubletop2(address, pointer, row);
-        address = address + host_screenwidth; /* *2;*/
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
       }
       break;
   }
-}
-
-/*single width, single height*/
-void teletextalphadoublebottom1(int address, int pointer, int row)
-{
-  unsigned int data,data0,data1, data2;
-  char *cscreen;
-
-  cscreen = (char *)pointer + (row << 3);
-  data0 = getword(cscreen);
-  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
-  data = (data0 & teletext_alphacolourmask | data1);
-  data1 = (data & 0xFF00);
-  data0 = (data & 0x00FF);
-  cscreen = (char *)address;
-  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
-  setword(cscreen,data2);
-  data1 = (data & 0xFF000000);
-  data0 = (data & 0x00FF0000);
-  cscreen = (char *)address+4;
-  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
-  setword(cscreen,data2);
-
-  cscreen = (char *)pointer + ((row << 3) + 4);
-  data0 = getword(cscreen);
-  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
-  data = (data0 & teletext_alphacolourmask | data1);
-  data1 = (data & 0xFF00);
-  data0 = (data & 0x00FF);
-  cscreen = (char *)address+8;
-  data2 = (data1 << 8) | (data1 << 16) | data0 | (data0 << 8);
-  setword(cscreen,data2);
-  data1 = (data & 0xFF000000);
-  data0 = (data & 0x00FF0000);
-  cscreen = (char *)address+12;
-  data2 = data1 | (data1 >> 8) | (data0 >> 16) | (data0 >> 8);
-  setword(cscreen,data2);
-}
-
-/*double width, double height*/
-void teletextalphadoublebottom2(int address, int pointer, int row)
-{
-  unsigned int data,data0,data1, data2;
-  char *cscreen;
-
-  cscreen = (char *)pointer + (row << 3);
-  data0 = getword(cscreen);
-  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
-  data = (data0 & teletext_alphacolourmask | data1);
-
-  data1 = (data & 0xFF00);
-  data0 = (data & 0x00FF);
-  cscreen = (char *)address;
-  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
-  setword(cscreen,data2);
-  cscreen = (char *)address+4;
-  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
-  setword(cscreen,data2);
-
-  data1 = (data & 0xFF000000);
-  data0 = (data & 0x00FF0000);
-  cscreen = (char *)address+8;
-  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
-  setword(cscreen,data2);
-  cscreen = (char *)address+12;
-  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
-  setword(cscreen,data2);
-
-  cscreen = (char *)pointer + ((row << 3) + 4);
-  data0 = getword(cscreen);
-  data1 = (data0 ^ 0xFFFFFFFF) & teletext_backcolourmask;
-  data = (data0 & teletext_alphacolourmask | data1);
-
-  data1 = (data & 0xFF00);
-  data0 = (data & 0x00FF);
-  cscreen = (char *)address+16;
-  data2 = (data0 << 24) | (data0 << 16) | data0 | (data0 << 8);
-  setword(cscreen,data2);
-  cscreen = (char *)address+20;
-  data2 = (data1 << 16) | (data1 << 8) | data1 | (data1 >> 8);
-  setword(cscreen,data2);
-
-  data1 = (data & 0xFF000000);
-  data0 = (data & 0x00FF0000);
-  cscreen = (char *)address+24;
-  data2 = data0 | (data0 >> 8) | (data0 >> 16) | (data0 << 8);
-  setword(cscreen,data2);
-  cscreen = (char *)address+28;
-  data2 = data1 | (data1 >> 8) | (data1 >> 16) | (data1 >> 24);
-  setword(cscreen,data2);
 }
 
 void teletextalphadoublebottom(void)
@@ -1865,43 +1820,57 @@ void teletextalphadoublebottom(void)
   int row;
   int pointer, address;
 
-  pointer = (int)teletext_alphad2 + (((teletext_character | 0x80) - 0x20) * 80);
+  pointer = (int)teletext_alpha.normal + (((teletext_character | 0x80) - 0x20) * 80 + 40);
   address = nscreen;
 
   switch (beebit_teletextmode)
   {
     case 15:
-      for (row = 0; row <= 9; row++)
+      for (row = 0; row <= 4; row++)
       {
         /*10 lines of 8 pixels*/
-        teletextalphadoublebottom1(address, pointer, row);
+        teletextalphanormal1(address, pointer, row);
+        address = address + host_screenwidth;
+        teletextalphanormal1(address, pointer, row);
         address = address + host_screenwidth;
       }
       break;
     case 21:
-      for (row = 0; row <= 9; row++)
+      for (row = 0; row <= 4; row++)
       {
         /*20 lines of 8 pixels*/
-        teletextalphadoublebottom1(address, pointer, row);
+        teletextalpharounded1(address, pointer - sizeof(teletext_alpha.field0), row);
         address = address + host_screenwidth;
-        teletextalphadoublebottom1(address, pointer, row);
+        teletextalpharounded1(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded1(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
+        teletextalpharounded1(address, pointer + sizeof(teletext_alpha.normal), row);
         address = address + host_screenwidth;
       }
       break;
     case 12801024:
     case 16801050:
     case 19201080:
-      for (row = 0; row <= 9; row++)
+      for (row = 0; row <= 4; row++)
       {
         /*40 lines of 8 pixels*/
-        teletextalphadoublebottom2(address, pointer, row);
-        address = address + host_screenwidth; /* * 2;*/
-        teletextalphadoublebottom2(address, pointer, row);
-        address = address + host_screenwidth; /* * 2;*/
-        teletextalphadoublebottom2(address, pointer, row);
-        address = address + host_screenwidth; /* * 2;*/
-        teletextalphadoublebottom2(address, pointer, row);
-        address = address + host_screenwidth; /* * 2;*/
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer - sizeof(teletext_alpha.field0), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
+        teletextalpharounded2(address, pointer + sizeof(teletext_alpha.normal), row);
+        address = address + host_screenwidth;
       }
       break;
   }
