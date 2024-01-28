@@ -20,6 +20,7 @@ extern int m6845_adj;
 extern int m6845_hsw;
 extern int m6845_vsw;
 extern int m6845_horizontaltotal;
+extern int m6845_alignmentmask;
 extern int m6845_leftoffscreen;
 extern int m6845_rightoffscreen;
 extern int m6845_leftextra; /*extra pixels on the left*/

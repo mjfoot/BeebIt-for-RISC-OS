@@ -1,0 +1,56 @@
+/*>videoscale.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*#define VIDEOSCALE_WITH_OVERSCALE*/
+
+typedef struct {
+  int offset;
+  int leftpixel : 16;
+  int rightpixel : 16;
+} VIDEOSCALELUTPARAMETERS;
+
+typedef struct {
+  int graphics : 8;
+  int unroundedteletext : 8;
+  int roundedteletext : 8;
+} VERTICALVIDEOSCALES;
+
+typedef struct {
+  int mode;
+  int alignmentmask;
+  int linelengthfloor;
+  int scaledlinelengthfloor;
+  int lutsize;
+  int teletextform; /*line ratio, pixel depth and graphics separation*/
+    /* bit-field:
+        bits 2-3: number of scanlines per dot-row
+           bit 1: 8-bpp if set, 4-bpp if clear
+           bit 0: 8-column graphics separation if set,
+                  6-column graphics separation if clear
+    */
+  int screenoffsetlines;
+  int screenoffsetremainder;
+  VIDEOSCALELUTPARAMETERS graphicslutparameters;
+  VIDEOSCALELUTPARAMETERS teletextlutparameters;
+  VERTICALVIDEOSCALES verticalscales;
+  void (*initgraphics)(VIDEOSCALELUTPARAMETERS *lutparams);
+  void (*initteletext)(VIDEOSCALELUTPARAMETERS *lutparams);
+  void (*scalegraphics)(int bufferaddress, int hostaddress);
+  void (*scaleteletext)(int bufferaddress, int hostaddress);
+} VIDEOSCALECHOICE;
+
+extern char **displayzoomicons;
+
+#ifdef VIDEOSCALE_WITH_OVERSCALE
+extern void limitedblankrow(int hostaddress, int length, int mask);
+#endif
+extern int getoverscalezoomavailabilityformode(int mode);
+extern int get256linezoomavailabilityformode(int mode);
+extern int getzoomnumberformode(int mode);
+extern void videoscalechoose(int mode, VIDEOSCALECHOICE *choice);

@@ -1,0 +1,41 @@
+/*>scrmode.h
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2003
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+/*#define SCREEN_MODES_WITH_NCOLOUR_OPTIONS*/
+
+typedef struct
+{
+  unsigned int xres : 16;
+  unsigned int yres : 16;
+  int fmt : 16;
+  int log2bpp : 16;
+  int ncolour;
+  int modeflags;
+} SCREENMODERECORD;
+
+#ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
+typedef char SCREENMODEICON[32];
+#else
+typedef char SCREENMODEICON[16];
+#endif
+
+extern int numberedscreenmodeflags;
+extern SCREENMODERECORD *screenmoderecords;
+extern SCREENMODEICON *screenmodeicons;
+extern int screenmoderecordcount;
+
+extern void detectscreenmodes(void);
+extern int writeusedscreenmode(int mode);
+extern int writenumberedmodelist(void);
+extern int writescreenmodelist(int longlist);
+extern int findscreenmode(char *icon);
+extern int getscreenmodeoverscalezoomavailability(SCREENMODERECORD* r);
+extern int getscreenmode256linezoomavailability(SCREENMODERECORD* r);
+extern int pickascreenmode(int xresmin,int yresmin);
+extern void screenmodesetblock(SCREENMODERECORD* r, int (*modeblock)[10]);

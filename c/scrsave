@@ -27,6 +27,7 @@
 #include "beebit.h"
 #include "swis.h"
 #include "kernel.h"
+#include "video.h"
 
 static _kernel_swi_regs regs;
 
@@ -68,6 +69,7 @@ static unsigned int arSprFileHdr[46] ={1, /* number of sprites in area*/
 void screentobuffer(void)
 {
   int vduvars[8];
+  int colournumbers[8];
   int xeig, yeig;
   int rdbits,rdwords,wrwords;
   int *screen,*rdp;
@@ -90,6 +92,22 @@ void screentobuffer(void)
   _kernel_swi(OS_ReadVduVariables,&regs,&regs);
 
   _kernel_swi(OS_RemoveCursors,&regs,&regs);
+
+  if (vduvars[3] > 2)
+  {
+    videogetcolournumbers(&colournumbers);
+  }
+  else
+  {
+    colournumbers[0] = 0x00;
+    colournumbers[1] = 0x01;
+    colournumbers[2] = 0x02;
+    colournumbers[3] = 0x03;
+    colournumbers[4] = 0x04;
+    colournumbers[5] = 0x05;
+    colournumbers[6] = 0x06;
+    colournumbers[7] = 0x07;
+  }
 
   xeig = vduvars[0];
   yeig = vduvars[1];
@@ -153,14 +171,14 @@ void screentobuffer(void)
 
       readpixel =read & mask;
 
-      /* translation for 256 colour modes*/
-      if (readpixel ==0x15) readpixel =1;
-      if (readpixel ==0x62) readpixel =2;
-      if (readpixel ==0x77) readpixel =3;
-      if (readpixel ==0x88) readpixel =4;
-      if (readpixel ==0x9D) readpixel =5;
-      if (readpixel ==0xEA) readpixel =6;
-      if (readpixel ==0xFF) readpixel =7;
+      if (readpixel == colournumbers[0]) readpixel=0;
+      else if (readpixel == colournumbers[1]) readpixel=1;
+      else if (readpixel == colournumbers[2]) readpixel=2;
+      else if (readpixel == colournumbers[3]) readpixel=3;
+      else if (readpixel == colournumbers[4]) readpixel=4;
+      else if (readpixel == colournumbers[5]) readpixel=5;
+      else if (readpixel == colournumbers[6]) readpixel=6;
+      else if (readpixel == colournumbers[7]) readpixel=7;
 
       write =write >>4;
       write =write | (readpixel <<4);
@@ -252,46 +270,8 @@ void spritealloc(void)
 {
   int xwindlimit,ywindlimit;
   int wrwords,nsize;
-  char cmodeblock[28];
 
-  if (beebit_graphicsmode <= 0xFF)
-  {
-    regs.r[0] = beebit_graphicsmode;
-  }
-  else
-  {
-    switch (beebit_graphicsmode)
-    {
-      case 12801024:
-        /*1280 x 1024*/
-        setword(cmodeblock, 1);
-        setword(cmodeblock + 4, 1280);
-        setword(cmodeblock + 8, 1024);
-        setword(cmodeblock + 12, 3); /*log2bpp*/
-        setword(cmodeblock + 16, -1);
-        setword(cmodeblock + 20, -1);
-        break;
-      case 16801050:
-        /*1680 x 1050*/
-        setword(cmodeblock, 1);
-        setword(cmodeblock + 4, 1680);
-        setword(cmodeblock + 8, 1050);
-        setword(cmodeblock + 12, 3); /*log2bpp*/
-        setword(cmodeblock + 16, -1);
-        setword(cmodeblock + 20, -1);
-        break;
-      case 19201080:
-        /*1920 x 1080*/
-        setword(cmodeblock, 1);
-        setword(cmodeblock + 4, 1920);
-        setword(cmodeblock + 8, 1080);
-        setword(cmodeblock + 12, 3); /*log2bpp*/
-        setword(cmodeblock + 16, -1);
-        setword(cmodeblock + 20, -1);
-        break;
-    }
-    regs.r[0] = (int)cmodeblock; /*MODE block*/
-  }
+  regs.r[0] = beebit_graphicsmodespecifier;
   regs.r[1] = 11;
   _kernel_swi(OS_ReadModeVariable,&regs,&regs);
   xwindlimit = regs.r[2];

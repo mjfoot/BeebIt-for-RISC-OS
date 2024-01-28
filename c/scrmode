@@ -1,0 +1,355 @@
+/*>scrmode.c
+ *
+ * BeebIt - BBC Micro Model B Emulator
+ *
+ * (C) Copyright Michael J Foot, 1998-2002
+ *
+ * Email: <mjfoot@paradise.net.nz>
+ */
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include "6502cpu.h"
+
+#include "kernel.h"
+#include "swis.h"
+#include "scrmode.h"
+#include "videoscale.h"
+
+extern _kernel_swi_regs regs;
+
+int numberedscreenmodeflags;
+SCREENMODERECORD *screenmoderecords;
+SCREENMODEICON *screenmodeicons;
+int screenmoderecordcount;
+
+static int comparescreenmoderecords(SCREENMODERECORD *a, SCREENMODERECORD *b)
+{
+  if (a->xres > b->xres) return -1;
+  if (a->xres < b->xres) return 1;
+  
+  if (a->yres > b->yres) return -1;
+  if (a->yres < b->yres) return 1;
+
+#ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
+  if ((unsigned int)a->ncolour > (unsigned int)b->ncolour) return -1;
+  if ((unsigned int)a->ncolour < (unsigned int)b->ncolour) return 1;
+#endif
+  
+  return 0;
+}
+
+static void detectscreenmodesbyenumeration(void)
+{
+  int modeblock[10];
+  SCREENMODERECORD r;
+  char *cnext;
+  int enumblock[32];
+  int nallocated,ntoskip,nread;
+  int c,i,j;
+  int *emode;
+  int eformat,insertionindex,direction;
+#ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
+  unsigned int nc;
+  char* ncsuffix;
+#endif
+
+#ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
+  nallocated = 24;
+#else
+  nallocated = 8;
+#endif
+  screenmoderecords = malloc(nallocated * sizeof(SCREENMODERECORD));
+  
+  ntoskip = 0;
+  
+  do
+  {
+    regs.r[0] = 2;
+    regs.r[2] = ntoskip;
+    regs.r[6] = (int)enumblock;
+    regs.r[7] = sizeof(enumblock);
+    _kernel_swi(OS_ScreenMode,&regs,&regs);
+    nread = regs.r[2];
+    ntoskip -= nread;
+
+    for (i=nread, emode=enumblock; i<0; i++, emode += (*emode>>2))
+    {
+      if ((emode[1] & 1) == 0) continue;
+      
+      eformat = (emode[1]>>1) & 0x7F;
+      
+      if (eformat > 1) continue;
+      
+      r.xres = emode[2] & 0xFFFF;
+      r.yres = emode[3] & 0xFFFF;
+      r.fmt = eformat;
+      
+      if (r.xres != emode[2] || r.yres != emode[3]) continue;
+      
+      if (eformat == 0)
+      {
+        r.log2bpp = emode[4];
+      }
+      else
+      {
+        r.ncolour = emode[4];
+        r.modeflags = emode[5];
+        r.log2bpp = emode[6];
+      }
+      
+      screenmodesetblock(&r,&modeblock);
+
+      if (eformat == 0)
+      {        
+        regs.r[0] = (int)modeblock;
+        regs.r[1] = 0;
+        _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+        r.modeflags = regs.r[2];
+        regs.r[1] = 3;
+        _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+        r.ncolour = regs.r[2];
+      }
+
+      if (r.log2bpp < 2 || r.log2bpp > 5)
+        continue;
+      
+      if (r.modeflags & 1) continue;
+
+      regs.r[0] = (int)modeblock;
+      if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) != NULL || c != 0)
+      {
+        continue;
+      }
+      
+      if (!get256linezoomavailabilityformode((int)modeblock))
+        continue;
+      
+#ifndef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
+      if (r.xres == 640)
+      {
+        if (numberedscreenmodeflags & (1<<21))
+        {
+          if (r.yres == 512) continue;
+        }
+        if (numberedscreenmodeflags & ((1<<15)|(1<<12)))
+        {
+          if (r.yres == 256) continue;
+        }
+      }
+#endif
+      
+      insertionindex = screenmoderecordcount;
+      
+      if (insertionindex == 0)
+      {
+        direction = 1;
+      }
+      else
+      {
+        do
+        {
+          direction = comparescreenmoderecords(&screenmoderecords[insertionindex-1], &r);
+          
+          if (direction >= 0)
+          {
+            if (direction == 0 && (unsigned int)screenmoderecords[insertionindex-1].ncolour > (unsigned int)r.ncolour)
+            {
+              screenmoderecords[insertionindex-1] = r;
+            }
+            break;
+          }
+        } while (--insertionindex > 0);
+      }
+
+      if (direction == 0) continue;
+            
+      if (nallocated == screenmoderecordcount)
+      {
+#ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
+        nallocated = nallocated + 12;
+#else
+        nallocated = nallocated + 4;
+#endif
+        screenmoderecords = realloc(screenmoderecords,nallocated * sizeof(SCREENMODERECORD));
+      }
+      
+      for (j=screenmoderecordcount; j>insertionindex; j--)
+      {
+        screenmoderecords[j] = screenmoderecords[j-1];
+      }
+      
+      screenmoderecords[insertionindex] = r;
+      screenmoderecordcount++;
+    }
+  }
+  while (nread < 0);
+  
+  screenmodeicons = calloc(screenmoderecordcount,sizeof(SCREENMODEICON));
+  
+  for (i=0; i<screenmoderecordcount; i++)
+  {
+    r = screenmoderecords[i];
+    cnext = screenmodeicons[i];
+
+    regs.r[0] = r.xres;
+    regs.r[1] = (int)cnext;
+    regs.r[2] = 5;
+    _kernel_swi(OS_BinaryToDecimal,&regs,&regs);
+    cnext += regs.r[2];
+    
+    cnext[0] = ' ';
+    cnext[1] = 'x';
+    cnext[2] = ' ';
+    cnext += 3;
+    
+    regs.r[0] = r.yres;
+    regs.r[1] = (int)cnext;
+    regs.r[2] = 5;
+    _kernel_swi(OS_BinaryToDecimal,&regs,&regs);
+    cnext += regs.r[2];
+    
+#ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
+    nc = (unsigned int)r.ncolour + 1;
+
+    cnext[0] = ' ';
+    cnext++;
+
+    if (nc == 0)
+    {
+      nc = 16;
+      ncsuffix = "M";
+    }
+    else if (nc >> 20)
+    {
+      nc >>= 20;
+      ncsuffix = "M";
+      
+      if (nc > 16) nc = 16;
+    }
+    else if (nc >> 10)
+    {
+      nc >>= 10;
+      ncsuffix = "T";
+    }
+    else
+    {
+      ncsuffix = "";
+    }
+
+    regs.r[0] = nc;
+    regs.r[1] = (int)cnext;
+    regs.r[2] = 10;
+    _kernel_swi(OS_BinaryToDecimal,&regs,&regs);
+    cnext += regs.r[2];
+    
+    strcpy(cnext, ncsuffix);
+#endif
+  }
+}
+
+void detectscreenmodes(void)
+{
+  int c;
+  numberedscreenmodeflags = 0;
+  regs.r[0] = 12;
+  if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) == NULL && c == 0)
+    numberedscreenmodeflags |= (1<<12);
+  regs.r[0] = 15;
+  if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) == NULL && c == 0)
+    numberedscreenmodeflags |= (1<<15);
+  regs.r[0] = 21;
+  if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) == NULL && c == 0)
+    numberedscreenmodeflags |= (1<<21);
+  screenmoderecordcount = 0;
+  screenmoderecords = NULL;
+  regs.r[0] = 0x81;
+  regs.r[1] = 0x00;
+  regs.r[2] = 0xFF;
+  _kernel_swi(OS_Byte,&regs,&regs);
+  if (regs.r[1] >= 0xA5)
+  {
+    detectscreenmodesbyenumeration();
+  }
+}
+
+int findscreenmode(char *icon)
+{
+  int i;
+  for (i=0; i<screenmoderecordcount; i++)
+  {
+    if (strcmp(icon,screenmodeicons[i]) == 0)
+    {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int getscreenmodeoverscalezoomavailability(SCREENMODERECORD* r)
+{
+  int modeblock[10];
+  
+  screenmodesetblock(r, &modeblock);
+  return getoverscalezoomavailabilityformode((int)modeblock);
+}
+
+int getscreenmode256linezoomavailability(SCREENMODERECORD* r)
+{
+  int modeblock[10];
+  
+  screenmodesetblock(r, &modeblock);
+  return get256linezoomavailabilityformode((int)modeblock);
+}
+
+int pickascreenmode(int xresmin,int yresmin)
+{
+  SCREENMODERECORD *r;
+  int modeblock[10];
+  int iforhalfscale = -1;
+  int i,flags;
+
+  for (i=0; i<screenmoderecordcount; i++)
+  {
+    r = screenmoderecords+i;
+    if (r->xres < xresmin || r->yres < yresmin)
+      continue;
+    screenmodesetblock(r,&modeblock);
+    flags = get256linezoomavailabilityformode((int)modeblock);
+    if (flags>>1)
+      return i;
+    if (flags&1)
+    {
+      if (iforhalfscale < 0)
+        iforhalfscale = i;
+      continue;
+    }
+  }
+  if (iforhalfscale >= 0)
+    return iforhalfscale;
+  return -1;
+}
+
+void screenmodesetblock(SCREENMODERECORD* r, int (*modeblock)[10])
+{
+  (*modeblock)[0] = 1;
+  (*modeblock)[1] = r->xres;
+  (*modeblock)[2] = r->yres;
+  (*modeblock)[3] = r->log2bpp;
+  (*modeblock)[4] = -1;
+  
+  if (r->fmt == 1)
+  {
+    (*modeblock)[5] = 0;
+    (*modeblock)[6] = r->modeflags;
+    (*modeblock)[7] = 3;
+    (*modeblock)[8] = r->ncolour;
+    (*modeblock)[9] = -1;
+  }
+  else
+  {
+    (*modeblock)[5] = -1;
+  }
+}
