@@ -486,6 +486,7 @@ void beebitinit(void)
   beebit_sound = TRUE;
   beebit_cursor = TRUE;
   beebit_fasttape = FALSE;
+  beebit_printer = FALSE;
   beebit_links = 0;
   beebit_videospeed = VIDEO_SLOW;
   beebit_framerate = VIDEO_50FPS;
