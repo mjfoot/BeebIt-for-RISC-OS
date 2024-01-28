@@ -64,7 +64,7 @@ void redraw(void);
 void openwindow(void);
 void closewindow(void);
 int do_poll(int poll_mask);
-int snapshotsave(void),memorysave(void),spritesave(void);
+int snapshotsave(void),memorysave(void),spritesave(void),modereportsave(void);
 void storewimpmode(void);
 void gobeebit(void);
 
@@ -499,12 +499,12 @@ FILE* wimpstreamh;
 char csavefile[512];
 
 /* jdl** setup arrays for different files we can output*/
-static int (*arDoSave[])(void) = {snapshotsave,memorysave,spritesave};
-static char *arError[] = {"snapshot","memory dump","screen"};
-static char *arFileName[] = {"Snapshot","Memory","Screen"};
-static int arFileType[] = {0xbbc,0xffd,0xff9};
-static int arFileSize[] = {0x210 +0x8000 ,0x20000 ,0x140B8};
-static char *arFileSpr[] = {"file_bbc","file_ffd","file_ff9"};
+static int (*arDoSave[])(void) = {snapshotsave,memorysave,spritesave,modereportsave};
+static char *arError[] = {"snapshot","memory dump","screen","mode report"};
+static char *arFileName[] = {"Snapshot","Memory","Screen","ModeReport"};
+static int arFileType[] = {0xbbc,0xffd,0xff9,0xfff};
+static int arFileSize[] = {0x210 +0x8000 ,0x20000 ,0x140B8,0x2000};
+static char *arFileSpr[] = {"file_bbc","file_ffd","file_ff9","file_fff"};
 static int file_tosave = 1; /* memory dump*/
 
 void wimp_setfiletransfer(char *cfile)
@@ -627,6 +627,35 @@ int memorysave(void)
     wimpwrite(memory,1,0x10000);
     if (beebit_machinetype !=MACHINE_MODELB)
       wimpwrite(shadow,1,0x10000);
+  return TRUE;
+}
+
+int modereportsave(void)
+{
+  const char *headingformat = "\n--- %s ---\n";
+  char buffer[128];
+
+  if (beebit_graphicsmodespecifier != -1)
+  {
+    snprintf(buffer,sizeof(buffer),headingformat,"Used");
+    wimpwrite(buffer,1,strlen(buffer));
+    if (!writeusedscreenmode(beebit_graphicsmodespecifier))
+      return FALSE;
+  }
+
+  snprintf(buffer,sizeof(buffer),headingformat,"Numbered list");
+  wimpwrite(buffer,1,strlen(buffer));
+  if (!writenumberedmodelist())
+    return FALSE;
+  snprintf(buffer,sizeof(buffer),headingformat,"Short list");
+  wimpwrite(buffer,1,strlen(buffer));
+  if (!writescreenmodelist(0))
+    return FALSE;
+  snprintf(buffer,sizeof(buffer),headingformat,"Long list");
+  wimpwrite(buffer,1,strlen(buffer));
+  if (!writescreenmodelist(1))
+    return FALSE;
+
   return TRUE;
 }
 
@@ -2234,6 +2263,7 @@ void button(void)
           case 3:
           case 4:
           case 5:
+          case 6:
           {
             char caretblock[23];
 

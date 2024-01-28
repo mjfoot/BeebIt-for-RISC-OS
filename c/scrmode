@@ -13,10 +13,15 @@
 #include <time.h>
 #include "6502cpu.h"
 
+#include "main.h"
 #include "kernel.h"
 #include "swis.h"
 #include "scrmode.h"
 #include "videoscale.h"
+
+#define DETECTMODE_WITHOUTWRITE 0
+#define DETECTMODE_WRITESHORTLIST 1
+#define DETECTMODE_WRITELONGLIST 2
 
 extern _kernel_swi_regs regs;
 
@@ -24,6 +29,8 @@ int numberedscreenmodeflags;
 SCREENMODERECORD *screenmoderecords;
 SCREENMODEICON *screenmodeicons;
 int screenmoderecordcount;
+
+static const char *modevarcolumnnames = "XRES YRES  NCOLOUR  EX EY  MODEFLAGS LOG2BPP\n";
 
 static int comparescreenmoderecords(SCREENMODERECORD *a, SCREENMODERECORD *b)
 {
@@ -41,8 +48,47 @@ static int comparescreenmoderecords(SCREENMODERECORD *a, SCREENMODERECORD *b)
   return 0;
 }
 
-static void detectscreenmodesbyenumeration(void)
+static int writemodevariables(int mode)
 {
+  char buffer[128];
+  SCREENMODERECORD r;
+  int xeig,yeig;
+
+  regs.r[0] = mode;
+  regs.r[1] = 0;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  r.modeflags = regs.r[2];
+  regs.r[1] = 3;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  r.ncolour = regs.r[2];
+  regs.r[1] = 4;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  xeig = regs.r[2];
+  regs.r[1] = 5;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  yeig = regs.r[2];
+  regs.r[1] = 9;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  r.log2bpp = regs.r[2];
+  regs.r[1] = 11;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  r.xres = regs.r[2] + 1;
+  regs.r[1] = 12;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  r.yres = regs.r[2] + 1;
+
+  snprintf(buffer,sizeof(buffer),
+    "%4d %4d &%8X %2d %2d  &%8X   %3d  ",
+    r.xres,r.yres,r.ncolour,xeig,yeig,r.modeflags,r.log2bpp);
+  wimpwrite(buffer,1,strlen(buffer));
+
+  return 1;
+}
+
+static void detectscreenmodesbyenumeration(int writeaction)
+{
+  const char *formatcolumnname = "\nFMT ";
+  char buffer[128];
   int modeblock[10];
   SCREENMODERECORD r;
   char *cnext;
@@ -55,6 +101,12 @@ static void detectscreenmodesbyenumeration(void)
   unsigned int nc;
   char* ncsuffix;
 #endif
+
+  if (writeaction == DETECTMODE_WRITESHORTLIST || writeaction == DETECTMODE_WRITELONGLIST)
+  {
+    wimpwrite(formatcolumnname,1,strlen(formatcolumnname));
+    wimpwrite(modevarcolumnnames,1,strlen(modevarcolumnnames));
+  }
 
 #ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
   nallocated = 24;
@@ -111,6 +163,14 @@ static void detectscreenmodesbyenumeration(void)
         regs.r[1] = 3;
         _kernel_swi(OS_ReadModeVariable,&regs,&regs);
         r.ncolour = regs.r[2];
+      }
+
+      if (writeaction == DETECTMODE_WRITELONGLIST)
+      {
+        snprintf(buffer,sizeof(buffer),"%2d  ",r.fmt);
+        wimpwrite(buffer,1,strlen(buffer));
+        writemodevariables((int)modeblock);
+        wimpwrite("\n",1,1);
       }
 
       if (r.log2bpp < 2 || r.log2bpp > 5)
@@ -194,6 +254,15 @@ static void detectscreenmodesbyenumeration(void)
     r = screenmoderecords[i];
     cnext = screenmodeicons[i];
 
+    if (writeaction == DETECTMODE_WRITESHORTLIST)
+    {
+      screenmodesetblock(&r,&modeblock);
+      snprintf(buffer,sizeof(buffer),"%2d  ",r.fmt);
+      wimpwrite(buffer,1,strlen(buffer));
+      writemodevariables((int)modeblock);
+      wimpwrite("\n",1,1);
+    }
+    
     regs.r[0] = r.xres;
     regs.r[1] = (int)cnext;
     regs.r[2] = 5;
@@ -271,8 +340,149 @@ void detectscreenmodes(void)
   _kernel_swi(OS_Byte,&regs,&regs);
   if (regs.r[1] >= 0xA5)
   {
-    detectscreenmodesbyenumeration();
+    detectscreenmodesbyenumeration(DETECTMODE_WITHOUTWRITE);
   }
+}
+
+int writeusedscreenmode(int mode)
+{
+  VIDEOSCALECHOICE choice;
+  VIDEOSCALELUTPARAMETERS glp,tlp;
+  VERTICALVIDEOSCALES vs;
+  char buffer[128];
+
+  const char *modecolumnname = "\nMODE ";
+  const char *paddedNoNumber = "     ";
+  const char *graphicsheading = "\nGraphics pixel ratio:\n";
+  const char *teletextheading = "\nTeletext pixel-to-dot ratio:\n";
+
+  wimpwrite(modecolumnname,1,strlen(modecolumnname));
+  wimpwrite(modevarcolumnnames,1,strlen(modevarcolumnnames));
+
+  if (mode >= 0 && mode <= 255)
+  {
+    snprintf(buffer,sizeof(buffer),"%3d  ",mode);
+    wimpwrite(buffer,1,strlen(buffer));
+  }
+  else
+  {
+    wimpwrite(paddedNoNumber,1,strlen(paddedNoNumber));
+  }
+
+  writemodevariables(mode);
+  wimpwrite("\n",1,1);
+
+  videoscalechoose(mode, &choice);
+  glp = choice.graphicslutparameters;
+  tlp = choice.teletextlutparameters;
+  vs = choice.verticalscales;
+  wimpwrite(graphicsheading,1,strlen(graphicsheading));
+  if (glp.leftpixel == glp.rightpixel)
+  {
+    snprintf(buffer,sizeof(buffer),"  %d:1 horizontally, ",glp.leftpixel);
+  }
+  else
+  {
+    snprintf(buffer,sizeof(buffer),"  %d:2 horizontally, ",glp.leftpixel+glp.rightpixel);
+  }
+  wimpwrite(buffer,1,strlen(buffer));
+  snprintf(buffer,sizeof(buffer),"%d:1 vertically\n",vs.graphics);
+  wimpwrite(buffer,1,strlen(buffer));
+  if (choice.teletextform)
+  {
+    wimpwrite(teletextheading,1,strlen(teletextheading));
+    snprintf(buffer,sizeof(buffer),"  %d:1 horizontally, ",tlp.leftpixel+tlp.rightpixel);
+    wimpwrite(buffer,1,strlen(buffer));
+    switch (choice.teletextform >> 2)
+    {
+      case 1:
+        snprintf(buffer,sizeof(buffer),"%d:1 vertically, unrounded\n",vs.unroundedteletext);
+        break;
+      case 2:
+        snprintf(buffer,sizeof(buffer),"%d:1 vertically, rounded (%d up %d down)\n",
+          vs.roundedteletext+vs.roundedteletext,
+          vs.roundedteletext,vs.roundedteletext);
+        break;
+      case 3:
+        snprintf(buffer,sizeof(buffer),"%d:1 vertically, rounded (%d up %d down)\n",
+          vs.roundedteletext+vs.unroundedteletext+vs.roundedteletext,
+          vs.roundedteletext,vs.roundedteletext);
+        break;
+    }
+    wimpwrite(buffer,1,strlen(buffer));
+  }
+
+  return 1;
+}
+
+int writenumberedmodelist(void)
+{
+  int c;
+
+  const char *modecolumnname = "\nMODE ";
+  const char *padded12 = " 12  ";
+  const char *padded15 = " 15  ";
+  const char *padded21 = " 21  ";
+
+  wimpwrite(modecolumnname,1,strlen(modecolumnname));
+  wimpwrite(modevarcolumnnames,1,strlen(modevarcolumnnames));
+
+  regs.r[0] = 12;
+  if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) == NULL && c == 0)
+  {
+    wimpwrite(padded12,1,strlen(padded12));
+    writemodevariables(12);
+    wimpwrite("\n",1,1);
+  }
+  regs.r[0] = 15;
+  if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) == NULL && c == 0)
+  {
+    wimpwrite(padded15,1,strlen(padded15));
+    writemodevariables(15);
+    wimpwrite("\n",1,1);
+  }
+  regs.r[0] = 21;
+  if (_kernel_swi_c(OS_CheckModeValid,&regs,&regs,&c) == NULL && c == 0)
+  {
+    wimpwrite(padded21,1,strlen(padded21));
+    writemodevariables(21);
+    wimpwrite("\n",1,1);
+  }
+
+  return 1;
+}
+
+int writescreenmodelist(int longlist)
+{
+  int savedscreenmoderecordcount;
+  SCREENMODERECORD *savedscreenmoderecords;
+  SCREENMODEICON *savedscreenmodeicons;
+
+  regs.r[0] = 0x81;
+  regs.r[1] = 0x00;
+  regs.r[2] = 0xFF;
+  _kernel_swi(OS_Byte,&regs,&regs);
+  if (regs.r[1] >= 0xA5)
+  {
+    savedscreenmoderecordcount = screenmoderecordcount;
+    savedscreenmoderecords = screenmoderecords;
+    savedscreenmodeicons = screenmodeicons;
+
+    screenmoderecordcount = 0;
+    screenmoderecords = NULL;
+    screenmodeicons = NULL;
+
+    detectscreenmodesbyenumeration(longlist
+        ? DETECTMODE_WRITELONGLIST : DETECTMODE_WRITESHORTLIST);
+    free(screenmoderecords);
+    free(screenmodeicons);
+
+    screenmoderecordcount = savedscreenmoderecordcount;
+    screenmoderecords = savedscreenmoderecords;
+    screenmodeicons = savedscreenmodeicons;
+  }
+
+  return 1;
 }
 
 int findscreenmode(char *icon)

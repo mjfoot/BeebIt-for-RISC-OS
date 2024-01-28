@@ -656,6 +656,7 @@ void videoscalechoose(int mode, VIDEOSCALECHOICE *choice)
   setverticalscalesandteletextform(choice, 1, 1);
 
   setlutparameters(&choice->graphicslutparameters,(scaleselector+0x80)>>8,scaleselector>>8);
+  choice->teletextlutparameters = choice->graphicslutparameters;
   if (ratioshift >= 1)
     setverticalscalesandteletextform(choice, (scaleselector>>7)<<ratioshift-1, 1);
   else
