@@ -383,8 +383,11 @@ int writeusedscreenmode(int mode)
 
   const char *modecolumnname = "\nMODE ";
   const char *paddedNoNumber = "     ";
+  const char *notscalingmessage = "\nDrawing direct to screen memory\n";
+  const char *scalingmessage = "\nScaling lines drawn in Mode 12 format\n";
   const char *graphicsheading = "\nGraphics pixel ratio:\n";
   const char *teletextheading = "\nTeletext pixel-to-dot ratio:\n";
+  const char *teletextrelaymessage = "\nPassing teletext to host Mode 7\n";
 
   wimpwrite(modecolumnname,1,strlen(modecolumnname));
   wimpwrite(modevarcolumnnames,1,strlen(modevarcolumnnames));
@@ -406,6 +409,14 @@ int writeusedscreenmode(int mode)
   glp = choice.graphicslutparameters;
   tlp = choice.teletextlutparameters;
   vs = choice.verticalscales;
+  if (choice.scalegraphics)
+  {
+    wimpwrite(scalingmessage,1,strlen(scalingmessage));
+  }
+  else
+  {
+    wimpwrite(notscalingmessage,1,strlen(notscalingmessage));
+  }
   wimpwrite(graphicsheading,1,strlen(graphicsheading));
   if (glp.leftpixel == glp.rightpixel)
   {
@@ -440,6 +451,10 @@ int writeusedscreenmode(int mode)
         break;
     }
     wimpwrite(buffer,1,strlen(buffer));
+  }
+  else
+  {
+    wimpwrite(teletextrelaymessage,1,strlen(teletextrelaymessage));
   }
 
   return 1;
