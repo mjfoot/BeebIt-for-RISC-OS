@@ -274,7 +274,7 @@ void spritealloc(void)
   ysize = ywindlimit + 1;
 
   wrwords = (xsize * wrbits + 31)/32;
-  nsize = ysize * 4 * wrwords + sizeof(arSprFileHdr);
+  nsize = ysize * 4 * wrwords;
 
   if (sprite == NULL)
   {
