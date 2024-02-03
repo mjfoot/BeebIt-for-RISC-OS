@@ -743,6 +743,7 @@ int beebitenter(void)
         }
         wimperror("A suitable screen mode cannot be found");
         lexit = TRUE;
+        lredraw = FALSE;
       }
       while (FALSE);
     }
