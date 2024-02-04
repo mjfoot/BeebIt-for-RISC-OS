@@ -1,4 +1,4 @@
-BeebIt : Version 0.76 (4 Feb 2024)
+BeebIt : Version 0.76 (04 Feb 2024)
 ===================================
 Emulator by Michael Foot <mjfoot.nz@gmail.com>.
 Additions by James Lampard.
@@ -259,7 +259,7 @@ telet   telet
 ---           COPY                                          END
 ---           f0                                            F11
 ---           SHIFT LOCK                                    ALT
-35            #  hash                                   £   pound
+35            #  hash                                   Â£   pound
 38      166   &  ampersand                              ^   caret
 39      167   '  apostrophe                             &   ampersand
 40      168   (  open bracket                           *   asterisk (left keys)
@@ -270,16 +270,16 @@ telet   telet
 59      187   ;  semi-colon                             ;   semi-colon (or + on num. keypad)
 61      189   =  equals                                 _   low dash
 64      192   @  at                                     `   apostrophe
-91      219   ˆ  left arrow     [  left sq. bracket     [   left square bracket
-92      220   ½  1/2            \  back slash           \   back slash
-93      221   ‰  right arrow    ]  right sq. bracket    #   hash
-94      222   ‹  up arrow       ^  caret                =   equals
+91      219   Âˆ  left arrow     [  left sq. bracket     [   left square bracket
+92      220   Â½  1/2            \  back slash           \   back slash
+93      221   Â‰  right arrow    ]  right sq. bracket    #   hash
+94      222   Â‹  up arrow       ^  caret                =   equals
 95            _  underscore                             ]   right square bracket
-96            £  pound                                  }   right brace
-123     251   ¼  1/4            {  left brace           {   left brace
+96            Â£  pound                                  }   right brace
+123     251   Â¼  1/4            {  left brace           {   left brace
 124     252      2 vert lines      high colon           |   pipe
-125     253   ¾  3/4            }  right brace          ~   swung dash/ tilde
-126     254   ÷  divide by      ~  swung dash/ tilde    +   plus (left keys)
+125     253   Â¾  3/4            }  right brace          ~   swung dash/ tilde
+126     254   Ã·  divide by      ~  swung dash/ tilde    +   plus (left keys)
 
 RESETTING THE EMULATION
 -----------------------
