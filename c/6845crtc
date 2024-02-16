@@ -33,9 +33,11 @@ int m6845_adj;
 int m6845_hsw;
 int m6845_vsw;
 int m6845_horizontaltotal;
-int m6845_fastextra; /*extra pixels for fast clock modes*/
-int m6845_slowextra; /*extra pixels for slow clock modes*/
-int m6845_widthextra; /*extra pixels*/
+int m6845_alignmentmask;
+int m6845_leftoffscreen;
+int m6845_rightoffscreen;
+int m6845_leftextra; /*extra pixels on the left*/
+int m6845_rightextra; /*extra pixels on the right*/
 int m6845_interlaceon;
 int m6845_displayskew;
 int m6845_cursorskew;
@@ -64,8 +66,6 @@ int cursor_on;
 int cursor_blinktime;
 
 /*int xxx;*/
-
-extern int lteletextmode;
 
 void crtcreset(void)
 {
@@ -200,31 +200,8 @@ void crtcwrite(int naddress,int nvalue)
       /*mode 0,1,2,3 = 80 (fast clock)*/
       /*mode 4,5,6,7 = 40 (slow clock)*/
       m6845_screenwidth = nvalue;
-      switch (beebit_teletextmode)
-      {
-        case 7:
-        case 15:
-        case 21:
-        case 12801024:
-          if (m6845_screenwidth > 40)
-            teletext_screenwidth = 40;
-          else
-            teletext_screenwidth = m6845_screenwidth;
-          break;
-        case 16801050:
-        case 19201080:
-          teletext_screenwidth = m6845_screenwidth;
-          break;
-      }
-      teletext_screenextra = ((host_screenwidth - (m6845_screenwidth << 5)) >> 1);
       video_width = m6845_screenwidth << 3; /*multiply by 8*/
-      m6845_fastextra = (80-m6845_screenwidth) >> 1;
-      m6845_slowextra = (40-m6845_screenwidth) >> 1;
-      /*BOFFIN needs this check to work*/
-      if (m6845_fastextra < 0)
-        m6845_fastextra = 0;
-      if (m6845_slowextra < 0)
-        m6845_slowextra = 0;
+      crtcteletextwidthextra();
       crtcwidthextra();
       break;
     case 2:
@@ -267,7 +244,7 @@ void crtcwrite(int naddress,int nvalue)
       /* 0  0=normal sync mode (non-interlace)*/
       /* 1  0=normal sync mode (non-interlace)*/
       /* 0  1=interlace sync mode*/
-      /* 1  1=normal sync and video mode*/
+      /* 1  1=interlace sync and video mode*/
       /*b5+b4 (display skew)*/
       /* 0  0=No delay*/
       /* 0  1=One character delay*/
@@ -351,9 +328,64 @@ void crtcwrite(int naddress,int nvalue)
   }
 }
 
+void crtcteletextwidthextra(void)
+{
+  if (local_teletextform == 0)
+  {
+    if (m6845_screenwidth > 40)
+      teletext_screenwidth = 40;
+    else
+      teletext_screenwidth = m6845_screenwidth;
+  }
+  else if (local_teletextform & 2)
+  {
+    teletext_rightextra = local_linelengthfloor - (m6845_screenwidth<<4);
+    teletext_leftextra = (teletext_rightextra>>1) & m6845_alignmentmask;
+    if (teletext_leftextra < 0)
+    {
+      teletext_leftoffscreen = -(teletext_leftextra>>4);
+      teletext_leftextra = 0;
+      teletext_rightextra -= (teletext_leftoffscreen<<4);
+      if (teletext_rightextra < 0)
+      {
+        teletext_rightextra = 0;
+      }
+      teletext_screenwidth = local_linelengthfloor>>4;
+    }
+    else
+    {
+      teletext_leftoffscreen = 0;
+      teletext_rightextra -= teletext_leftextra;
+      teletext_screenwidth = m6845_screenwidth;
+    }
+  }
+  else
+  {
+    teletext_rightextra = local_linelengthfloor - (m6845_screenwidth<<3);
+    teletext_leftextra = (teletext_rightextra>>1) & m6845_alignmentmask;
+    if (teletext_leftextra < 0)
+    {
+      teletext_leftoffscreen = -(teletext_leftextra>>3);
+      teletext_leftextra = 0;
+      teletext_rightextra -= (teletext_leftoffscreen<<3);
+      if (teletext_rightextra < 0)
+      {
+        teletext_rightextra = 0;
+      }
+      teletext_screenwidth = local_linelengthfloor>>3;
+    }
+    else
+    {
+      teletext_leftoffscreen = 0;
+      teletext_rightextra -= teletext_leftextra;
+      teletext_screenwidth = m6845_screenwidth;
+    }
+  }
+}
+
 void crtcwidthextra(void)
 {
-  int nwidthextra;
+  int alignmentmask;
 
   if (videoula_clockrate)
   {
@@ -361,53 +393,15 @@ void crtcwidthextra(void)
     switch (beebit_graphicsmode)
     {
       case 12:
-        m6845_widthextra = (m6845_fastextra<<2);
+      case 20:
         video_displaywidth = (m6845_screenwidth<<2);
         break;
       case 15:
-        m6845_widthextra = (m6845_fastextra<<3);
-        video_displaywidth = (m6845_screenwidth<<3);
-        break;
       case 21:
-        m6845_widthextra = (m6845_fastextra<<3);
         video_displaywidth = (m6845_screenwidth<<3);
-        break;
-      case 12801024:
-      case 16801050:
-      case 19201080:
-        m6845_widthextra = (m6845_fastextra<<4); /*64*/
-        video_displaywidth = (m6845_screenwidth<<3); /*640*/
-        /*
-        m6845_fastextra = 8
-        m6845_screenwidth = 64
-        video_displaywidth = 640
-
-        m6845_widthextra = 64
-        video_displaywidth = 512
-        host_screenwidth = 1280, 1920
-        */
-
-    /*bbcvdu(32);
-    bbcvdu(47);
-    inttohex4(m6845_widthextra);
-    bbcvdu(32);
-    inttohex4(video_displaywidth);
-    bbcvdu(32);
-    inttohex4(host_screenwidth);*/
-
-
-        nwidthextra = ((host_screenwidth >> 1) - video_displaywidth - m6845_widthextra);
-        m6845_widthextra += nwidthextra;
-
-    /*inttohex4(nwidthextra);
-    bbcvdu(32);
-    inttohex4(m6845_widthextra);
-    bbcvdu(32);
-    bbcvdu(13);
-    bbcvdu(10);*/
-
         break;
     }
+    alignmentmask = m6845_alignmentmask & ~3;
   }
   else
   {
@@ -415,27 +409,60 @@ void crtcwidthextra(void)
     switch (beebit_graphicsmode)
     {
       case 12:
-        m6845_widthextra = (m6845_slowextra<<3);
+      case 20:
         video_displaywidth = (m6845_screenwidth<<3);
         break;
       case 15:
-        m6845_widthextra = (m6845_slowextra<<4);
-        video_displaywidth = (m6845_screenwidth<<4);
-        break;
       case 21:
-        m6845_widthextra = (m6845_slowextra<<4);
         video_displaywidth = (m6845_screenwidth<<4);
-        break;
-      case 12801024:
-      case 16801050:
-      case 19201080:
-        m6845_widthextra = (m6845_slowextra<<5); /*64*/
-        video_displaywidth = (m6845_screenwidth<<4); /*640*/
-        nwidthextra = ((host_screenwidth >> 1) - video_displaywidth - m6845_widthextra);
-        m6845_widthextra += nwidthextra;
-
         break;
     }
+    alignmentmask = m6845_alignmentmask & ~7;
+  }
+
+  m6845_rightextra = local_linelengthfloor - video_displaywidth;
+  m6845_leftextra = (m6845_rightextra>>1) & m6845_alignmentmask;
+  if (m6845_leftextra < 0)
+  {
+    switch (beebit_graphicsmode)
+    {
+      case 12:
+      case 20:
+        m6845_leftoffscreen = -m6845_leftextra;
+        m6845_rightextra -= m6845_leftoffscreen;
+        if (m6845_rightextra < 0)
+        {
+          m6845_rightoffscreen = -m6845_rightextra;
+          m6845_rightextra = 0;
+        }
+        else
+        {
+          m6845_rightoffscreen = 0;
+        }
+        break;
+      case 15:
+      case 21:
+        m6845_leftoffscreen = ((-m6845_leftextra)>>1);
+        m6845_rightextra -= (m6845_leftoffscreen<<1);
+        if (m6845_rightextra < 0)
+        {
+          m6845_rightoffscreen = ((-m6845_rightextra)>>1);
+          m6845_rightextra = 0;
+        }
+        else
+        {
+          m6845_rightoffscreen = 0;
+        }
+        break;
+    }
+    m6845_leftextra = 0;
+    video_displaywidth = local_linelengthfloor;
+  }
+  else
+  {
+    m6845_leftoffscreen = 0;
+    m6845_rightoffscreen = 0;
+    m6845_rightextra -= m6845_leftextra;
   }
 }
 
@@ -540,18 +567,12 @@ void crtccursor(void)
         switch (beebit_graphicsmode)
         {
           case 12:
+          case 20:
             cursor_x = ((n%m6845_screenwidth)<<2);
             break;
           case 15:
-            cursor_x = ((n%m6845_screenwidth)<<3);
-            break;
           case 21:
             cursor_x = ((n%m6845_screenwidth)<<3);
-            break;
-          case 12801024:
-          case 16801050:
-          case 19201080:
-            cursor_x = ((n%m6845_screenwidth)<<4);
             break;
         }
       }
@@ -560,18 +581,12 @@ void crtccursor(void)
         switch (beebit_graphicsmode)
         {
           case 12:
+          case 20:
             cursor_x = ((n%m6845_screenwidth)<<3);
             break;
           case 15:
-            cursor_x = ((n%m6845_screenwidth)<<4);
-            break;
           case 21:
             cursor_x = ((n%m6845_screenwidth)<<4);
-            break;
-          case 12801024:
-          case 16801050:
-          case 19201080:
-            cursor_x = ((n%m6845_screenwidth)<<5);
             break;
         }
       }

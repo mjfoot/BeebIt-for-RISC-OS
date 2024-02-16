@@ -23,32 +23,111 @@
   IMPORT |shadow|
   IMPORT |beebit_acccon|
   IMPORT |beebit_vdusel|
-  IMPORT |host_screenwidth|
   IMPORT |videoula_palette|
   IMPORT |video_address|
   IMPORT |video_baseaddress|
 
   EXPORT |mode0plot4|
   EXPORT |mode0plot8|
-  EXPORT |mode0plot8x2|
   EXPORT |mode1plot4|
   EXPORT |mode1plot8|
-  EXPORT |mode1plot8x2|
   EXPORT |mode2plot4|
   EXPORT |mode2plot8|
-  EXPORT |mode2plot8x2|
 
-  EXPORT |nlocalscreen|
+  EXPORT |nhostscreen|
+  EXPORT |nhostscreenlinelength|
+  EXPORT |roundteletextalpha|
   EXPORT |blankrow|
   EXPORT |blankrowx|
   ;EXPORT |swapbanks|
 
-  EXPORT |screenstart|
+  EXPORT |screenstartandlinelength|
   EXPORT |vsync|
 
 ;
 ;RISC OS
 ;
+
+|roundteletextalpha|
+  ;r0=address of character data to read
+  ;r1=address of upper half-line character data to write
+  ;r2=address of lower half-line character data to write
+  STMFD sp!,{r4-r12,lr}
+  MOV r3,#10
+  LDMIA r0,{r4-r5}
+  LDMIA r0!,{r6-r7}
+  LDR r12,=0x0F0F0F0F
+roundteletextalpha1
+  MOV r8,r4,LSL #8
+  MOV r9,r6,LSL #8
+  AND r10,r4,r9
+  BIC r10,r10,r8
+  AND r10,r10,r12
+  MOV r8,r4,LSR #8
+  MOV r9,r6,LSR #8
+  ORR r8,r8,r5,LSL #24
+  ORR r9,r9,r7,LSL #24
+  AND r11,r4,r9
+  BIC r11,r11,r8
+  AND r11,r11,r12,LSL #4
+  ORR r10,r10,r11
+  ORR r10,r10,r6
+  STR r10,[r1],#4
+  MOV r8,r5,LSL #8
+  MOV r9,r7,LSL #8
+  ORR r8,r8,r4,LSR #24
+  ORR r9,r9,r6,LSR #24
+  AND r10,r5,r9
+  BIC r10,r10,r8
+  AND r10,r10,r12
+  MOV r8,r5,LSR #8
+  MOV r9,r7,LSR #8
+  AND r11,r5,r9
+  BIC r11,r11,r8
+  AND r11,r11,r12,LSL #4
+  ORR r10,r10,r11
+  ORR r10,r10,r7
+  STR r10,[r1],#4
+  SUBS r3,r3,#1
+  BEQ roundteletextalpha2
+  MOV r4,r6
+  MOV r5,r7
+  LDMIA r0!,{r6-r7}
+  MOV r8,r4,LSL #8
+  MOV r9,r6,LSL #8
+  AND r10,r6,r8
+  BIC r10,r10,r9
+  AND r10,r10,r12
+  MOV r8,r4,LSR #8
+  MOV r9,r6,LSR #8
+  ORR r8,r8,r5,LSL #24
+  ORR r9,r9,r7,LSL #24
+  AND r11,r6,r8
+  BIC r11,r11,r9
+  AND r11,r11,r12,LSL #4
+  ORR r10,r10,r11
+  ORR r10,r10,r4
+  STR r10,[r2],#4
+  MOV r8,r5,LSL #8
+  MOV r9,r7,LSL #8
+  ORR r8,r8,r4,LSR #24
+  ORR r9,r9,r6,LSR #24
+  AND r10,r7,r8
+  BIC r10,r10,r9
+  AND r10,r10,r12
+  MOV r8,r5,LSR #8
+  MOV r9,r7,LSR #8
+  AND r11,r7,r8
+  BIC r11,r11,r9
+  AND r11,r11,r12,LSL #4
+  ORR r10,r10,r11
+  ORR r10,r10,r5
+  STR r10,[r2],#4
+  B roundteletextalpha1
+roundteletextalpha2
+  STMIA r2!,{r6-r7}
+  LDMFD sp!,{r4-r12,pc}
+
 ;|blankrowold|
 ;  ;r0=address to write to
 ;  ;r1=number of writes to do
@@ -367,110 +446,6 @@ mode0plot8_end
   STR r8,[r10] ;store video address
   LDMFD sp!,{v1-v6,sl,fp,pc} ;a1-a4,ip don't need to be preserved for APCS
 
-|mode0plot8x2|
-  ;mode0plot8x2(nscreen+nx,nxend-nx);
-  ;mode 0 plot to 8bpp mode x2
-  ;r0 = address offset in riscos memory (screen)
-  ;r1 = number of bytes to plot
-  STMFD sp!,{v1-v6,sl,fp,lr} ;a1-a4,ip don't need to be preserved for APCS
-  LDR r12,=beebit_acccon
-  LDR r2,[r12] ;acccon
-  LDR r12,=beebit_vdusel
-  LDR r3,[r12] ;vdusel
-  TST r2,r3 ;test vdusel set
-  LDREQ r12,=memory ;bbc memory space
-  LDRNE r12,=shadow ;shadow memory space
-
-  LDR r11,=videoula_palette ;videoula palette lookup
-  LDR r10,=video_address
-  ;LDR r8,[r10,#2] ;current address in bbc memory (into B3,B2)
-  LDR r8,[r10]
-  MOV r8,r8,LSL #16 ;current address in bbc memory (into B3,B2)
-  ADD r7,r12,r8,LSR #16 ;absolute address in bbc memory
-
-  LDRB r3,[r11]    ;get palette values
-  LDRB r4,[r11,#1]
-  SUB r4,r4,r3     ;change to difference
-  ORR r3,r3,r3,LSL #8 ;base value for two bbc pixels
-  ORR r3,r3,r3,LSL #16 ;base value for four bbc pixels
-
-  ;r9 = second line address
-  LDR r9,=host_screenwidth
-  LDR r9,[r9] ;host_screenwidth
-  ADD r9,r9,r0
-mode0plot8x2_1
-  LDRB r6,[r7],#8 ;read byte from bbc memory (n)
-
-  ;&02 &01
-  MOVS r14,r6,LSL #25  ;C =b7, N =b6
-  MOV r5,r3            ;base value four bbc zero pixels
-  ADDCS r5,r5,r4       ;if bbc pixel =1 then add in differece
-  ADDCS r5,r5,r4,LSL #8
-  ADDMI r5,r5,r4,LSL #16 ;if other pixel =1 then add in difference
-  ADDMI r5,r5,r4,LSL #24 ;if other pixel =1 then add in difference
-
-  STR r5,[r0],#4 ;*cscreen = r5
-  STR r5,[r9],#4 ;*cscreen = r9
-
-  ;&08 &04
-  MOVS r14,r6,LSL #27  ;C =b5, N =b4
-  MOV r5,r3            ;base value four bbc zero pixels
-  ADDCS r5,r5,r4
-  ADDCS r5,r5,r4,LSL #8
-  ADDMI r5,r5,r4,LSL #16
-  ADDMI r5,r5,r4,LSL #24
-
-  STR r5,[r0],#4 ;*cscreen = r5
-  STR r5,[r9],#4 ;*cscreen = r5
-;  ADD r0,r0,#4
-
-  ;&20 &10
-  MOVS r14,r6,LSL #29  ;C =b3, N =b2
-  MOV r5,r3
-  ADDCS r5,r5,r4
-  ADDCS r5,r5,r4,LSL #8
-  ADDMI r5,r5,r4,LSL #16
-  ADDMI r5,r5,r4,LSL #24
-
-  STR r5,[r0],#4 ;*cscreen = r5
-  STR r5,[r9],#4 ;*cscreen = r5
-
-  ;&80 &40
-  MOVS r14,r6,LSL #31  ;C =b1, N =b0
-  MOV r5,r3
-  ADDCS r5,r5,r4
-  ADDCS r5,r5,r4,LSL #8
-  ADDMI r5,r5,r4,LSL #16
-  ADDMI r5,r5,r4,LSL #24
-
-  STR r5,[r0],#4 ;*cscreen = r5
-  STR r5,[r9],#4 ;*cscreen = r5
-;  ADD r0,r0,#4
-
-  SUBS r1,r1,#8 ;decrement count by 8 bytes
-  ;CMP r1,#0
-  BLE mode0plot8x2_end
-
-  ADDS r8,r8,#&80000 ;video_address += (8<<16)
-
-;  CMP r8,#&8000 ;if video_address < 0x8000
-;  ADDLT r7,r7,#8 ;add 8 to bbc memory location
-  BPL mode0plot8x2_1 ;loop
-;  SUB r7,r7,#8  ;we've over incremented r7
-
-;  MOV r2,#&8000 ;else
-;  SUB r2,r2,#1 ;to get &7FFF
-;  AND r8,r8,r2 ;video_address &= 0x7FFF
-  BIC r8,r8,#&80000000
-  LDR r14,=video_baseaddress
-  LDR r14,[r14] ;get bbc screen base address
-  ADD r8,r8,r14,LSL #16 ;video_address += video_baseaddress
-  ADD r7,r12,r8,LSR #16 ;absolute address in bbc memory
-  B mode0plot8x2_1
-mode0plot8x2_end
-  STR r8,[r10] ;store video address
-  LDMFD sp!,{v1-v6,sl,fp,pc} ;a1-a4,ip don't need to be preserved for APCS
-
 ;|mode1plot_old|
 ;  ;r0 = byte to plot (n)
 ;  ;r1 = x position to plot
@@ -694,108 +669,6 @@ mode1plot8_1
   ADD r7,r12,r8,LSR #16 ;absolute address in bbc memory
   B mode1plot8_1
 mode1plot8_end
-  STR r8,[r10] ;store video address
-  LDMFD sp!,{v1-v6,sl,fp,pc}
-
-|mode1plot8x2|
-  ;mode1plot8x2(nscreen+nx,nxend-nx);
-  ;mode 1 plot to 8bpp mode x2
-  ;r0 = address offset in riscos memory (screen)
-  ;r1 = number of bytes to plot
-  STMFD sp!,{v1-v6,sl,fp,lr} ;a1-a4,ip don't need to be preserved for APCS
-  LDR r12,=beebit_acccon
-  LDR r2,[r12] ;acccon
-  LDR r12,=beebit_vdusel
-  LDR r3,[r12] ;vdusel
-  TST r2,r3 ;test vdusel set
-  LDREQ r12,=memory ;bbc memory space
-  LDRNE r12,=shadow ;shadow memory space
-
-;mode1plot8x2_0
-  LDR r11,=videoula_palette ;videoula palette lookup
-  LDR r10,=video_address
-;  LDR r9,=mode1values
-  ;LDR r8,[r10,#2] ;current address in bbc memory (into B3,B2)
-  LDR r8,[r10]
-  MOV r8,r8,LSL #16 ;current address in bbc memory (into B3,B2)
-  ADD r7,r12,r8,LSR #16 ;absolute address in bbc memory
-
-  MOV r3,#&88000000 ;convienient AND mask
-
-  ;r9 = second line address
-  LDR r9,=host_screenwidth
-  LDR r9,[r9] ;host_screenwidth
-  ADD r9,r9,r0
-mode1plot8x2_1
-  LDRB r6,[r7],#8 ;read byte from bbc memory (n)
-
-  ;&02 &01
-  AND r2,r3,r6,LSL #24   ;b000c000 (in HB)
-  ORR r2,r2,r2,LSL #3    ;bc00c000
-
-  LDRB r4,[r11,r2,LSR #30] ;r4 = videoula_palette[r2]
-  ADD r5,r4,r4,LSL #8 ;r5 = r4 + (r4<<8) double pixel
-  ADD r5,r5,r5,LSL #16 ;r5 = r4 + (r4<<8) double pixel
-
-  STR r5,[r0],#4 ;*cscreen = r5
-  STR r5,[r9],#4 ;*cscreen = r5
-
-  ;&08 &04
-  AND r2,r3,r6,LSL #25
-  ORR r2,r2,r2,LSL #3
-
-  LDRB r4,[r11,r2,LSR #30] ;r4 = videoula_palette[r2]
-  ADD r5,r4,r4,LSL #8 ;r2 = r4 + (r4<<4)
-  ADD r5,r5,r5,LSL #16
-
-  STR r5,[r0],#4 ;*cscreen = r5
-  STR r5,[r9],#4 ;*cscreen = r5
-;  ADD r0,r0,#4
-
-  ;&20 &10
-  AND r2,r3,r6,LSL #26
-  ORR r2,r2,r2,LSL #3
-
-  LDRB r4,[r11,r2,LSR #30] ;r4 = videoula_palette[r2]
-  ADD r5,r4,r4,LSL #8 ;r5 = r4 + (r4<<8)
-  ADD r5,r5,r5,LSL #16 ;r5 = r4 + (r4<<8) double pixel
-
-  STR r5,[r0],#4 ;*cscreen = r5
-  STR r5,[r9],#4 ;*cscreen = r5
-
-  ;&80 &40
-  AND r2,r3,r6,LSL #27
-  ORR r2,r2,r2,LSL #3
-
-  LDRB r4,[r11,r2,LSR #30] ;r4 = videoula_palette[r2]
-  ADD r5,r4,r4,LSL #8 ;r3 = r4 + (r4<<4)
-  ADD r5,r5,r5,LSL #16
-
-  STR r5,[r0],#4 ;*cscreen = r5
-  STR r5,[r9],#4 ;*cscreen = r5
-;  ADD r0,r0,#4
-
-  SUBS r1,r1,#8 ;decrement count by 8 bytes
-  ;CMP r1,#0
-  BLE mode1plot8x2_end ;be nice to SA
-
-  ADDS r8,r8,#&80000 ;video_address += 8
-
-;  CMP r8,#&8000 ;if video_address < 0x8000
-;  ADDLT r7,r7,#8 ;add 8 to bbc memory location
-  BPL mode1plot8x2_1 ;loop
-; SUB r7,r7,#8 ;we've over incremented r7
-
-;  MOV r2,#&8000 ;else
-;  SUB r2,r2,#1 ;to get &7FFF
-;  AND r8,r8,r2 ;video_address &= 0x7FFF
-  BIC r8,r8,#&80000000
-  LDR r14,=video_baseaddress
-  LDR r14,[r14] ;get bbc screen base address
-  ADD r8,r8,r14,LSL #16 ;video_address += video_baseaddress
-  ADD r7,r12,r8,LSR #16 ;absolute address in bbc memory
-  B mode1plot8x2_1
-mode1plot8x2_end
   STR r8,[r10] ;store video address
   LDMFD sp!,{v1-v6,sl,fp,pc}
 
@@ -1130,142 +1003,6 @@ mode2plot8_end
   STR r8,[r10] ;store video address
   LDMFD sp!,{v1-v6,sl,fp,pc}
 
-|mode2plot8x2|
-  ;mode2plot8x2(nscreen+nx,nxend-nx);
-  ;mode 2 plot to 8bpp mode
-  ;r0 = address offset in riscos memory (screen)
-  ;r1 = number of bytes to plot
-  STMFD sp!,{v1-v6,sl,fp,lr} ;a1-a4,ip don't need to be preserved for APCS
-  ;LDR r12,=memory ;bbc memory space
-  LDR r12,=beebit_acccon
-  LDR r2,[r12] ;acccon
-  LDR r12,=beebit_vdusel
-  LDR r3,[r12] ;vdusel
-  ;ANDS r2,r2,#&80
-  ;ANDS r3,r2,r3 ;test vdusel set
-  TST r2,r3 ;test vdusel set
-  LDREQ r12,=memory ;bbc memory space
-  LDRNE r12,=shadow ;shadow memory space
-  ;BNE mode2shadow
-
-  ;read from main memory
-  ;LDR r12,=beebit_memorymap ;master 128 stuff
-  ;LDR r2,[r12]
-  ;ANDS r2,r2,#&04 ;memorymap X
-  ;LDREQ r12,=memory ;shadow memory is not swapped in, so read from shadow
-  ;LDRNE r12,=shadow ;shadow memory is swapped in, so read main memory from show :)
-  ;B mode2plot0
-
-;mode2shadow
-  ;read from shadow memory
-  ;LDR r12,=beebit_memorymap ;master 128 stuff
-  ;LDR r2,[r12]
-  ;ANDS r2,r2,#&04 ;memorymap X
-  ;LDREQ r12,=shadow ;shadow memory is not swapped in, so read from shadow
-  ;LDRNE r12,=memory ;shadow memory is swapped in, so read main memory
-
-;mode2plot8x2_0
-  LDR r11,=videoula_palette ;videoula palette lookup
-  LDR r10,=video_address
-  LDR r9,=mode2values
-  ;LDR r8,[r10,#2] ;current address in bbc memory (into B3,B2)
-  LDR r8,[r10]
-  MOV r8,r8,LSL #16 ;current address in bbc memory (into B3,B2)
-  ADD r7,r12,r8,LSR #16 ;absolute address in bbc memory
-
-  ;r5 = second line address
-  LDR r5,=host_screenwidth
-  LDR r5,[r5] ;host_screenwidth
-  ADD r5,r5,r0
-mode2plot8x2_1
-  LDRB r6,[r7],#8 ;read byte from bbc memory (n)
-
-  ;&08 &04 &02 &01
-  ;slow calculated method
-  ;AND r2,r6,#&80 ;n & 0x80
-  ;MOV r3,r2,LSR #4 ;>>4
-  ;AND r2,r6,#&20 ;n & 0x20
-  ;ADD r3,r3,r2,LSR #3 ;>>3
-  ;AND r2,r6,#&08 ;n & 0x08
-  ;ADD r3,r3,r2,LSR #2 ;>>2
-  ;AND r2,r6,#&02 ;n & 0x02
-  ;ADD r3,r3,r2,LSR #1 ;>>1
-
-  ;fast lookup table method
-  AND r2,r6,#&AA ;%10101010
-  ;LDR r9,=mode2values
-  LDRB r3,[r9,r2]
-
-  LDRB r4,[r11,r3] ;r4 = videoula_palette[r3]
-  ADD r3,r4,r4,LSL #8 ;r3 = r4 + (r4<<8)
-  ;STRB r3,[r0] ;cscreen[r0] = r3
-  ;ADD r0,r0,#1 ;r0++
-  ;STRB r3,[r0] ;cscreen[r0] = r3
-  ;ADD r0,r0,#1 ;r0++
-  ADD r2,r3,r3,LSL #16 ;r3 = r3 + (r3<<16)
-
-  STR r2,[r0],#4 ;*cscreen = r0
-  STR r2,[r0],#4 ;*cscreen = r0
-  STR r2,[r5],#4 ;*cscreen = r5
-  STR r2,[r5],#4 ;*cscreen = r5
-  ;STR r2,[r9],#4 ;*cscreen = r5
-;  ADD r0,r0,#4
-
-  ;&08 &04 &02 &01
-  ;slow calculated method
-  ;AND r2,r6,#&40 ;n & 0x40
-  ;MOV r3,r2,LSR #3 ;>>3
-  ;AND r2,r6,#&10 ;n & 0x10
-  ;ADD r3,r3,r2,LSR #2 ;>>2
-  ;AND r2,r6,#&04 ;n & 0x04
-  ;ADD r3,r3,r2,LSR #1 ;>>1
-  ;AND r2,r6,#&01 ;n & 0x01
-  ;ADD r3,r3,r2
-
-  ;fast lookup table method
-  AND r2,r6,#&55 ;%01010101
-  ;LDR r9,=mode2values
-  LDRB r3,[r9,r2]
-
-  LDRB r4,[r11,r3] ;r4 = videoula_palette[r3]
-  ADD r3,r4,r4,LSL #8 ;r3 = r4 + (r4<<4)
-  ;STRB r3,[r0] ;cscreen[r0] = r3
-  ;ADD r0,r0,#1 ;r0++
-  ;STRB r3,[r0] ;cscreen[r0] = r3
-  ;ADD r0,r0,#1 ;r0++
-  ADD r2,r3,r3,LSL #16 ;r5 = r3 + (r3<<16)
-
-  STR r2,[r0],#4 ;*cscreen = r0
-  STR r2,[r0],#4 ;*cscreen = r0
-  STR r2,[r5],#4 ;*cscreen = r5
-  STR r2,[r5],#4 ;*cscreen = r5
-  ;STR r5,[r9],#4 ;*cscreen = r5
-;  ADD r0,r0,#4
-
-  SUBS r1,r1,#8 ;decrement count by 8 bytes
-  BLE mode2plot8x2_end ;be nice to SA
-
-  ADDS r8,r8,#&80000 ;video_address += 8
-
-;  CMP r8,#&8000 ;if video_address < 0x8000
-;  ADDLT r7,r7,#8 ;add 8 to bbc memory location
-  BPL mode2plot8x2_1 ;loop
-;  SUB r7,r7,#8 ;we've over incremented r7
-
-;  MOV r2,#&8000 ;else
-;  SUB r2,r2,#1 ;to get &7FFF
-;  AND r8,r8,r2 ;video_address &= 0x7FFF
-  BIC r8,r8,#&80000000
-  LDR r3,=video_baseaddress
-  LDR r3,[r3] ;get bbc screen base address
-  ADD r8,r8,r3,LSL #16 ;video_address += video_baseaddress
-  ADD r7,r12,r8,LSR #16 ;absolute address in bbc memory
-  B mode2plot8x2_1
-  LDMFD sp!,{r0-r12,pc} ;should never get here!
-mode2plot8x2_end
-  STR r8,[r10] ;store video address
-  LDMFD sp!,{v1-v6,sl,fp,pc}
-
 mode2values
   ;lookup table for mode 2 screen plotting
   DCB &00,&01,&01,0,&02,&03,0,0,&02,0,&03,0,0,0,0,0 ;0
@@ -1285,13 +1022,16 @@ mode2values
   DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   DCB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
-|screenstart|
+|screenstartandlinelength|
   STMFD sp!,{r0,r1,r11,r12,lr}
   LDR r0,=vduvar1
   LDR r1,=vduvar2
   SWI OS_ReadVduVariables
   LDR r11,[r1] ;get screen address
-  LDR r12,=nlocalscreen
+  LDR r12,=nhostscreen
+  STR r11,[r12]
+  LDR r11,[r1,#4] ;get screen line length
+  LDR r12,=nhostscreenlinelength
   STR r11,[r12]
   LDMFD sp!,{r0,r1,r11,r12,pc}
 
@@ -1305,16 +1045,20 @@ mode2values
 
   AREA    |C$$data|, DATA
 
-|nlocalscreen|
+|nhostscreen|
+  DCD 0
+|nhostscreenlinelength|
   DCD 0
   ALIGN
 
 vduvar1
   DCD 148
+  DCD 6
   DCD -1
   ALIGN
 
 vduvar2
+  DCD 0
   DCD 0
   DCD 0
   ALIGN

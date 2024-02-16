@@ -50,9 +50,13 @@
 #define DISPLAY_MODE_LOW 1
 #define DISPLAY_MODE_MEDIUM 2
 #define DISPLAY_MODE_HIGH 3
-#define DISPLAY_MODE_12801024 4
-#define DISPLAY_MODE_16801050 5
-#define DISPLAY_MODE_19201080 6
+#define DISPLAY_MODE_FIRST_IN_TABLE 4
+#define DISPLAY_ZOOM_AUTO 0
+#define DISPLAY_ZOOM_FIRST_IN_TABLE 1
+#define PALETTE_RGB 0
+#define PALETTE_COLOUR 1
+#define PALETTE_GREY 2
+#define PALETTE_GREEN 3
 
 /*define this for RISC OS machines*/
 #define __RISCOS__
@@ -98,8 +102,9 @@ extern FILE *beebit_tapeimage; /*file handles*/
 extern char beebit_cmosdefault[0x40];
 extern char beebit_cmos[0x40];
 
+extern int beebit_graphicsmodeselector[10]; /*selector used when the specifier is not a mode number*/
+extern int beebit_graphicsmodespecifier;
 extern int beebit_graphicsmode; /*can mode 12,15 or 21 be used for graphics?*/
-extern int beebit_teletextmode; /*can teletext use mode 7 or 15?*/
 extern int beebit_currenttype;
 extern int beebit_machinetype;
 extern int beebit_cpuspeed;
@@ -107,6 +112,8 @@ extern int beebit_videospeed;
 extern int beebit_framerate;
 extern int beebit_mouseemulation;
 extern int beebit_displaymode;
+extern int beebit_displayzoom;
+extern int beebit_palette;
 extern int beebit_sound;
 extern int beebit_cursor;
 extern int beebit_fasttape;

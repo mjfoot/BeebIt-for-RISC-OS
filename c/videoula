@@ -27,6 +27,7 @@
 #include "kernel.h"
 #include "main.h"
 #include "riscos.h"
+#include "scrmode.h"
 #include "swis.h"
 #include "video.h"
 
@@ -99,17 +100,11 @@ void videoulasetpalette(void)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n2] = videoula_palette0[n1];
               break;
             case 15:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
             case 21:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
               break;
           }
@@ -123,17 +118,11 @@ void videoulasetpalette(void)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n2] = videoula_palette1[n1];
               break;
             case 15:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
             case 21:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
               break;
           }
@@ -151,17 +140,11 @@ void videoulasetpalette(void)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n2] = videoula_palette0[n1];
               break;
             case 15:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
             case 21:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
               break;
           }
@@ -175,17 +158,11 @@ void videoulasetpalette(void)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n2] = videoula_palette1[n1];
               break;
             case 15:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
             case 21:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
               break;
           }
@@ -199,19 +176,11 @@ void videoulasetpalette(void)
         switch (beebit_graphicsmode)
         {
           case 12:
+          case 20:
             memcpy(videoula_palette,videoula_palette0,0x10);
             break;
           case 15:
-            for (n1=0;n1<=0x0F;n1++)
-              videoula_palette[n1] = videoula_colourmap8[videoula_palette0[n1]];
-            break;
-         case 21:
-            for (n1=0;n1<=0x0F;n1++)
-              videoula_palette[n1] = videoula_colourmap8[videoula_palette0[n1]];
-            break;
-          case 12801024:
-          case 16801050:
-          case 19201080:
+          case 21:
             for (n1=0;n1<=0x0F;n1++)
               videoula_palette[n1] = videoula_colourmap8[videoula_palette0[n1]];
             break;
@@ -222,19 +191,11 @@ void videoulasetpalette(void)
         switch (beebit_graphicsmode)
         {
           case 12:
+          case 20:
             memcpy(videoula_palette,videoula_palette1,0x10);
             break;
           case 15:
-            for (n1=0;n1<=0x0F;n1++)
-              videoula_palette[n1] = videoula_colourmap8[videoula_palette1[n1]];
-            break;
           case 21:
-            for (n1=0;n1<=0x0F;n1++)
-              videoula_palette[n1] = videoula_colourmap8[videoula_palette1[n1]];
-            break;
-          case 12801024:
-          case 16801050:
-          case 19201080:
             for (n1=0;n1<=0x0F;n1++)
               videoula_palette[n1] = videoula_colourmap8[videoula_palette1[n1]];
             break;
@@ -287,22 +248,16 @@ void videoulasetcursor(void)
   }
   if (lteletextmode)
   {
-    switch (beebit_teletextmode)
+    if (local_teletextform == 0)
     {
-      case 7:
-        cursor_width <<= 1;
-        break;
-      case 15:
+      cursor_width <<= 1;
+    }
+    else
+    {
+      if ((local_teletextform & 2) == 0)
+        cursor_width <<= 2;
+      else
         cursor_width <<= 3;
-        break;
-      case 21:
-        cursor_width <<= 3;
-        break;
-      case 12801024:
-      case 16801050:
-      case 19201080:
-        cursor_width <<= 4;
-        break;
     }
   }
   else
@@ -313,18 +268,12 @@ void videoulasetcursor(void)
       switch (beebit_graphicsmode)
       {
         case 12:
+        case 20:
           cursor_width <<= 2;
           break;
         case 15:
-          cursor_width <<= 3;
-          break;
         case 21:
           cursor_width <<= 3;
-          break;
-        case 12801024:
-        case 16801050:
-        case 19201080:
-          cursor_width <<= 4;
           break;
       }
     }
@@ -334,18 +283,12 @@ void videoulasetcursor(void)
       switch (beebit_graphicsmode)
       {
         case 12:
+        case 20:
           cursor_width <<= 3;
           break;
         case 15:
-          cursor_width <<= 4;
-          break;
         case 21:
           cursor_width <<= 4;
-          break;
-        case 12801024:
-        case 16801050:
-        case 19201080:
-          cursor_width <<= 5;
           break;
       }
     }
@@ -354,7 +297,6 @@ void videoulasetcursor(void)
 
 void videoulawrite(int naddress, char nvalue)
 {
-  char cmodeblock[24];
   int ntotal;
   char n1,n2;
   /*read/write to slow 1MHz device takes 2 cycles instead of one*/
@@ -396,17 +338,11 @@ void videoulawrite(int naddress, char nvalue)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n2] = videoula_palette0[n1];
               break;
             case 15:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
             case 21:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
               break;
           }
@@ -416,17 +352,11 @@ void videoulawrite(int naddress, char nvalue)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n2] = videoula_palette1[n1];
               break;
             case 15:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
             case 21:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
               break;
           }
@@ -443,17 +373,11 @@ void videoulawrite(int naddress, char nvalue)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n2] = videoula_palette0[n1];
               break;
             case 15:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
             case 21:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n2] = videoula_colourmap8[videoula_palette0[n1]];
               break;
           }
@@ -463,17 +387,11 @@ void videoulawrite(int naddress, char nvalue)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n2] = videoula_palette1[n1];
               break;
             case 15:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
             case 21:
-              videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n2] = videoula_colourmap8[videoula_palette1[n1]];
               break;
           }
@@ -488,17 +406,11 @@ void videoulawrite(int naddress, char nvalue)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n1] = videoula_palette0[n1];
               break;
             case 15:
-              videoula_palette[n1] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
             case 21:
-              videoula_palette[n1] = videoula_colourmap8[videoula_palette0[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n1] = videoula_colourmap8[videoula_palette0[n1]];
               break;
           }
@@ -508,17 +420,11 @@ void videoulawrite(int naddress, char nvalue)
           switch (beebit_graphicsmode)
           {
             case 12:
+            case 20:
               videoula_palette[n1] = videoula_palette1[n1];
               break;
             case 15:
-              videoula_palette[n1] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
             case 21:
-              videoula_palette[n1] = videoula_colourmap8[videoula_palette1[n1]];
-              break;
-            case 12801024:
-            case 16801050:
-            case 19201080:
               videoula_palette[n1] = videoula_colourmap8[videoula_palette1[n1]];
               break;
           }
@@ -622,165 +528,37 @@ void videoulawrite(int naddress, char nvalue)
 
     if (ncurrentmode == -1)
     {
-      if (lteletextmode)
+      if (lteletextmode && local_teletextform == 0)
       {
-        switch (beebit_teletextmode)
+        if (screenmoderecords)
         {
-          case 7:
-            host_screenwidth = MODE12_X;
-            cursor_bitmap = 0x77777777;
-            videoulasetcursor();
-            regs.r[0] = 0;
-            regs.r[1] = 7;
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            /*bbcvdu(22);
-            bbcvdu(7);*/
-            break;
-          case 15:
-            host_screenwidth = MODE15_X;
-            cursor_bitmap = 0xFFFFFFFF;
-            videoulasetcursor();
-            regs.r[0] = 0;
-            regs.r[1] = 15;
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            /*bbcvdu(22);
-            bbcvdu(15);*/
-            break;
-          case 21:
-            host_screenwidth = MODE15_X;
-            cursor_bitmap = 0xFFFFFFFF;
-            videoulasetcursor();
-            regs.r[0] = 0;
-            regs.r[1] = 21;
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            /*bbcvdu(22);
-            bbcvdu(21);*/
-            break;
-          case 12801024:
-            /*1280 x 1024*/
-            setword(cmodeblock, 1);
-            setword(cmodeblock + 4, 1280);
-            setword(cmodeblock + 8, 1024);
-            setword(cmodeblock + 12, 3); /*log2bpp*/
-            setword(cmodeblock + 16, -1);
-            setword(cmodeblock + 20, -1);
-            regs.r[0] = 0;
-            regs.r[1] = (int)cmodeblock; /*MODE block*/
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            host_screenwidth = 1280;
-            cursor_bitmap = 0xFFFFFFFF;
-            break;
-          case 16801050:
-            /*1680 x 1050*/
-            setword(cmodeblock, 1);
-            setword(cmodeblock + 4, 1680);
-            setword(cmodeblock + 8, 1050);
-            setword(cmodeblock + 12, 3); /*log2bpp*/
-            setword(cmodeblock + 16, -1);
-            setword(cmodeblock + 20, -1);
-            regs.r[0] = 0;
-            regs.r[1] = (int)cmodeblock; /*MODE block*/
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            host_screenwidth = 1696;
-            cursor_bitmap = 0xFFFFFFFF;
-            break;
-          case 19201080:
-            /*1920 x 1080*/
-            setword(cmodeblock, 1);
-            setword(cmodeblock + 4, 1920);
-            setword(cmodeblock + 8, 1080);
-            setword(cmodeblock + 12, 3); /*log2bpp*/
-            setword(cmodeblock + 16, -1);
-            setword(cmodeblock + 20, -1);
-            regs.r[0] = 0;
-            regs.r[1] = (int)cmodeblock; /*MODE block*/
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            host_screenwidth = 1920;
-            cursor_bitmap = 0xFFFFFFFF;
-            break;
+          regs.r[0] = 0;
+          regs.r[1] = 7;
+          _kernel_swi(OS_ScreenMode,&regs,&regs);
+        }
+        else
+        {
+          bbcvdu(22);
+          bbcvdu(7);
         }
       }
       else
       {
-        switch (beebit_graphicsmode)
+        if (screenmoderecords)
         {
-          case 12:
-            /*mode 12 will suit all modes*/
-            regs.r[0] = 0;
-            regs.r[1] = 12;
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            /*bbcvdu(22);
-            bbcvdu(12);*/
-            host_screenwidth = MODE12_X;
-            cursor_bitmap = 0x77777777;
-            break;
-          case 15:
-            /*mode 15 for RISC OS 5*/
-            regs.r[0] = 0;
-            regs.r[1] = 15;
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            /*bbcvdu(22);
-            bbcvdu(15);*/
-            host_screenwidth = MODE15_X;
-            cursor_bitmap = 0xFFFFFFFF;
-            break;
-          case 21:
-            /*mode 21 for RISC OS 5*/
-            regs.r[0] = 0;
-            regs.r[1] = 21;
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            /*bbcvdu(22);
-            bbcvdu(21);*/
-            host_screenwidth = MODE15_X;
-            cursor_bitmap = 0xFFFFFFFF;
-            break;
-          case 12801024:
-            /*1280 x 1024*/
-            setword(cmodeblock, 1);
-            setword(cmodeblock + 4, 1280);
-            setword(cmodeblock + 8, 1024);
-            setword(cmodeblock + 12, 3); /*log2bpp*/
-            setword(cmodeblock + 16, -1);
-            setword(cmodeblock + 20, -1);
-            regs.r[0] = 0;
-            regs.r[1] = (int)cmodeblock; /*MODE block*/
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            host_screenwidth = 1280;
-            cursor_bitmap = 0xFFFFFFFF;
-            break;
-          case 16801050:
-            /*1680 x 1050*/
-            setword(cmodeblock, 1);
-            setword(cmodeblock + 4, 1680);
-            setword(cmodeblock + 8, 1050);
-            setword(cmodeblock + 12, 3); /*log2bpp*/
-            setword(cmodeblock + 16, -1);
-            setword(cmodeblock + 20, -1);
-            regs.r[0] = 0;
-            regs.r[1] = (int)cmodeblock; /*MODE block*/
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            host_screenwidth = 1696;
-            cursor_bitmap = 0xFFFFFFFF;
-            break;
-          case 19201080:
-            /*1920 x 1080*/
-            setword(cmodeblock, 1);
-            setword(cmodeblock + 4, 1920);
-            setword(cmodeblock + 8, 1080);
-            setword(cmodeblock + 12, 3); /*log2bpp*/
-            setword(cmodeblock + 16, -1);
-            setword(cmodeblock + 20, -1);
-            regs.r[0] = 0;
-            regs.r[1] = (int)cmodeblock; /*MODE block*/
-            _kernel_swi(OS_ScreenMode,&regs,&regs);
-            host_screenwidth = 1920;
-            cursor_bitmap = 0xFFFFFFFF;
-            break;
+          regs.r[0] = 0;
+          regs.r[1] = beebit_graphicsmodespecifier;
+          _kernel_swi(OS_ScreenMode,&regs,&regs);
+        }
+        else
+        {
+          bbcvdu(22);
+          bbcvdu(beebit_graphicsmodespecifier);
         }
       }
       ncurrentmode = video_mode;
       /*videomodechange();*/
-      screenstart();
+      videohostmodevars();
       cursordisable();
       crtcscreen();
       crtccursor();

@@ -1,0 +1,808 @@
+;>riscos.s
+;
+; BeebIt - BBC Micro Model B Emulator
+;
+; (C) Copyright Michael J Foot, 1998-2003
+;
+; Email: <mjfoot@paradise.net.nz>
+;
+; Use the GET directive to include register definitions as if typed here
+
+  GET     h.RegNames
+
+; Use the GET directive to include a list of SWI names as if typed here
+
+  GET     h.SWInames
+
+; Area name C$$code advisable as wanted to link with C output
+
+  AREA    |C$$code|, CODE, READONLY
+
+; Import global symbols
+  IMPORT |host_scaledlinelength|
+  IMPORT |nhostscreenlinelength|
+  IMPORT |local_linelengthfloor|
+  IMPORT |videoscale_workspace|
+
+  EXPORT |video80from48lutscale|
+  EXPORT |video96from32lutscale|
+  EXPORT |video128from32lutsixdotscale|
+  EXPORT |video128from32lutscale|
+  EXPORT |video160from32lutscale|
+  EXPORT |video192from32lutscale|
+  EXPORT |video256from32lutsixdotscale|
+
+;
+;RISC OS
+;
+
+|video80from48lutscale|
+  ;r0 = address of 4-bpp line to read
+  ;r1 = address of first scaled line to write
+  LDR r2,=local_linelengthfloor
+  LDR r3,[r2]
+  CMP r3,#0
+  MOVEQ pc,lr
+  STMFD sp!,{r4-r12,lr}
+  LDR r2,=videoscale_workspace
+  LDR r6,[r2]
+  LDR r2,=nhostscreenlinelength
+  LDR r4,[r2]
+  LDR r2,=host_scaledlinelength
+  LDR r5,[r2]
+  ADD r2,r5,r1
+  SUB r2,r2,r4 ;r2 = address of last line to write
+  ADD r3,r3,r0 ;r3 = address of end of line to read
+video80from48lutscale_1
+  LDR r5,[r0]
+  MOV r7,r5,LSL #4
+  MOV r12,r5,LSR #4
+  AND r7,r7,#0x0FF0
+  AND r12,r12,#0x0FF0
+  ADD r7,r7,r6
+  ADD r12,r12,r6
+  LDMIA r7,{r8-r10}
+  MOV r7,r8
+  MOV r11,r10
+  MOV r5,r1
+video80from48lutscale_2
+  CMP r2,r5
+  STMIA r5,{r7-r11}
+  ADD r5,r5,r4
+  BNE video80from48lutscale_2
+  LDMIA r12,{r8-r10}
+  MOV r7,r8
+  MOV r11,r10
+  ADD r5,r1,#20
+  ADD r2,r2,#20
+video80from48lutscale_3
+  CMP r2,r5
+  STMIA r5,{r7-r11}
+  ADD r5,r5,r4
+  BNE video80from48lutscale_3
+  LDR r5,[r0],#4
+  MOV r7,r5,LSR #12
+  MOV r12,r5,LSR #20
+  AND r7,r7,#0x0FF0
+  AND r12,r12,#0x0FF0
+  ADD r7,r7,r6
+  ADD r12,r12,r6
+  LDMIA r7,{r8-r10}
+  MOV r7,r8
+  MOV r11,r10
+  ADD r5,r1,#40
+  ADD r2,r2,#20
+video80from48lutscale_4
+  CMP r2,r5
+  STMIA r5,{r7-r11}
+  ADD r5,r5,r4
+  BNE video80from48lutscale_4
+  LDMIA r12,{r8-r10}
+  MOV r7,r8
+  MOV r11,r10
+  ADD r5,r1,#60
+  ADD r2,r2,#20
+  ADD r1,r1,#80
+video80from48lutscale_5
+  CMP r2,r5
+  STMIA r5,{r7-r11}
+  ADD r5,r5,r4
+  BNE video80from48lutscale_5
+  CMP r0,r3
+  ADD r2,r2,#20
+  BNE video80from48lutscale_1
+  LDMFD sp!,{r4-r12,pc}
+
+|video96from32lutscale|
+  ;r0 = address of 4-bpp line to read
+  ;r1 = address of first scaled line to write
+  LDR r2,=local_linelengthfloor
+  LDR r3,[r2]
+  CMP r3,#0
+  MOVEQ pc,lr
+  STMFD sp!,{r1,r4-r12,lr}
+  LDR r2,=videoscale_workspace
+  LDR r6,[r2]
+  LDR r2,=nhostscreenlinelength
+  LDR r4,[r2]
+  LDR r2,=host_scaledlinelength
+  LDR r5,[r2]
+  ADD r2,r5,r1
+  SUB r2,r2,r4 ;r2 = address of last line to write
+  ADD r3,r3,r0 ;r3 = address of end of line to read
+video96from32lutscale_1
+  LDR r5,[r0]
+  MOV r7,r5,LSL #4
+  MOV r1,r5,LSR #4
+  AND r7,r7,#0x0FF0
+  AND r1,r1,#0x0FF0
+  ADD r7,r7,r6
+  ADD r1,r1,r6
+  LDMIA r7,{r9-r10}
+  MOV r7,r9
+  MOV r8,r9
+  MOV r11,r10
+  MOV r12,r10
+  LDR r5,[sp]
+video96from32lutscale_2
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  ADD r5,r5,r4
+  BNE video96from32lutscale_2
+  LDMIA r1,{r9-r10}
+  MOV r7,r9
+  MOV r8,r9
+  MOV r11,r10
+  MOV r12,r10
+  LDR r5,[sp]
+  ADD r5,r5,#24
+  ADD r2,r2,#24
+video96from32lutscale_3
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  ADD r5,r5,r4
+  BNE video96from32lutscale_3
+  LDR r5,[r0],#4
+  MOV r7,r5,LSR #12
+  MOV r1,r5,LSR #20
+  AND r7,r7,#0x0FF0
+  AND r1,r1,#0x0FF0
+  ADD r7,r7,r6
+  ADD r1,r1,r6
+  LDMIA r7,{r9-r10}
+  MOV r7,r9
+  MOV r8,r9
+  MOV r11,r10
+  MOV r12,r10
+  LDR r5,[sp]
+  ADD r5,r5,#48
+  ADD r2,r2,#24
+video96from32lutscale_4
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  ADD r5,r5,r4
+  BNE video96from32lutscale_4
+  LDMIA r1,{r9-r10}
+  MOV r7,r9
+  MOV r8,r9
+  MOV r11,r10
+  MOV r12,r10
+  LDR r5,[sp]
+  ADD r5,r5,#72
+  ADD r2,r2,#24
+video96from32lutscale_5
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  ADD r5,r5,r4
+  BNE video96from32lutscale_5
+  LDR r1,[sp]
+  ADD r2,r2,#24
+  ADD r1,r1,#96
+  CMP r0,r3
+  STR r1,[sp]
+  BNE video96from32lutscale_1
+  LDMFD sp!,{r1,r4-r12,pc}
+
+|video128from32lutsixdotscale|
+  ;r0 = address of 4-bpp line to read
+  ;r1 = address of first scaled line to write
+  LDR r2,=local_linelengthfloor
+  LDR r3,[r2]
+  CMP r3,#0
+  MOVEQ pc,lr
+  STMFD sp!,{r0-r1,r4-r12,lr}
+  LDR r2,=videoscale_workspace
+  LDR r6,[r2]
+  ADD r6,r6,#0x1000
+  LDR r2,=nhostscreenlinelength
+  LDR r4,[r2]
+  LDR r2,=host_scaledlinelength
+  LDR r5,[r2]
+  ADD r2,r5,r1
+  SUB r2,r2,r4 ;r2 = address of last line to write
+  ADD r3,r3,r0 ;r3 = address of end of line to read
+video128from32lutsixdotscale_1
+  LDR r5,[r0]
+  MOV r7,r5,LSR #4
+  MOV r0,r5,LSR #12
+  MOV r1,r5,LSR #20
+  AND r7,r7,#0x0FF0
+  AND r0,r0,#0x0FF0
+  AND r1,r1,#0x0FF0
+  ADD r7,r7,r6
+  ADD r0,r0,r6
+  ADD r1,r1,r6
+  LDMIA r7,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+video128from32lutsixdotscale_2
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutsixdotscale_2
+  LDMIA r0,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+  ADD r5,r5,#32
+  ADD r2,r2,#32
+video128from32lutsixdotscale_3
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutsixdotscale_3
+  LDMIA r1,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+  ADD r5,r5,#64
+  ADD r2,r2,#32
+video128from32lutsixdotscale_4
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutsixdotscale_4
+  LDR r5,[sp]
+  ADD r7,r5,#4
+  CMP r7,r3
+  BEQ video128from32lutsixdotscale_8
+  LDR r5,[r5,#4]
+  MOV r7,r5,LSL #4
+  MOV r0,r5,LSR #4
+  MOV r1,r5,LSR #12
+  AND r7,r7,#0x0FF0
+  AND r0,r0,#0x0FF0
+  AND r1,r1,#0x0FF0
+  ADD r7,r7,r6
+  ADD r0,r0,r6
+  ADD r1,r1,r6
+  LDMIA r7,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+  ADD r5,r5,#96
+  ADD r2,r2,#32
+video128from32lutsixdotscale_5
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutsixdotscale_5
+  LDMIA r0,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+  ADD r5,r5,#128
+  ADD r2,r2,#32
+video128from32lutsixdotscale_6
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutsixdotscale_6
+  LDMIA r1,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+  ADD r5,r5,#160
+  ADD r2,r2,#32
+video128from32lutsixdotscale_7
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutsixdotscale_7
+  LDMFD sp,{r0-r1}
+  ADD r2,r2,#32
+  ADD r0,r0,#8
+  ADD r1,r1,#192
+  CMP r0,r3
+  STMEA sp,{r0-r1}
+  BNE video128from32lutsixdotscale_1
+video128from32lutsixdotscale_8
+  LDMFD sp!,{r0-r1,r4-r12,pc}
+
+|video128from32lutscale|
+  ;r0 = address of 4-bpp line to read
+  ;r1 = address of first scaled line to write
+  LDR r2,=local_linelengthfloor
+  LDR r3,[r2]
+  CMP r3,#0
+  MOVEQ pc,lr
+  STMFD sp!,{r1,r4-r12,lr}
+  LDR r2,=videoscale_workspace
+  LDR r6,[r2]
+  LDR r2,=nhostscreenlinelength
+  LDR r4,[r2]
+  LDR r2,=host_scaledlinelength
+  LDR r5,[r2]
+  ADD r2,r5,r1
+  SUB r2,r2,r4 ;r2 = address of last line to write
+  ADD r3,r3,r0 ;r3 = address of end of line to read
+video128from32lutscale_1
+  LDR r5,[r0]
+  MOV r7,r5,LSL #4
+  MOV r1,r5,LSR #4
+  AND r7,r7,#0x0FF0
+  AND r1,r1,#0x0FF0
+  ADD r7,r7,r6
+  ADD r1,r1,r6
+  LDMIA r7,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp]
+video128from32lutscale_2
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutscale_2
+  LDMIA r1,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp]
+  ADD r5,r5,#32
+  ADD r2,r2,#32
+video128from32lutscale_3
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutscale_3
+  LDR r5,[r0],#4
+  MOV r7,r5,LSR #12
+  MOV r1,r5,LSR #20
+  AND r7,r7,#0x0FF0
+  AND r1,r1,#0x0FF0
+  ADD r7,r7,r6
+  ADD r1,r1,r6
+  LDMIA r7,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp]
+  ADD r5,r5,#64
+  ADD r2,r2,#32
+video128from32lutscale_4
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutscale_4
+  LDMIA r1,{r10-r11}
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp]
+  ADD r5,r5,#96
+  ADD r2,r2,#32
+video128from32lutscale_5
+  CMP r2,r5
+  STMIA r5,{r7-r12}
+  STR r11,[r5,#24]
+  STR r12,[r5,#28]
+  ADD r5,r5,r4
+  BNE video128from32lutscale_5
+  LDR r1,[sp]
+  ADD r2,r2,#32
+  ADD r1,r1,#128
+  CMP r0,r3
+  STR r1,[sp]
+  BNE video128from32lutscale_1
+  LDMFD sp!,{r1,r4-r12,pc}
+
+|video160from32lutscale|
+  ;r0 = address of 4-bpp line to read
+  ;r1 = address of first scaled line to write
+  LDR r2,=local_linelengthfloor
+  LDR r3,[r2]
+  CMP r3,#0
+  MOVEQ pc,lr
+  STMFD sp!,{r0-r1,r4-r12,lr}
+  LDR r2,=videoscale_workspace
+  LDR r6,[r2]
+  LDR r2,=nhostscreenlinelength
+  LDR r4,[r2]
+  LDR r2,=host_scaledlinelength
+  LDR r5,[r2]
+  ADD r2,r5,r1
+  SUB r2,r2,r4 ;r2 = address of last line to write
+  ADD r3,r3,r0 ;r3 = address of end of line to read
+video160from32lutscale_1
+  LDR r5,[r0]
+  MOV r7,r5,LSL #4
+  MOV r1,r5,LSR #4
+  AND r7,r7,#0x0FF0
+  AND r1,r1,#0x0FF0
+  ADD r7,r7,r6
+  ADD r1,r1,r6
+  LDMIA r7,{r10-r11}
+  MOV r0,r10
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+video160from32lutscale_2
+  CMP r2,r5
+  STMIA r5,{r0,r7-r12}
+  STR r11,[r5,#28]
+  STR r12,[r5,#32]
+  STR r12,[r5,#36]
+  ADD r5,r5,r4
+  BNE video160from32lutscale_2
+  LDMIA r1,{r10-r11}
+  MOV r0,r10
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+  ADD r5,r5,#40
+  ADD r2,r2,#40
+video160from32lutscale_3
+  CMP r2,r5
+  STMIA r5,{r0,r7-r12}
+  STR r11,[r5,#28]
+  STR r12,[r5,#32]
+  STR r12,[r5,#36]
+  ADD r5,r5,r4
+  BNE video160from32lutscale_3
+  LDR r5,[sp]
+  LDR r5,[r5]
+  MOV r7,r5,LSR #12
+  MOV r1,r5,LSR #20
+  AND r7,r7,#0x0FF0
+  AND r1,r1,#0x0FF0
+  ADD r7,r7,r6
+  ADD r1,r1,r6
+  LDMIA r7,{r10-r11}
+  MOV r0,r10
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+  ADD r5,r5,#80
+  ADD r2,r2,#40
+video160from32lutscale_4
+  CMP r2,r5
+  STMIA r5,{r0,r7-r12}
+  STR r11,[r5,#28]
+  STR r12,[r5,#32]
+  STR r12,[r5,#36]
+  ADD r5,r5,r4
+  BNE video160from32lutscale_4
+  LDMIA r1,{r10-r11}
+  MOV r0,r10
+  MOV r7,r10
+  MOV r8,r10
+  MOV r9,r10
+  MOV r12,r11
+  LDR r5,[sp,#4]
+  ADD r5,r5,#120
+  ADD r2,r2,#40
+video160from32lutscale_5
+  CMP r2,r5
+  STMIA r5,{r0,r7-r12}
+  STR r11,[r5,#28]
+  STR r12,[r5,#32]
+  STR r12,[r5,#36]
+  ADD r5,r5,r4
+  BNE video160from32lutscale_5
+  LDMFD sp,{r0-r1}
+  ADD r2,r2,#40
+  ADD r0,r0,#4
+  ADD r1,r1,#160
+  CMP r0,r3
+  STMEA sp,{r0-r1}
+  BNE video160from32lutscale_1
+  LDMFD sp!,{r0-r1,r4-r12,pc}
+
+|video192from32lutscale|
+  ;r0 = address of 4-bpp line to read
+  ;r1 = address of first scaled line to write
+  LDR r2,=local_linelengthfloor
+  LDR r3,[r2]
+  CMP r3,#0
+  MOVEQ pc,lr
+  STMFD sp!,{r4-r11,lr}
+  LDR r2,=videoscale_workspace
+  LDR r6,[r2]
+  LDR r2,=nhostscreenlinelength
+  LDR r4,[r2]
+  LDR r2,=host_scaledlinelength
+  LDR r5,[r2]
+  ADD r2,r5,r1
+  SUB r2,r2,r4 ;r2 = address of last line to write
+  ADD r3,r3,r0 ;r3 = address of end of line to read
+video192from32lutscale_1
+  LDR r5,[r0]
+  MOV r7,r5,LSL #4
+  MOV r11,r5,LSR #4
+  AND r7,r7,#0x0FF0
+  AND r11,r11,#0x0FF0
+  ADD r7,r7,r6
+  ADD r11,r11,r6
+  LDMIA r7,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  MOV r5,r1
+video192from32lutscale_2
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#40
+  ADD r5,r5,r4
+  BNE video192from32lutscale_2
+  LDMIA r11,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  ADD r5,r1,#48
+  ADD r2,r2,#48
+video192from32lutscale_3
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#40
+  ADD r5,r5,r4
+  BNE video192from32lutscale_3
+  LDR r5,[r0],#4
+  MOV r7,r5,LSR #12
+  MOV r11,r5,LSR #20
+  AND r7,r7,#0x0FF0
+  AND r11,r11,#0x0FF0
+  ADD r7,r7,r6
+  ADD r11,r11,r6
+  LDMIA r7,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  ADD r5,r1,#96
+  ADD r2,r2,#48
+video192from32lutscale_4
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#40
+  ADD r5,r5,r4
+  BNE video192from32lutscale_4
+  LDMIA r11,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  ADD r5,r1,#144
+  ADD r2,r2,#48
+  ADD r1,r1,#192
+video192from32lutscale_5
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#40
+  ADD r5,r5,r4
+  BNE video192from32lutscale_5
+  CMP r0,r3
+  ADD r2,r2,#48
+  BNE video192from32lutscale_1
+  LDMFD sp!,{r4-r11,pc}
+
+|video256from32lutsixdotscale|
+  ;r0 = address of 4-bpp line to read
+  ;r1 = address of first scaled line to write
+  LDR r2,=local_linelengthfloor
+  LDR r3,[r2]
+  CMP r3,#0
+  MOVEQ pc,lr
+  STMFD sp!,{r4-r12,lr}
+  LDR r2,=videoscale_workspace
+  LDR r6,[r2]
+  ADD r6,r6,#0x1000
+  LDR r2,=nhostscreenlinelength
+  LDR r4,[r2]
+  LDR r2,=host_scaledlinelength
+  LDR r5,[r2]
+  ADD r2,r5,r1
+  SUB r2,r2,r4 ;r2 = address of last line to write
+  ADD r3,r3,r0 ;r3 = address of end of line to read
+video256from32lutsixdotscale_1
+  LDR r5,[r0],#4
+  MOV r7,r5,LSR #4
+  MOV r11,r5,LSR #12
+  MOV r12,r5,LSR #20
+  AND r7,r7,#0x0FF0
+  AND r11,r11,#0x0FF0
+  AND r12,r12,#0x0FF0
+  ADD r7,r7,r6
+  ADD r11,r11,r6
+  ADD r12,r12,r6
+  LDMIA r7,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  MOV r5,r1
+  ADD r1,r1,#64
+video256from32lutsixdotscale_2
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#56
+  ADD r5,r5,r4
+  BNE video256from32lutsixdotscale_2
+  LDMIA r11,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  MOV r5,r1
+  ADD r2,r2,#64
+  ADD r1,r1,#64
+video256from32lutsixdotscale_3
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#56
+  ADD r5,r5,r4
+  BNE video256from32lutsixdotscale_3
+  LDMIA r12,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  MOV r5,r1
+  ADD r2,r2,#64
+  ADD r1,r1,#64
+video256from32lutsixdotscale_4
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#56
+  ADD r5,r5,r4
+  BNE video256from32lutsixdotscale_4
+  CMP r0,r3
+  BEQ video256from32lutsixdotscale_8
+  LDR r5,[r0],#4
+  MOV r7,r5,LSL #4
+  MOV r11,r5,LSR #4
+  MOV r12,r5,LSR #12
+  AND r7,r7,#0x0FF0
+  AND r11,r11,#0x0FF0
+  AND r12,r12,#0x0FF0
+  ADD r7,r7,r6
+  ADD r11,r11,r6
+  ADD r12,r12,r6
+  LDMIA r7,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  MOV r5,r1
+  ADD r2,r2,#64
+  ADD r1,r1,#64
+video256from32lutsixdotscale_5
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#56
+  ADD r5,r5,r4
+  BNE video256from32lutsixdotscale_5
+  LDMIA r11,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  MOV r5,r1
+  ADD r2,r2,#64
+  ADD r1,r1,#64
+video256from32lutsixdotscale_6
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#56
+  ADD r5,r5,r4
+  BNE video256from32lutsixdotscale_6
+  LDMIA r12,{r8-r9}
+  MOV r7,r8
+  MOV r10,r9
+  MOV r5,r1
+  ADD r2,r2,#64
+  ADD r1,r1,#64
+video256from32lutsixdotscale_7
+  CMP r2,r5
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r8}
+  STMIA r5!,{r7-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5!,{r9-r10}
+  STMIA r5,{r9-r10}
+  SUB r5,r5,#56
+  ADD r5,r5,r4
+  BNE video256from32lutsixdotscale_7
+  CMP r0,r3
+  ADD r2,r2,#64
+  BNE video256from32lutsixdotscale_1
+video256from32lutsixdotscale_8
+  LDMFD sp!,{r4-r12,pc}
+
+;Data Area
+
+  AREA    |C$$data|, DATA
+
+  END

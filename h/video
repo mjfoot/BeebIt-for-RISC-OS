@@ -12,9 +12,21 @@
 #define MODE15_X 640 /*mode 15 is 640 pixels x 8 bits wide */
 #define MODE15_Y 256
 
+typedef struct {
+  int graphics;
+  int unroundedteletext;
+  int roundedteletext;
+} VERTICALLYSCALEDLINELENGTHS;
+
+/*palette*/
+extern const unsigned int palette_rgb[8];
+extern unsigned int palette_specified[8];
+
 /*teletext*/
-extern int teletext_screenextra;
 extern int teletext_screenwidth;
+extern int teletext_leftoffscreen;
+extern int teletext_leftextra;
+extern int teletext_rightextra;
 
 /*video*/
 /*extern int video_vsync0;*/ /*start of vertical sync scan line*/
@@ -32,7 +44,6 @@ extern char video_scanlinecounter; /*fraction part of character row*/
 extern int video_offset;
 extern int video_width;
 extern int video_displaywidth;
-extern int video_scale; /*video scaling to screen*/
 extern int video_field;
 extern int video_drawline; /*draw a line on this pass*/
 extern int video_onscreen;
@@ -40,19 +51,35 @@ extern int video_de;
 extern int video_scanline;
 extern int video_display;
 extern int video_framerate;
-extern int host_screenwidth; /*screen width of the screen mode on the host*/
-/*extern int host_mode1280x1024;
-extern int host_mode1600x1024;*/
+extern int *videoscale_workspace;
+extern int nlocalscreen;
+extern int nlocalscreenlinelength;
+extern int local_linelengthfloor; /*line length compatible with optimised blank, plot and scale routines*/
+extern int local_teletextform; /*line ratio, pixel depth and graphics separation*/
+extern int local_teletextlinelength;
+extern int host_colournumbers[8];
+extern int host_colourmasks[8];
+extern int host_scaledlinelengthfloor;
+extern int host_scaledlinelength;
+extern int host_scaledteletextrowlength;
+extern int host_screenoffsetlines;
+extern int host_screenoffsetremainder;
 extern unsigned int cursor_bitmap;
 
 extern void videoinit(void);
+extern void videosetpalette(void);
+extern void videosetscale(void);
 extern void videosetplot(void);
+extern void videohostmodevars(void);
+extern int writeusedcolours(void);
+extern void videofreeworkspace(void);
 extern void videoreset(int lfull);
 extern void videomodechange(void);
 /*extern void videoupdate(void);*/
 extern void videoscanline(void);
-extern void videoteletext4(void);
-extern void videoteletext8(void);
-extern void videoteletext8x2(void);
+extern void videoteletextrelay(void);
+extern void videoteletextdrawrow(void);
 
 extern void (*videoteletext)(void);
+extern void (*videographicsscale)(int bufferaddress, int hostaddress);
+extern void (*videoteletextscale)(int bufferaddress, int hostaddress);

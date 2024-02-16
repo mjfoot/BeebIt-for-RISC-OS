@@ -291,6 +291,7 @@ r65c12opcodeF9_2
   BL sbcbcd ;1 cycle
   BL r65c12loadregs
   ;LDMFD sp!,{lr}
+  LDR lr, [sp], #4
   CPU_CYCLES 3 ;+1
   ;LDMFD sp!,{r0-r12,pc}
   ;MOV pc,lr

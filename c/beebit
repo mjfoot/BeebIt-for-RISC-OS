@@ -24,6 +24,7 @@
 #include "keyboard.h"
 #include "main.h"
 #include "riscos.h"
+#include "scrmode.h"
 #include "scrsave.h"
 #include "sheila.h"
 #include "swis.h"
@@ -79,8 +80,9 @@ FILE *beebit_tapeimage; /*file handles*/
 char beebit_cmosdefault[0x40] = {0,0,0,0,0,0xC9,0xFF,0xFE,0x32,0,7,0xC1,0x1E,5,0,0x58,0xA2}; /*default CMOS RAM values*/
 char beebit_cmos[0x40];
 
+int beebit_graphicsmodeselector[10]; /*selector used when mode is not specified by number*/
+int beebit_graphicsmodespecifier;
 int beebit_graphicsmode; /*can mode 12,15 or 21 be used for graphics?*/
-int beebit_teletextmode; /*can teletext use mode 7 or 15?*/
 int beebit_currenttype;
 int beebit_machinetype;
 int beebit_cpuspeed;
@@ -88,6 +90,8 @@ int beebit_videospeed;
 int beebit_framerate;
 int beebit_mouseemulation;
 int beebit_displaymode;
+int beebit_displayzoom;
+int beebit_palette;
 int beebit_sound;
 int beebit_cursor;
 int beebit_fasttape;
@@ -479,18 +483,14 @@ void beebitinit(void)
   fclose(hh1);*/
 
   beebit_trace = FALSE;
-  /*get keyboard status*/
-  regs.r[0] = 202;
-  regs.r[1] = 0;
-  regs.r[2] = 255;
-  _kernel_swi(OS_Byte,&regs,&regs);
   /*set caps lock on*/
-  beebit_leds = (regs.r[1] & 0xEF);
+  beebit_leds = 0x00;
   /*set up default configuration*/
   beebit_machinetype = beebit_currenttype = -1;
   beebit_sound = TRUE;
   beebit_cursor = TRUE;
   beebit_fasttape = FALSE;
+  beebit_printer = FALSE;
   beebit_links = 0;
   beebit_videospeed = VIDEO_SLOW;
   beebit_framerate = VIDEO_50FPS;
@@ -499,6 +499,8 @@ void beebitinit(void)
   beebit_discimage[1][0] = 0x00;
   beebit_discimage[2][0] = 0x00;
   beebit_discimage[3][0] = 0x00;
+
+  beebit_graphicsmodespecifier = -1;
 
   videoinit();
 
@@ -514,7 +516,6 @@ void beebitinit(void)
 int beebitenter(void)
 {
   char /*cbuffer[128],*/cname[128];
-  char cmodeblock[28];
   /*char *n;*/
   /*int nicon[0x10] = {49,46,43,40,37,34,31,28,25,22,19,16,13,10,7,4};*/
   int i, lredraw, nmask, nindex;
@@ -663,8 +664,8 @@ int beebitenter(void)
 
     /*set keyboard status*/
     regs.r[0] = 202;
-    regs.r[1] = beebit_leds;
-    regs.r[2] = 0;
+    regs.r[1] = beebit_leds & 0x10;
+    regs.r[2] = 0xEF;
     _kernel_swi(OS_Byte,&regs,&regs);
     /*save current status*/
     host_leds = regs.r[1];
@@ -679,262 +680,122 @@ int beebitenter(void)
     /*work out the best video mode to use*/
     /*hh1 = fopen("<BeebIt$Dir>.Trace","w");*/
 
+    beebit_graphicsmodespecifier = -1;
     switch (beebit_displaymode)
     {
+      case DISPLAY_MODE_AUTO:
+        break;
       case DISPLAY_MODE_LOW:
-        beebit_graphicsmode = 12;
-        /*check to see if we can use 16 colour mode 7*/
-        regs.r[0] = 7;
-        regs.r[1] = 3;
-        _kernel_swi(OS_ReadModeVariable,&regs,&regs);
-        if (regs.r[2] == 15)
-          beebit_teletextmode = 7;
-        else
-          beebit_teletextmode = 15;
+        if (numberedscreenmodeflags & (1<<12))
+          beebit_graphicsmodespecifier = 12;
         break;
       case DISPLAY_MODE_MEDIUM:
-        beebit_graphicsmode = 15;
-        beebit_teletextmode = 15;
+        if (numberedscreenmodeflags & (1<<15))
+          beebit_graphicsmodespecifier = screenmodespecifymedium(&beebit_graphicsmodeselector);
         break;
       case DISPLAY_MODE_HIGH:
-        beebit_graphicsmode = 21;
-        beebit_teletextmode = 21;
+        if (numberedscreenmodeflags & (1<<21))
+          beebit_graphicsmodespecifier = screenmodespecifyhigh(&beebit_graphicsmodeselector);
         break;
-      case DISPLAY_MODE_12801024:
-        beebit_graphicsmode = 12801024;
-        beebit_teletextmode = 12801024;
-        break;
-      case DISPLAY_MODE_16801050:
-        beebit_graphicsmode = 16801050;
-        beebit_teletextmode = 16801050;
-        break;
-      case DISPLAY_MODE_19201080:
-        beebit_graphicsmode = 19201080;
-        beebit_teletextmode = 19201080;
-        break;
-      case DISPLAY_MODE_AUTO:
-        regs.r[0] = 12; /*MODE 12*/
-        _kernel_swi(OS_CheckModeValid,&regs,&regs);
-        if (regs.r[0] == -1)
+      default:
+        i = beebit_displaymode - DISPLAY_MODE_FIRST_IN_TABLE;
+        if (i>=0 && i<screenmoderecordcount)
         {
-          /*mode cannot be selected*/
-          regs.r[0] = 15; /*MODE 15*/
-          _kernel_swi(OS_CheckModeValid,&regs,&regs);
-          if (regs.r[0] == -1)
-          {
-            /*mode cannot be selected*/
-            regs.r[0] = 21; /*MODE 21*/
-            _kernel_swi(OS_CheckModeValid,&regs,&regs);
-            if (regs.r[0] == -1)
-            {
-              /*mode cannot be selected*/
-              /*1280 x 1024*/
-              setword(cmodeblock, 1);
-              setword(cmodeblock + 4, 1280);
-              setword(cmodeblock + 8, 1024);
-              setword(cmodeblock + 12, 3); /*log2bpp*/
-              setword(cmodeblock + 16, -1);
-              setword(cmodeblock + 20, -1);
-              regs.r[0] = (int)cmodeblock; /*MODE block*/
-              _kernel_swi(OS_CheckModeValid,&regs,&regs);
-              if (regs.r[0] == -1)
-              {
-                /*mode cannot be selected*/
-                /*1680 x 1050*/
-                setword(cmodeblock, 1);
-                setword(cmodeblock + 4, 1680);
-                setword(cmodeblock + 8, 1050);
-                setword(cmodeblock + 12, 3); /*log2bpp*/
-                setword(cmodeblock + 16, -1);
-                setword(cmodeblock + 20, -1);
-                regs.r[0] = (int)cmodeblock; /*MODE block*/
-                _kernel_swi(OS_CheckModeValid,&regs,&regs);
-                if (regs.r[0] == -1)
-                {
-                  /*mode cannot be selected*/
-                  /*1920 x 1080*/
-                  setword(cmodeblock, 1);
-                  setword(cmodeblock + 4, 1920);
-                  setword(cmodeblock + 8, 1080);
-                  setword(cmodeblock + 12, 3); /*log2bpp*/
-                  setword(cmodeblock + 16, -1);
-                  setword(cmodeblock + 20, -1);
-                  regs.r[0] = (int)cmodeblock; /*MODE block*/
-                  _kernel_swi(OS_CheckModeValid,&regs,&regs);
-                  if (regs.r[0] == -1)
-                  {
-                    /*beebit_graphicsmode = 12801024;
-                    beebit_teletextmode = 12801024;*/
-                    wimperror("A suitable screen mode cannot be found");
-                    lexit = TRUE;
-                  }
-                  else
-                  {
-                    beebit_graphicsmode = 19201080;
-                    beebit_teletextmode = 19201080;
-                  }
-                }
-                else
-                {
-                  beebit_graphicsmode = 16801050;
-                  beebit_teletextmode = 16801050;
-                }
-              }
-              else
-              {
-                beebit_graphicsmode = 12801024;
-                beebit_teletextmode = 12801024;
-              }
-            }
-            else
-            {
-              beebit_graphicsmode = 21;
-              beebit_teletextmode = 21;
-            }
-          }
-          else
-          {
-            beebit_graphicsmode = 15;
-            beebit_teletextmode = 15;
-          }
+          screenmodesetblock(screenmoderecords+i,&beebit_graphicsmodeselector);
+          beebit_graphicsmodespecifier = (int)beebit_graphicsmodeselector;
         }
-        else
+        break;
+    }
+    if (beebit_graphicsmodespecifier == -1)
+    {
+      do
+      {
+        if (numberedscreenmodeflags & (1<<12))
         {
-          beebit_graphicsmode = 12;
-          /*check to see if we can use 16 colour mode 7*/
-          regs.r[0] = 7;
-          regs.r[1] = 3;
-          _kernel_swi(OS_ReadModeVariable,&regs,&regs);
-          if (regs.r[2] == 15)
-            beebit_teletextmode = 7;
-          else
-            beebit_teletextmode = 15;
+          beebit_graphicsmodespecifier = 12;
+          break;
         }
-      break;
+        if (numberedscreenmodeflags & (1<<15))
+        {
+          beebit_graphicsmodespecifier = 15;
+          break;
+        }
+        if (numberedscreenmodeflags & (1<<21))
+        {
+          beebit_graphicsmodespecifier = 21;
+          break;
+        }
+#ifdef VIDEOSCALE_WITH_OVERSCALE 
+        i = pickascreenmode(1280,1024);
+        if (i>=0)
+        {
+          screenmodesetblock(screenmoderecords+i,&beebit_graphicsmodeselector);
+          beebit_graphicsmodespecifier = (int)beebit_graphicsmodeselector;
+          break;
+        }
+#endif
+        i = pickascreenmode(640,256);
+        if (i>=0)
+        {
+          screenmodesetblock(screenmoderecords+i,&beebit_graphicsmodeselector);
+          beebit_graphicsmodespecifier = (int)beebit_graphicsmodeselector;
+          break;
+        }
+        wimperror("A suitable screen mode cannot be found");
+        lexit = TRUE;
+        lredraw = FALSE;
+      }
+      while (FALSE);
     }
 
     /*beebit_trace = TRUE;*/
 
     if (!lexit)
     {
-      /*beebit_mode12 = FALSE;*/ /*force 256 colour mode*/
-      /*beebit_graphicsmode = 21;
-      beebit_teletextmode = 21;*/
-
       /*fclose(hh1);*/
-
+      
       /*allocate space for screen buffer sprite*/
       spritealloc();
 
+      videosetpalette();
+      videosetscale();
       videosetplot();
-
+      
       if (video_mode != -1)
       {
-        switch (video_mode)
+        if (video_mode == 7 && local_teletextform == 0)
         {
-          case 7:
-            switch (beebit_teletextmode)
-            {
-              case 12801024:
-                /*1280 x 1024*/
-                setword(cmodeblock, 1);
-                setword(cmodeblock + 4, 1280);
-                setword(cmodeblock + 8, 1024);
-                setword(cmodeblock + 12, 3); /*log2bpp*/
-                setword(cmodeblock + 16, -1);
-                setword(cmodeblock + 20, -1);
-                regs.r[0] = 0;
-                regs.r[1] = (int)cmodeblock; /*MODE block*/
-                _kernel_swi(OS_ScreenMode,&regs,&regs);
-                break;
-              case 16801050:
-                /*1680 x 1050*/
-                setword(cmodeblock, 1);
-                setword(cmodeblock + 4, 1680);
-                setword(cmodeblock + 8, 1050);
-                setword(cmodeblock + 12, 3); /*log2bpp*/
-                setword(cmodeblock + 16, -1);
-                setword(cmodeblock + 20, -1);
-                regs.r[0] = 0;
-                regs.r[1] = (int)cmodeblock; /*MODE block*/
-                _kernel_swi(OS_ScreenMode,&regs,&regs);
-                break;
-              case 19201080:
-                /*1920 x 1080*/
-                setword(cmodeblock, 1);
-                setword(cmodeblock + 4, 1920);
-                setword(cmodeblock + 8, 1080);
-                setword(cmodeblock + 12, 3); /*log2bpp*/
-                setword(cmodeblock + 16, -1);
-                setword(cmodeblock + 20, -1);
-                regs.r[0] = 0;
-                regs.r[1] = (int)cmodeblock; /*MODE block*/
-                _kernel_swi(OS_ScreenMode,&regs,&regs);
-                break;
-              default:
-                regs.r[0] = 0;
-                regs.r[1] = beebit_teletextmode;
-                _kernel_swi(OS_ScreenMode,&regs,&regs);
-                /*bbcvdu(22);
-                bbcvdu(beebit_teletextmode);*/
-                break;
-            }
-            break;
-          default:
-            if (beebit_graphicsmode <= 0xFF)
-            {
-              regs.r[0] = 0;
-              regs.r[1] = beebit_graphicsmode;
-              _kernel_swi(OS_ScreenMode,&regs,&regs);
-              /*bbcvdu(22);
-              bbcvdu(beebit_graphicsmode);*/
-            }
-            else
-            {
-              switch (beebit_graphicsmode)
-              {
-                case 12801024:
-                  /*1280 x 1024*/
-                  setword(cmodeblock, 1);
-                  setword(cmodeblock + 4, 1280);
-                  setword(cmodeblock + 8, 1024);
-                  setword(cmodeblock + 12, 3); /*log2bpp*/
-                  setword(cmodeblock + 16, -1);
-                  setword(cmodeblock + 20, -1);
-                  regs.r[0] = 0;
-                  regs.r[1] = (int)cmodeblock; /*MODE block*/
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  break;
-                case 16801050:
-                  /*1680 x 1050*/
-                  setword(cmodeblock, 1);
-                  setword(cmodeblock + 4, 1680);
-                  setword(cmodeblock + 8, 1050);
-                  setword(cmodeblock + 12, 3); /*log2bpp*/
-                  setword(cmodeblock + 16, -1);
-                  setword(cmodeblock + 20, -1);
-                  regs.r[0] = 0;
-                  regs.r[1] = (int)cmodeblock; /*MODE block*/
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  break;
-                case 19201080:
-                  /*1920 x 1080*/
-                  setword(cmodeblock, 1);
-                  setword(cmodeblock + 4, 1920);
-                  setword(cmodeblock + 8, 1080);
-                  setword(cmodeblock + 12, 3); /*log2bpp*/
-                  setword(cmodeblock + 16, -1);
-                  setword(cmodeblock + 20, -1);
-                  regs.r[0] = 0;
-                  regs.r[1] = (int)cmodeblock; /*MODE block*/
-                  _kernel_swi(OS_ScreenMode,&regs,&regs);
-                  break;
-              }
-            }
-            break;
+          if (screenmoderecords)
+          {
+            regs.r[0] = 0;
+            regs.r[1] = 7;
+            _kernel_swi(OS_ScreenMode,&regs,&regs);
+          }
+          else
+          {
+            bbcvdu(22);
+            bbcvdu(7);
+          }
         }
+        else
+        {
+          if (screenmoderecords)
+          {
+            regs.r[0] = 0;
+            regs.r[1] = beebit_graphicsmodespecifier;
+            _kernel_swi(OS_ScreenMode,&regs,&regs);
+          }
+          else
+          {
+            bbcvdu(22);
+            bbcvdu(beebit_graphicsmodespecifier);
+          }
+        }
+        
+        crtcteletextwidthextra();
+        crtcwidthextra();
         videomodechange();
-        screenstart();
+        videohostmodevars();
         cursordisable();
       }
     }
@@ -948,7 +809,7 @@ int beebitenter(void)
       beebit_teletextmode = -1;
       videosetplot();
       videomodechange();
-      screenstart();*/
+      videohostmodevars();*/
       /*setword((char *)nlocalscreen, (int)screen);*/
       /*initialise keyboard handler*/
       /*_kernel_swi(KeyBuffer_Claim,&regs,&regs);
@@ -1195,6 +1056,8 @@ void beebitexit(void)
   /*_kernel_oscli("BeebSoundCloseDown");*/
   zeribeepdetach();
 
+  videofreeworkspace();
+
   /*if (beebit_singletask)
   {*/
     if (!lexit)
@@ -1204,13 +1067,11 @@ void beebitexit(void)
     /*enable <Break>*/
     breakenable();
 
-    /*get/set keyboard status*/
+    /*set keyboard status*/
     regs.r[0] = 202;
-    regs.r[1] = host_leds;
-    regs.r[2] = 0;
+    regs.r[1] = host_leds & 0x10;
+    regs.r[2] = 0xEF;
     _kernel_swi(OS_Byte,&regs,&regs);
-    /*save current status*/
-    beebit_leds = (regs.r[1] & 0x10);
     regs.r[0] = 118;
     _kernel_swi(OS_Byte,&regs,&regs);
   /*}
@@ -1267,9 +1128,6 @@ void beebitexit(void)
   if (beebit_driveimage[3])
     fclose(beebit_driveimage[3]);
 
-   /*free space for screen buffer sprite*/
-   spritefree();
-
   /*if (beebit_singletask)*/
     cursorenable();
 
@@ -1304,6 +1162,9 @@ void beebitclosedown(void)
   #endif*/
 
   i8271closedown();
+
+  /*free space for screen buffer sprite*/
+  spritefree();
 }
 
 /*void updateCaI(void)

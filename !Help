@@ -1,4 +1,4 @@
-BeebIt : Version 0.74 (20 May 2023)
+BeebIt : Version 0.76 (04 Feb 2024)
 ===================================
 Emulator by Michael Foot <mjfoot.nz@gmail.com>.
 Additions by James Lampard.
@@ -69,8 +69,8 @@ For BBC Model B+ (128K) emulation:
 
   OS200         OS              Operating System V2.00
   BASIC200      E               BASIC ROM V2.00
-  SWRAM         D
-  SWRAM         C
+                D               Writable checked
+                C               Writable checked
   DFS220        B               Disc Filing System V2.20
   ADFS130       A               Acorn ADFS V1.30
 
@@ -310,7 +310,7 @@ TO DO
 This emulator has been written as a way to keep the memory of one of my favourite machines alive and has been an ongoing project since I started in December 1997.
 Below is a list of items I would very much like to see added to BeebIt but since I can only work on it when I have free time it may be a very long time before many of these get done.
 If there is anyone who would like to tackle the task of adding one of these items to BeebIt, I would be happy to distribute the source code ('C' and ARM assembler) to you and offer any help needed.
-Please email me at <mjfoot@paradise.net.nz> if you are interested. Thanks.
+Please email me at <mjfoot.nz@gmail.com> if you are interested. Thanks.
 
 * Emulation speed increases!
 * Cursor emulation. (done)
@@ -330,7 +330,7 @@ Please email me at <mjfoot@paradise.net.nz> if you are interested. Thanks.
 LATER VERSIONS
 --------------
 
-The latest version can be obtained from my home page at <http://homepages.paradise.net.nz/mjfoot>.
+The latest version can be obtained from my home page at <http://mjfoot.netlify.app>.
 
 ACKNOWLEDGEMENTS
 ----------------
