@@ -48,6 +48,22 @@ static int comparescreenmoderecords(SCREENMODERECORD *a, SCREENMODERECORD *b)
   return 0;
 }
 
+static int comparescreenmoderecordncolours(SCREENMODERECORD *a, SCREENMODERECORD *b)
+{
+  unsigned int nca = (unsigned int)a->ncolour;
+  unsigned int ncb = (unsigned int)b->ncolour;
+
+  if (nca == ncb)
+    return 0;
+
+  /*avoid 16 colour modes if possible as these are the most likely to be emulated modes*/
+  if (nca == 15) return -1;
+  if (ncb == 15) return 1;
+
+  if (nca > ncb) return -1;
+  return 1;
+}
+
 static int writemodevariables(int mode)
 {
   char buffer[128];
@@ -92,6 +108,7 @@ static void detectscreenmodesbyenumeration(int writeaction)
   char buffer[128];
   int modeblock[10];
   SCREENMODERECORD r,r2;
+  SCREENMODERECORD* insertionptr;
   char *cnext;
   int enumblock[32];
   int nallocated,ntoskip,nread;
@@ -241,13 +258,14 @@ static void detectscreenmodesbyenumeration(int writeaction)
       {
         do
         {
-          direction = comparescreenmoderecords(&screenmoderecords[insertionindex-1], &r);
+          insertionptr = &screenmoderecords[insertionindex-1];
+          direction = comparescreenmoderecords(insertionptr, &r);
           
           if (direction >= 0)
           {
-            if (direction == 0 && (unsigned int)screenmoderecords[insertionindex-1].ncolour > (unsigned int)r.ncolour)
+            if (direction == 0 && comparescreenmoderecordncolours(insertionptr, &r) < 0)
             {
-              screenmoderecords[insertionindex-1] = r;
+              *insertionptr = r;
             }
             break;
           }
