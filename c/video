@@ -3506,7 +3506,7 @@ void videoscanline(void)
   /*increase 6845 scanline count by 1*/
   m6845_sc++;
 
-  if (m6845_sc >= m6845_sl)
+  if (m6845_sc >= m6845_sl && m6845_vc < m6845_vt)
   {
     /*scanline count >= scan lines per character row*/
     m6845_vc++;
