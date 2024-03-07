@@ -2,9 +2,9 @@
  *
  * BeebIt - BBC Micro Model B Emulator
  *
- * (C) Copyright Michael J Foot, 1998-2002
+ * (C) Copyright Michael J Foot, 1998-2024
  *
- * Email: <mjfoot@paradise.net.nz>
+ * Email: <mjfoot.nz@gmail.com>
  */
 
 #include <stdlib.h>
@@ -36,7 +36,7 @@ static int comparescreenmoderecords(SCREENMODERECORD *a, SCREENMODERECORD *b)
 {
   if (a->xres > b->xres) return -1;
   if (a->xres < b->xres) return 1;
-  
+
   if (a->yres > b->yres) return -1;
   if (a->yres < b->yres) return 1;
 
@@ -44,7 +44,7 @@ static int comparescreenmoderecords(SCREENMODERECORD *a, SCREENMODERECORD *b)
   if ((unsigned int)a->ncolour > (unsigned int)b->ncolour) return -1;
   if ((unsigned int)a->ncolour < (unsigned int)b->ncolour) return 1;
 #endif
-  
+
   return 0;
 }
 
@@ -132,9 +132,9 @@ static void detectscreenmodesbyenumeration(int writeaction)
   nallocated = 8;
 #endif
   screenmoderecords = malloc(nallocated * sizeof(SCREENMODERECORD));
-  
+
   ntoskip = 0;
-  
+
   do
   {
     regs.r[0] = 2;
@@ -148,17 +148,17 @@ static void detectscreenmodesbyenumeration(int writeaction)
     for (i=nread, emode=enumblock; i<0; i++, emode += (*emode>>2))
     {
       if ((emode[1] & 1) == 0) continue;
-      
+
       eformat = (emode[1]>>1) & 0x7F;
-      
+
       if (eformat > 1) continue;
-      
+
       r.xres = emode[2] & 0xFFFF;
       r.yres = emode[3] & 0xFFFF;
       r.fmt = eformat;
-      
+
       if (r.xres != emode[2] || r.yres != emode[3]) continue;
-      
+
       if (eformat == 0)
       {
         r.log2bpp = emode[4];
@@ -169,11 +169,11 @@ static void detectscreenmodesbyenumeration(int writeaction)
         r.modeflags = emode[5];
         r.log2bpp = emode[6];
       }
-      
+
       screenmodesetblock(&r,&modeblock);
 
       if (eformat == 0)
-      {        
+      {
         regs.r[0] = (int)modeblock;
         regs.r[1] = 0;
         _kernel_swi(OS_ReadModeVariable,&regs,&regs);
@@ -193,7 +193,7 @@ static void detectscreenmodesbyenumeration(int writeaction)
 
       if (r.log2bpp < 2 || r.log2bpp > 5)
         continue;
-      
+
       if (r.modeflags & 1) continue;
 
       regs.r[0] = (int)modeblock;
@@ -230,10 +230,10 @@ static void detectscreenmodesbyenumeration(int writeaction)
           }
         }
       }
-      
+
       if (!get256linezoomavailabilityformode((int)modeblock))
         continue;
-      
+
 #ifndef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
       if (r.xres == 640)
       {
@@ -247,9 +247,9 @@ static void detectscreenmodesbyenumeration(int writeaction)
         }
       }
 #endif
-      
+
       insertionindex = screenmoderecordcount;
-      
+
       if (insertionindex == 0)
       {
         direction = 1;
@@ -260,7 +260,7 @@ static void detectscreenmodesbyenumeration(int writeaction)
         {
           insertionptr = &screenmoderecords[insertionindex-1];
           direction = comparescreenmoderecords(insertionptr, &r);
-          
+
           if (direction >= 0)
           {
             if (direction == 0 && comparescreenmoderecordncolours(insertionptr, &r) < 0)
@@ -273,7 +273,7 @@ static void detectscreenmodesbyenumeration(int writeaction)
       }
 
       if (direction == 0) continue;
-            
+
       if (nallocated == screenmoderecordcount)
       {
 #ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
@@ -283,20 +283,20 @@ static void detectscreenmodesbyenumeration(int writeaction)
 #endif
         screenmoderecords = realloc(screenmoderecords,nallocated * sizeof(SCREENMODERECORD));
       }
-      
+
       for (j=screenmoderecordcount; j>insertionindex; j--)
       {
         screenmoderecords[j] = screenmoderecords[j-1];
       }
-      
+
       screenmoderecords[insertionindex] = r;
       screenmoderecordcount++;
     }
   }
   while (nread < 0);
-  
+
   screenmodeicons = calloc(screenmoderecordcount,sizeof(SCREENMODEICON));
-  
+
   for (i=0; i<screenmoderecordcount; i++)
   {
     r = screenmoderecords[i];
@@ -310,24 +310,24 @@ static void detectscreenmodesbyenumeration(int writeaction)
       writemodevariables((int)modeblock);
       wimpwrite("\n",1,1);
     }
-    
+
     regs.r[0] = r.xres;
     regs.r[1] = (int)cnext;
     regs.r[2] = 5;
     _kernel_swi(OS_BinaryToDecimal,&regs,&regs);
     cnext += regs.r[2];
-    
+
     cnext[0] = ' ';
     cnext[1] = 'x';
     cnext[2] = ' ';
     cnext += 3;
-    
+
     regs.r[0] = r.yres;
     regs.r[1] = (int)cnext;
     regs.r[2] = 5;
     _kernel_swi(OS_BinaryToDecimal,&regs,&regs);
     cnext += regs.r[2];
-    
+
 #ifdef SCREEN_MODES_WITH_NCOLOUR_OPTIONS
     nc = (unsigned int)r.ncolour + 1;
 
@@ -343,7 +343,7 @@ static void detectscreenmodesbyenumeration(int writeaction)
     {
       nc >>= 20;
       ncsuffix = "M";
-      
+
       if (nc > 16) nc = 16;
     }
     else if (nc >> 10)
@@ -361,7 +361,7 @@ static void detectscreenmodesbyenumeration(int writeaction)
     regs.r[2] = 10;
     _kernel_swi(OS_BinaryToDecimal,&regs,&regs);
     cnext += regs.r[2];
-    
+
     strcpy(cnext, ncsuffix);
 #endif
   }
@@ -584,7 +584,7 @@ int findscreenmode(char *icon)
 int getscreenmodeoverscalezoomavailability(SCREENMODERECORD* r)
 {
   int modeblock[10];
-  
+
   screenmodesetblock(r, &modeblock);
   return getoverscalezoomavailabilityformode((int)modeblock);
 }
@@ -592,7 +592,7 @@ int getscreenmodeoverscalezoomavailability(SCREENMODERECORD* r)
 int getscreenmode256linezoomavailability(SCREENMODERECORD* r)
 {
   int modeblock[10];
-  
+
   screenmodesetblock(r, &modeblock);
   return get256linezoomavailabilityformode((int)modeblock);
 }
@@ -632,7 +632,7 @@ void screenmodesetblock(SCREENMODERECORD* r, int (*modeblock)[10])
   (*modeblock)[2] = r->yres;
   (*modeblock)[3] = r->log2bpp;
   (*modeblock)[4] = -1;
-  
+
   if (r->fmt == 1)
   {
     (*modeblock)[5] = 0;

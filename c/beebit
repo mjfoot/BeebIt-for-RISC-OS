@@ -400,9 +400,23 @@ int beebitsectorcount(FILE *hfile)
     return (0);
 }
 
+int beebitimagedsd(int nimagetype)
+{
+  switch (nimagetype)
+  {
+    case DFS_DSD_TRACK:
+    case DFS_DSD_SIDE:
+    case ADFS_INTERLEAVED:
+    case ADFS_NON_INTERLEAVED:
+      return (TRUE);
+    default:
+      return (FALSE);
+  }
+}
+
 int beebitimagetype(FILE *hfile, int nsectorcount)
 {
-  char nb6, nb7;
+  char nb6l, nb6h, nb7;
   int nsize, nlocation, nresult;
   long nlen;
   if (hfile != NULL)
@@ -433,9 +447,10 @@ int beebitimagetype(FILE *hfile, int nsectorcount)
         if (nlen > 0xB00)
         {
           i8271readimage(hfile, 0xB00, DFS_SECTOR_SIZE);
-          nb6 = (i8271_data[6] & 0x0F);
+          nb6l = (i8271_data[6] & 0x0F);
+          nb6h = (i8271_data[6] & 0xC0); /*strip out boot options (b4, b5)*/
           nb7 = i8271_data[7];
-          if (((nb6<<8)+nb7) == nsectorcount)
+          if (((nb6l << 8) + nb7) == nsectorcount && nb6h == 0)
             /*it's a double sided disc, track interleaved*/
             nresult = DFS_DSD_TRACK;
           else
@@ -444,7 +459,7 @@ int beebitimagetype(FILE *hfile, int nsectorcount)
             if (nlocation < nlen)
             {
               i8271readimage(hfile, nlocation, DFS_SECTOR_SIZE);
-              if ((i8271_data[6] & 0x0F) == nb6 AND i8271_data[7] == nb7)
+              if (((i8271_data[6] & 0x0F) == nb6l) AND ((i8271_data[6] & 0xC0) == nb6h) AND (i8271_data[7] == nb7))
                 nresult = DFS_DSD_SIDE;
               else
                 nresult = DFS_SSD;
@@ -725,7 +740,7 @@ int beebitenter(void)
           beebit_graphicsmodespecifier = 21;
           break;
         }
-#ifdef VIDEOSCALE_WITH_OVERSCALE 
+#ifdef VIDEOSCALE_WITH_OVERSCALE
         i = pickascreenmode(1280,1024);
         if (i>=0)
         {
@@ -753,14 +768,14 @@ int beebitenter(void)
     if (!lexit)
     {
       /*fclose(hh1);*/
-      
+
       /*allocate space for screen buffer sprite*/
       spritealloc();
 
       videosetpalette();
       videosetscale();
       videosetplot();
-      
+
       if (video_mode != -1)
       {
         if (video_mode == 7 && local_teletextform == 0)
@@ -791,7 +806,7 @@ int beebitenter(void)
             bbcvdu(beebit_graphicsmodespecifier);
           }
         }
-        
+
         crtcteletextwidthextra();
         crtcwidthextra();
         videomodechange();

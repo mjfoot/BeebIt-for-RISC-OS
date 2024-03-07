@@ -143,6 +143,7 @@ extern void updateothertimers(int ncycles);
 extern void updatetimers(void);
 extern void updatekeyboard(void);
 extern int beebitsectorcount(FILE *hfile);
+extern int beebitimagedsd(int nimagetype);
 extern int beebitimagetype(FILE *hfile, int nsectorcount);
 extern void beebitinit(void);
 extern void beebitreset(void);

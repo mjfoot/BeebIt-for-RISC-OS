@@ -2,9 +2,9 @@
  *
  * BeebIt - BBC Micro Model B Emulator
  *
- * (C) Copyright Michael J Foot, 1998-2002
+ * (C) Copyright Michael J Foot, 1998-2024
  *
- * Email: <mjfoot@paradise.net.nz>
+ * Email: <mjfoot.nz@gmail.com>
  */
 
 /*on the 3dpool disc is a demo called BBoing! It uses an extra wide screen mode which does not get emulated here properly*/
@@ -261,9 +261,9 @@ void videosetscale(void)
   int workspacesize;
 
   videoscalechoose(beebit_graphicsmodespecifier, &choice);
-  
+
   beebit_graphicsmode = choice.mode;
-  
+
   m6845_alignmentmask = choice.alignmentmask;
   local_linelengthfloor = choice.linelengthfloor;
   local_teletextform = choice.teletextform;
@@ -283,9 +283,9 @@ void videosetscale(void)
       local_teletextlinelength = (local_teletextform >> 2) * local_linelengthfloor;
       workspacesize = 10 * local_teletextlinelength;
     }
-    
+
     workspacesize = choice.lutsize + workspacesize;
-    
+
     if (videoscale_workspace)
     {
       videoscale_workspace = realloc(videoscale_workspace, workspacesize);
@@ -294,17 +294,17 @@ void videosetscale(void)
     {
       videoscale_workspace = malloc(workspacesize);
     }
-    
+
     nlocalscreen = (int)videoscale_workspace + choice.lutsize;
     nlocalscreenlinelength = local_linelengthfloor;
-    
+
     host_graphicslutparameters = choice.graphicslutparameters;
     host_teletextlutparameters = choice.teletextlutparameters;
     host_verticalscales = choice.verticalscales;
-    
+
     videoscalegraphicsinit = choice.initgraphics;
     videoscaleteletextinit = choice.initteletext;
-    
+
     videographicsscale = choice.scalegraphics;
     videoteletextscale = choice.scaleteletext;
   }
@@ -315,10 +315,10 @@ void videosetscale(void)
       free(videoscale_workspace);
       videoscale_workspace = NULL;
     }
-    
+
     videoscalegraphicsinit = NULL;
     videoscaleteletextinit = NULL;
-    
+
     videographicsscale = NULL;
     videoteletextscale = NULL;
   }
@@ -462,7 +462,7 @@ void videohostmodevars(void)
       videoscalegraphicsinit(&host_graphicslutparameters);
     if (videoscaleteletextinit)
       videoscaleteletextinit(&host_teletextlutparameters);
-    
+
     host_scaledlinelengths.graphics =
         host_verticalscales.graphics * nhostscreenlinelength;
     host_scaledlinelengths.unroundedteletext =
@@ -3326,7 +3326,7 @@ void videoteletextdrawrow(void)
   if (beebit_cursor AND cursor_show AND cursor_on)
   {
     nscreen = nlocalscreen + borderlength + (m6845_vc * precedingrowlength) + 9 * local_teletextlinelength;
-    
+
     if (m6845_vc == cursor_y0)
     {
       if (local_teletextform & 2)
@@ -3371,13 +3371,13 @@ void videoteletextdrawrow(void)
       }
     }
   }
-  
+
   if (videoteletextscale)
   {
     borderlength = 3 * host_scaledlinelengths.graphics;
     precedingrowlength = 10 * host_scaledlinelengths.graphics;
     nscreen = nlocalscreen;
-    
+
     if (m6845_vc == 0)
     {
       nscaledscreen = nhostscreen;
@@ -3396,12 +3396,12 @@ void videoteletextdrawrow(void)
     {
       nscaledscreen = nhostscreen + borderlength + (m6845_vc * precedingrowlength);
     }
-    
+
     switch (local_teletextform >> 2)
     {
       case 1:
         host_scaledlinelength = host_scaledlinelengths.unroundedteletext;
-        
+
         for (i = 10; i > 0; i--)
         {
           videoteletextscale(nscreen, nscaledscreen);
@@ -3411,7 +3411,7 @@ void videoteletextdrawrow(void)
         break;
       case 2:
         host_scaledlinelength = host_scaledlinelengths.roundedteletext;
-        
+
         for (i = 20; i > 0; i--)
         {
           videoteletextscale(nscreen, nscaledscreen);
@@ -3421,30 +3421,30 @@ void videoteletextdrawrow(void)
         break;
       case 3:
         host_scaledlinelength = host_scaledlinelengths.roundedteletext;
-        
+
         for (i = 10; i > 0; i--)
         {
           videoteletextscale(nscreen, nscaledscreen);
           nscreen = nscreen + nlocalscreenlinelength;
           nscaledscreen = nscaledscreen + host_scaledlinelength;
-          
+
           host_scaledlinelength = host_scaledlinelengths.unroundedteletext;
-          
+
           videoteletextscale(nscreen, nscaledscreen);
           nscreen = nscreen + nlocalscreenlinelength;
           nscaledscreen = nscaledscreen + host_scaledlinelength;
-          
+
           host_scaledlinelength = host_scaledlinelengths.roundedteletext;
-          
+
           videoteletextscale(nscreen, nscaledscreen);
           nscreen = nscreen + nlocalscreenlinelength;
           nscaledscreen = nscaledscreen + host_scaledlinelength;
         }
         break;
     }
-    
+
     host_scaledlinelength = host_scaledlinelengths.graphics;
-    
+
     if (m6845_vc == 24)
     {
       /*end of frame*/
@@ -3600,7 +3600,7 @@ void videoscanline(void)
         {
           videoulasetpalette();
         }
-        
+
         if (local_teletextform == 0)
         {
           if (lteletextmode)
@@ -3754,7 +3754,7 @@ void videoscanline(void)
     {
       localrow = video_currentrow;
     }
-  
+
     if (video_scanline >= video_display0 && video_scanline < video_display1)
     {
       /*if allowed to draw a line on this pass*/
@@ -3933,14 +3933,14 @@ void videoscanline(void)
           }
         }
       }
-      
+
       if (videographicsscale)
       {
         nscreen = nlocalscreen;
         nscaledscreen = nhostscreen+(video_currentrow * host_scaledlinelength);
         videographicsscale(nscreen, nscaledscreen);
       }
-      
+
       /*increase the currently plotted row by 1*/
       video_currentrow++;
 

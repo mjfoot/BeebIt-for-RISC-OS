@@ -1342,7 +1342,7 @@ int getdisplaymodezoomavailability(int displaymode)
       n = getoverscalezoomavailabilityformode(n);
 #else
       n = get256linezoomavailabilityformode(n);
-#endif 
+#endif
     }
   }
   return n;
@@ -1355,7 +1355,7 @@ void updatezoommenuitems(int availability)
 
   citem = (czoommenu+28);
   *(citem) = 0;
-  
+
   for (i=0; i<zoomnumbercount; i++)
   {
     if (displayzoomicons[i] && (availability & (1<<i)))
@@ -1450,7 +1450,7 @@ void setoptions(int ntype)
     writeicon(hoptions,DISPLAY_MODE_EDIT,"Medium",0,0);
   else if (beebit_displaymode == DISPLAY_MODE_HIGH)
     writeicon(hoptions,DISPLAY_MODE_EDIT,"High",0,0);
-  else if (i>=0 && i<screenmoderecordcount) 
+  else if (i>=0 && i<screenmoderecordcount)
     writeicon(hoptions,DISPLAY_MODE_EDIT,screenmodeicons[i],0,0);
   else
     writeicon(hoptions,DISPLAY_MODE_EDIT,"Auto",0,0);
@@ -1862,16 +1862,16 @@ void select(void)
       nchar = cdisplaymenu+40+(nmain*24);
     }
     writeicon(hoptions,DISPLAY_MODE_EDIT,nchar,0,0);
-    
+
     i = finddisplaymodebyicon(nchar);
     n = getdisplaymodezoomavailability(i);
     nchar = readicon(hoptions,DISPLAY_ZOOM_EDIT);
-    
+
     for (j=0; j<zoomnumbercount; j++)
     {
       if (!displayzoomicons[j])
         continue;
-      
+
       if (strcmp(nchar,displayzoomicons[j]) == 0)
         break;
     }
@@ -2189,7 +2189,7 @@ void button(void)
         {
           if (!displayzoomicons[i])
             continue;
-          
+
           if (strcmp(cbuffer,displayzoomicons[i]) == 0)
           {
             beebit_displayzoom = DISPLAY_ZOOM_FIRST_IN_TABLE+i;
@@ -2400,8 +2400,10 @@ void message(void)
 {
   int naction, n, nlen;
   int nwindow, nicon, nfiletype;
+  /*char cfileext[4];*/
   char *cpointer;
   FILE *hfile;
+
   naction = getword(b+16);
   switch (naction)
   {
@@ -2444,9 +2446,14 @@ void message(void)
       }
       else if (nwindow == hconfigdrives)
       {
-
         if (nfiletype != 0x1000 AND nfiletype != 0x2000)
         {
+          /*nlen = strlen(b+44);*/
+          /*cpointer = strrchr(b+44, 0x2F);*/ /*extension separator / */
+          /*if (cpointer == NULL)
+            cfileext[0] = NULL;
+          else
+            strncpy(cfileext, cpointer+1, 4);*/
           switch (nicon)
           {
             case 4:
@@ -2455,7 +2462,7 @@ void message(void)
               n = beebitsectorcount(hfile);
               n = beebitimagetype(hfile,n);
               fclose(hfile);
-              if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+              if (beebitimagedsd(n) == TRUE)
                 iconbitset(nwindow,6,22);
               else
                 iconbitclear(nwindow,6,22);
@@ -2467,7 +2474,7 @@ void message(void)
               n = beebitsectorcount(hfile);
               n = beebitimagetype(hfile,n);
               fclose(hfile);
-              if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+              if (beebitimagedsd(n) == TRUE)
               {
                 writeicon(nwindow,4,b+44,0,0);
                 iconbitset(nwindow,nicon,22);
@@ -2484,7 +2491,7 @@ void message(void)
               n = beebitsectorcount(hfile);
               n = beebitimagetype(hfile,n);
               fclose(hfile);
-              if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+              if (beebitimagedsd(n) == TRUE)
                 iconbitset(nwindow,11,22);
               else
                 iconbitclear(nwindow,11,22);
@@ -2496,7 +2503,7 @@ void message(void)
               n = beebitsectorcount(hfile);
               n = beebitimagetype(hfile,n);
               fclose(hfile);
-              if (n == DFS_DSD_TRACK OR n == DFS_DSD_SIDE)
+              if (beebitimagedsd(n) == TRUE)
               {
                 writeicon(nwindow,9,b+44,0,0);
                 iconbitset(nwindow,nicon,22);
@@ -3068,7 +3075,7 @@ void setup(void)
               if (*cnext <= 48 || *cnext > 57)
                 break;
               yres = atoi(cnext);
-            
+
               for (i=0; i<screenmoderecordcount; i++)
               {
                 if (xres == screenmoderecords[i].xres && yres == screenmoderecords[i].yres)
@@ -3099,7 +3106,7 @@ void setup(void)
           {
             if (!displayzoomicons[i])
               continue;
-            
+
             if (strlen(displayzoomicons[i]) != j)
               continue;
 
@@ -3591,7 +3598,7 @@ void init(void)
   nicon = regs.r[0];
 
   detectscreenmodes();
-  
+
   for (i=0,zoomnumbercount=0; displayzoomicons[i] != (char*)-1; i++)
   {
     zoomnumbercount++;
