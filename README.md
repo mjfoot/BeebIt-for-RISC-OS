@@ -1,5 +1,4 @@
-# BeebIt
-BeebIt - BBC Micro Computer Emulator for RISC OS
+# BeebIt - BBC Micro Computer Emulator for RISC OS
 
 BeebIt is a freeware BBC Micro computer emulator for RISC OS versions 3.00 and above.
 It emulates the Acorn BBC Model B, BBC Model B+ and BBC Master range of computers.
@@ -11,3 +10,5 @@ BeebIt will not work as it stands. You will need a copy of the OS and BASIC ROM 
 Pace Micro Technology Limited still hold the copyright over these ROMs and therefore they cannot be distributed with this emulator.
 
 Please read the !Help file for more information.
+
+Binaries can be got from https://mjfoot.netlify.app/bbc
