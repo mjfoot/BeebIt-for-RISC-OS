@@ -48,14 +48,10 @@
   ;IMPORT |r6502_z|
   ;IMPORT |r6502_c|
   IMPORT |r6502_cyclestogo|
-  ;IMPORT |r6502read|
-  IMPORT |r6502readm|
-  ;IMPORT |r6502writemem|
-  IMPORT |r6502writem|
+  IMPORT |r6502read|
+  IMPORT |r6502write|
   IMPORT |r65c12opcodes|
 
-  ;IMPORT |sheilaread|
-  ;IMPORT |sheilawrite|
   IMPORT |updatetimers|
   IMPORT |adcbcd|
   IMPORT |r65c12loadregs|
@@ -104,7 +100,7 @@
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFPREINDEXED
   ADDRESSOFPREINDEXED_M ;r0 ;4 cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   ;LDR r12,=r6502_ps ;pointer to r6502_ps
   ;LDRB rps,[r12] ;load r6502_ps
   ANDS r1,rps,#DFLAG
@@ -141,11 +137,11 @@ r65c12opcode61_2
   ;STMFD sp!,{r0-r12,lr}
   ADDRESSOFPREINDEXED_M ;r0 ;4 cycles
   MOV r2,r0 ;store address
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502ROR r0 ;1 cycle
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMM ;1 cycle
+  WRITEMEM ;1 cycle
 
   ANDS r1,rps,#DFLAG
   BNE r65c12opcode63_2
@@ -355,7 +351,7 @@ r65c12opcode6C_2
   MOV r3,r0 ;store address
 
   ;BL r6502readm ;lo
-  READMEMM ;lo
+  READMEM ;lo
   MOV r2,r0 ;lo
 
   MOV r0,r3
@@ -369,7 +365,7 @@ r65c12opcode6C_2
   ORR r0,r0,r1
 
   ;BL r6502readm ;hi
-  READMEMM ;hi
+  READMEM ;hi
 
   ADD rpc,r2,r0,LSL#8 ;rpc=lo+(hi<<8)
   CPU_CYCLES 3
@@ -380,7 +376,7 @@ r65c12opcode6C_2
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   ;LDR r12,=r6502_ps ;pointer to r6502_ps
   ;LDRB rps,[r12] ;load r6502_ps
   ANDS r1,rps,#DFLAG
@@ -410,11 +406,11 @@ r65c12opcode6D_2
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
   MOV r2,r0 ;store address
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502ROR r0 ;2 cycles
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMM ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 4
   ;LDMFD sp!,{r0-r4,rps-r12,pc}
   ;MOV pc,lr
@@ -425,11 +421,11 @@ r65c12opcode6D_2
   ;STMFD sp!,{r0-r12,lr}
   ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
   MOV r2,r0 ;store address
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502ROR r0
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMM ;1 cycle
+  WRITEMEM ;1 cycle
 
   ANDS r1,rps,#DFLAG
   BNE r65c12opcode6F_2

@@ -53,16 +53,11 @@
   ;IMPORT |r6502_c|
   IMPORT |r6502_cyclestogo|
   IMPORT |r6502read|
-  ;IMPORT |r6502writemem|
   IMPORT |r6502write|
-  IMPORT |r6502readbp|
-  IMPORT |r6502writebp|
   IMPORT |r6512loadregs|
   IMPORT |r6512saveregs|
   IMPORT |r6512opcodes|
 
-  ;IMPORT |sheilaread|
-  ;IMPORT |sheilawrite|
   IMPORT |adcbcd|
 
 ; Export global symbols
@@ -73,7 +68,6 @@
   EXPORT |r6512opcode83|
   EXPORT |r6512opcode84|
   EXPORT |r6512opcode85|
-  ;EXPORT |r6512opcode85_ram|
   EXPORT |r6512opcode86|
   EXPORT |r6512opcode87|
   EXPORT |r6512opcode88|
@@ -101,7 +95,7 @@
   ADDRESSOFPREINDEXED_BP ;r0 ;4 cycles
   ;R6502STA ;r1=r6502_a
   MOV r1,ra ;1 cycle
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,rps-r12,pc}
   ;MOV pc,lr
@@ -125,7 +119,7 @@
   ;LDR r11,=r6502_x
   ;LDRB rx,[r11]
   AND r1,ra,rx ;1 cycle
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,ra,rx,rpc-r12,pc}
   ;MOV pc,lr
@@ -152,20 +146,6 @@
   ;LDMFD sp!,{r0-r2,rps-r12,pc}
   ;MOV pc,lr
   R6512NEXTOPCODE
-
-;|r6512opcode85_ram|
-  ;STA
-  ;STMFD sp!,{r0-r2,rps-r12,lr}
-  ;CMP rpc,#&3000
-  ;LDRGE r12,=shadow
-;  ADDRESSOFZEROPAGE_P r0
-  ;R6502STA ;r1=r6502_a
-  ;LDR r12,=memory
-;  STRB ra,[r12,r0]
-;  CPU_CYCLES 3
-  ;LDMFD sp!,{r0-r2,rps-r12,pc}
-  ;MOV pc,lr
-;  R6512NEXTOPCODE
 
 |r6512opcode86|
   ;STX
@@ -248,7 +228,7 @@
   ;STY
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
   MOV r1,ry ;1 cycle
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 2
   R6512NEXTOPCODE
 
@@ -256,7 +236,7 @@
   ;STA
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
   MOV r1,ra ;1 cycle
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 2
   R6512NEXTOPCODE
 
@@ -265,7 +245,7 @@
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
   ;R6502STX ;r1=r6502_x
   MOV r1,rx ;1 cycle
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 2
   R6512NEXTOPCODE
 
@@ -278,7 +258,7 @@
   ;LDR r11,=r6502_x
   ;LDRB rx,[r11]
   AND r1,ra,rx ;1 cycle
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,ra,rx,rpc-r12,pc}
   ;MOV pc,lr

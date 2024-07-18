@@ -622,19 +622,13 @@ int beebitenter(void)
     switch (beebit_machinetype)
     {
       case MACHINE_MODELB:
-        r6502read = r6502readb;
-        r6502write = r6502writeb;
         cpu_execute = r6502execute;
         break;
       case MACHINE_MODELBPLUS:
-        r6502read = r6502readbp;
-        r6502write = r6502writebp;
         cpu_execute = r6512execute;
         break;
       case MACHINE_MASTER128:
       case MACHINE_COMPACT:
-        r6502read = r6502readm;
-        r6502write = r6502writem;
         cpu_execute = r65c12execute;
         if (beebit_machinetype == MACHINE_MASTER128)
         {
@@ -661,8 +655,6 @@ int beebitenter(void)
         }
         break;
       default:
-        r6502read = r6502readb;
-        r6502write = r6502writeb;
         break;
     }
 

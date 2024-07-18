@@ -50,8 +50,6 @@
   IMPORT |r6502_cyclestogo|
   IMPORT |r6502read|
   IMPORT |r6502write|
-  IMPORT |r6502readbp|
-  IMPORT |r6502writebp|
   IMPORT |beebit_irq|
   ;IMPORT |r6522sysvia_irq|
   ;IMPORT |r6522usrvia_irq|
@@ -150,7 +148,7 @@ r6512opcode30end
   ;STMFD sp!,{r0-r2,ra,ry,rps-r12,lr}
   ;VALUEOFPOSTINDEXEDY
   ADDRESSOFPOSTINDEXEDY_BP ;r0 ;3+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502AND ;1 cycle
   CPU_CYCLES 2
@@ -170,12 +168,12 @@ r6512opcode30end
   ;STMFD sp!,{r0-ra,rps,r11,r12,lr}
   ADDRESSOFPOSTINDEXEDY_BP ;r0 ;3+ cycles
   MOV r2,r0 ;store address
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502RLA ;3 cycles
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 5
   ;LDMFD sp!,{r0-ra,rps,r11,r12,pc}
   ;MOV pc,lr
@@ -238,7 +236,7 @@ r6512opcode30end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEYPLUS
   ADDRESSOFABSOLUTEYPLUS_BP ;r0 ;2+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502AND ;1 cycle
   CPU_CYCLES 2
@@ -259,12 +257,12 @@ r6512opcode30end
   ;STMFD sp!,{r0-ra,rps,r11,r12,lr}
   ADDRESSOFABSOLUTEY_BP ;r0 ;3 cycles
   MOV r2,r0 ;store address
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502RLA ;2 cycles
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 4
   ;LDMFD sp!,{r0-ra,rps,r11,r12,pc}
   ;MOV pc,lr
@@ -284,7 +282,7 @@ r6512opcode30end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEXPLUS
   ADDRESSOFABSOLUTEXPLUS_BP ;r0 ;2+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502AND ;1 cycle
   CPU_CYCLES 2
@@ -297,12 +295,12 @@ r6512opcode30end
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTEX_BP ;r0 ;3 cycles
   MOV r2,r0 ;store address
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502ROL r0 ;2 cycles
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 4
   ;LDMFD sp!,{r0-r4,rps-rpc,r10-r12,pc}
   ;MOV pc,lr
@@ -313,11 +311,11 @@ r6512opcode30end
   ;STMFD sp!,{r0-ra,rps,r11,r12,lr}
   ADDRESSOFABSOLUTEX_BP ;r0 ;3 cycles
   MOV r2,r0 ;store address
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   R6502RLA ;2 cycles
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 4
   ;LDMFD sp!,{r0-ra,rps,r11,r12,pc}
   ;MOV pc,lr

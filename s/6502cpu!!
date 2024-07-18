@@ -298,9 +298,7 @@
   IMPORT |r6502_x|
   IMPORT |r6502_y|
   IMPORT |r6502_cyclestogo|
-  ;IMPORT |r6502read|
-  IMPORT |r6502readbp|
-  ;IMPORT |r6502write|
+  IMPORT |r6502read|
   IMPORT |beebit_trace|
   IMPORT |beebit_romsel|
   IMPORT |beebit_acccon|
@@ -310,7 +308,6 @@
   EXPORT |r6502loadregs|
   EXPORT |r6502saveregs|
   EXPORT |r6502execute|
-  EXPORT |r6502execute_ram|
   ;EXPORT |r6502adc|
   ;EXPORT |r6502sbc|
   EXPORT |r6502irq|
@@ -735,151 +732,6 @@ r6502execute_loop3
   ;SUB r0,r0,r1
   BL r6502saveregs
   ;SWI OS_WriteI+90
-  LDMFD sp!,{r0-r12,pc}
-
-;
-;rockwell 6502 cpu
-;
-|r6502execute_ram|
-  STMFD sp!,{r0-r12,lr}
-  BL r6502loadregs
-
-r6502execute_ram_loop
-  ;-------------------
-  ;CMP rpc,#&400
-  ;BLT r6502execute_ram_loop2
-  ;CMP rpc,#&800
-  ;BGE r6502execute_ram_loop2
-
-  ;LDR r11,=beebit_trace ;trace
-  ;LDR r0,[r11]
-
-  ;CMP r0,#00
-  ;BEQ r6502execute_ram_loop2
-
-  ;MOV r0, rpc ;get RPC
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex4 ;BinaryToDecimal
-  ;SWI OS_Write0
-  ;SWI OS_WriteI+32
-
-  ;LDRB r0,[r12,rpc] ;get opcode
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-
-  ;SWI OS_NewLine
-  ;-------------------
-
-r6502execute_ram_loop2
-  ;CMP rpc,#&3000
-  ;LDRLTB r0,[r12,rpc] ;get opcode
-  ;MOVGE r0,rpc
-  ;BLGE r6502readbp ;=r0
-  MOV r0,rpc
-  BL r6502readbp ;=r0
-
-  ;---------------------
-  ;LDR r11,=beebit_trace ;trace
-  ;LDR r2,[r11]
-
-  ;CMP r2,#00
-  ;BEQ r6502execute_ram_loop3
-
-  ;CMP rpc,#&400
-  ;BLT r6502execute_ram_loop3
-  ;CMP rpc,#&800
-  ;BGE r6502execute_ram_loop3
-
-  ;STMFD sp!,{r0}
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-  ;LDMFD sp!,{r0}
-  ;--------------------
-
-r6502execute_ram_loop3
-  ADD rpc,rpc,#1
-
-  LDR r1,=r6502opcodes
-  ;STMFD sp!,{lr}
-  MOV lr,pc
-  LDR pc,[r1,r0,LSL#2]
-  ;LDMFD sp!,{lr}
-
-  ;------------------
-  ;LDR r11,=beebit_trace ;trace
-  ;LDR r0,[r11]
-
-  ;CMP r0,#00
-  ;BEQ r6502execute_ram_loop4
-  ;CMP rpc,#&400
-  ;BLT r6502execute_ram_loop4
-  ;CMP rpc,#&800
-  ;BGE r6502execute_ram_loop4
-
-  ;SWI OS_WriteI+32
-  ;MOV r0, ra ;a
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-
-  ;SWI OS_WriteI+32
-  ;MOV r0, rx ;x
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-
-  ;SWI OS_WriteI+32
-  ;MOV r0, ry ;y
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-
-  ;SWI OS_WriteI+32
-  ;MOV r0, rps ;program status
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-
-  ;SWI OS_WriteI+32
-  ;MOV r0, rsp ;sp
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-
-  ;SWI OS_WriteI+32
-  ;LDR r0,=beebit_romsel
-  ;LDR r0,[r0]
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-
-  ;SWI OS_WriteI+32
-  ;LDR r0,=beebit_acccon
-  ;LDR r0,[r0]
-  ;LDR r1,=buffer
-  ;MOV r2,#16
-  ;SWI OS_ConvertHex2 ;BinaryToDecimal
-  ;SWI OS_Write0
-
-  ;SWI OS_NewLine
-  ;--------------------
-
-r6502execute_ram_loop4
-  CMP rcycles,#0
-  BGT r6502execute_ram_loop
-
-  BL r6502saveregs
   LDMFD sp!,{r0-r12,pc}
 
 |r6502opcodes|

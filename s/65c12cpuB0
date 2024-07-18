@@ -48,14 +48,9 @@
   ;IMPORT |r6502_c|
   IMPORT |r6502_cyclestogo|
   IMPORT |r6502read|
-  IMPORT |r6502readm|
-  IMPORT |r6502write|
   IMPORT |r65c12loadregs|
   IMPORT |r65c12saveregs|
   IMPORT |r65c12opcodes|
-
-  ;IMPORT |sheilaread|
-  ;IMPORT |sheilawrite|
 
 ; Export global symbols
 
@@ -157,7 +152,7 @@ r65c12opcodeB0end
 ;  SWI OS_WriteI+32
 ;  LDMFD sp!,{r0}
 
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
 
 ;  STMFD sp!,{r0}
   ;MOV r0, ry ;y
@@ -178,7 +173,7 @@ r65c12opcodeB0end
   ;LDA
   ;STMFD sp!,{lr}
   ADDRESSOFINDZEROPAGE_M
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDA
   CPU_CYCLES 5
   ;LDMFD sp!,{pc}
@@ -190,7 +185,7 @@ r65c12opcodeB0end
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
   ;VALUEOFPOSTINDEXEDY
   ADDRESSOFPOSTINDEXEDY_M ;r0 ;3+ cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0
   MOV ra,r0 ;1 cycle
@@ -265,7 +260,7 @@ r65c12opcodeB0end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEYPLUS
   ADDRESSOFABSOLUTEYPLUS_M ;r0 ;2+ cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r12,pc}
@@ -295,7 +290,7 @@ r65c12opcodeB0end
   ;STMFD sp!,{lr}
   ;VALUEOFABSOLUTEYPLUS
   ADDRESSOFABSOLUTEYPLUS_M ;r0 ;2+ cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   ANDS ra,r0,rsp ;r0 = r0 and sp
   ;STRB ra,[r12] ;save a
   ;set psr
@@ -315,7 +310,7 @@ r65c12opcodeB0end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEXPLUS
   ADDRESSOFABSOLUTEXPLUS_M ;r0 ;2+ cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDY ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r12,pc}
@@ -326,7 +321,7 @@ r65c12opcodeB0end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEXPLUS
   ADDRESSOFABSOLUTEXPLUS_M ;r0 ;2+ cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r12,pc}
@@ -337,7 +332,7 @@ r65c12opcodeB0end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEYPLUS
   ADDRESSOFABSOLUTEYPLUS_M ;r0 ;2+ cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDX ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r12,pc}
@@ -349,7 +344,7 @@ r65c12opcodeB0end
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
   ;VALUEOFABSOLUTEYPLUS ;r0=ra
   ADDRESSOFABSOLUTEYPLUS_M ;r0 ;2+ cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0
   MOV ra,r0

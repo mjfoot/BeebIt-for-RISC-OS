@@ -336,8 +336,8 @@ char r6502_a, r6502_x, r6502_y; /*3 registers A,X,Y*/
 int r6502_pc; /*program counter*/
 char r6502_sp; /*stack pointer (MUST be a char otherwise we'll blow the stack!)*/
 char r6502_ps; /*processor status*/
-char (*r6502read)(int naddress);
-void (*r6502write)(int naddress, char nvalue);
+char (*r6502readoffset[0x10])(int naddress);
+void (*r6502writeoffset[0x10])(int naddress, char nvalue);
 void (*cpu_execute)(void);
 
 /*int r6502_cyclestotal;*/
@@ -392,367 +392,308 @@ void r6502badopcode(void)
 }
 
 #ifndef __RISCOS__
-char r6502readb(int naddress)
+char r6502read(int naddress)
+{
+  naddress &= 0xFFFF;
+  return r6502readoffset[naddress>>10](naddress);
+}
+
+char r6502read0000(int naddress)
+{
+  /*&0000 - &2FFF (RAM)*/
+  char nvalue = memory[naddress];
+  return nvalue;
+}
+
+char r6502read3000(int naddress)
+{
+  /*&3000 - &7FFF (RAM)*/
+  char nvalue = memory[naddress];
+  return nvalue;
+}
+
+char r6502read8000(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = memory[naddress];
+  return nvalue;
+}
+
+char r6502readC000(int naddress)
+{
+  /*&C000 - &EFFF (OS)*/
+  char nvalue = memory[naddress];
+  return nvalue;
+}
+
+char r6502readbF000(int naddress)
 {
   /*bbc b*/
-  char nresult;
-  if (naddress < 0x3000)
+  char nvalue;
+  if (naddress < 0xFC00)
   {
-    /*&0000 - &2FFF (RAM)*/
-    nresult = memory[naddress];
-  }
-  else if (naddress < 0x8000)
-  {
-    /*&3000 - &7FFF (SHADOW RAM)*/
-    /*if (beebit_acccon & 0x80)
-      nresult = shadow[naddress];
-    else*/
-      nresult = memory[naddress];
-  }
-  else if (naddress < 0xFC00)
-  {
-    /*&8000 - &FBFF (RAM)*/
-    nresult = memory[naddress];
+    /*&F000 - &FBFF (OS)*/
+    nvalue = memory[naddress];
   }
   else if (naddress < 0xFE00)
   {
     /*&FC00 - &FDFF (FRED, JIM)*/
     CPU_CYCLES(2)
-    nresult = 0xFE;
+    nvalue = 0xFE;
   }
   else if (naddress < 0xFF00)
-    /*FE00 - &FEFF (SHIELA)*/
-    nresult = sheilaread(naddress);
+    /*FE00 - &FEFF (SHEILA)*/
+    nvalue = sheilaread_b(naddress);
   else
-    nresult = memory[(naddress & 0xFFFF)];
-  return (nresult);
+    nvalue = memory[(naddress & 0xFFFF)];
+  return nvalue;
 }
-#endif
 
-#ifndef __RISCOS__
-char r6502readbp(int naddress)
+char r6502readbp3000_ram(int naddress)
 {
   /*bbc b+*/
-  char nresult;
-  if (naddress < 0x3000)
+  /*&3000 - &7FFF*/
+  char nvalue;
+  /*shadow mode*/
+  if ((r6502_pc >= 0xC000 AND r6502_pc < 0xE000)
+    OR ((beebit_romsel & 0x80) AND r6502_pc >= 0xA000 AND r6502_pc < 0xB000))
+    nvalue = shadow[naddress];
+  else
+    nvalue = memory[naddress];
+  return nvalue;
+}
+
+char r6502readbp8000_ram(int naddress)
+{
+  /*bbc b+*/
+  /*&8000 - &AFFF (SHADOW RAM)*/
+  char nvalue = shadow[naddress - 0x8000];
+  return nvalue;
+}
+
+char r6502readbpF000(int naddress)
+{
+  /*bbc b+*/
+  char nvalue;
+  if (naddress < 0xFC00)
   {
-    /*&0000 - &2FFF (RAM)*/
-    nresult = memory[naddress];
-  }
-  else if (naddress < 0x8000)
-  {
-    /*&3000 - &7FFF*/
-    if (beebit_acccon & 0x80)
-    {
-      /*shadow mode*/
-      if ((r6502_pc >= 0xC000 AND r6502_pc < 0xE000)
-        OR ((beebit_romsel & 0x80) AND r6502_pc >= 0xA000 AND r6502_pc < 0xB000))
-        nresult = shadow[naddress];
-      else
-        nresult = memory[naddress];
-    }
-    else
-      nresult = memory[naddress];
-  }
-  else if (naddress < 0xB000)
-  {
-    /*&8000 - &AFFF*/
-    if (beebit_romsel & 0x80)
-      nresult = shadow[naddress];
-    else
-      nresult = memory[naddress];
-  }
-  else if (naddress < 0xFC00)
-  {
-    /*&B000 - &FBFF*/
-    nresult = memory[naddress];
+    /*&F000 - &FBFF (OS)*/
+    nvalue = memory[naddress];
   }
   else if (naddress < 0xFE00)
   {
     /*&FC00 - &FDFF (FRED, JIM)*/
     CPU_CYCLES(2)
-    nresult = 0xFE;
+    nvalue = 0xFE;
   }
   else if (naddress < 0xFF00)
-    /*FE00 - &FEFF (SHIELA)*/
-    nresult = sheilaread(naddress);
+    /*FE00 - &FEFF (SHEILA)*/
+    nvalue = sheilaread_bp(naddress);
   else
-    nresult = memory[(naddress & 0xFFFF)];
-  return (nresult);
+    nvalue = memory[(naddress & 0xFFFF)];
+  return nvalue;
 }
-#endif
 
-#ifndef __RISCOS__
-char r6502readm(int naddress)
+char r6502readm3000_x(int naddress)
 {
   /*bbc master 128*/
-  char nresult;
-  if (naddress < 0x3000)
+  /*&3000 - &7FFF (RAM)*/
+  /*LYNNE (ACCCON b2) (X)*/
+  char nvalue = shadow[naddress];
+  return nvalue;
+}
+
+char r6502readm3000_e(int naddress)
+{
+  /*bbc master 128*/
+  /*&3000 - &7FFF (RAM)*/
+  char nvalue;
+  /*(ACCCON b1) (E)*/
+  if (r6502_pc >= 0xC000 AND r6502_pc < 0xE000)
+    nvalue = shadow[naddress];
+  else
+    nvalue = memory[naddress];
+  return nvalue;
+}
+
+char r6502readm8000_ram(int naddress)
+{
+  /*bbc master 128*/
+  /*&8000 - &8FFF*/
+  /*ANDY (ROMSEL b7)*/
+  char nvalue = shadow[naddress - 0x8000];
+  return nvalue;
+}
+
+char r6502readmC000_y(int naddress)
+{
+  /*bbc master 128*/
+  /*&C000 - &DFFF*/
+  /*HAZEL (ACCCON b3) (Y)*/
+  char nvalue = shadow[naddress - 0xB000];
+  return nvalue;
+}
+
+char r6502readmF000(int naddress)
+{
+  /*bbc master 128*/
+  char nvalue;
+  if (naddress < 0xFC00)
   {
-    /*&0000 - &2FFF (RAM)*/
-    nresult = memory[naddress];
-  }
-  else if (naddress < 0x8000)
-  {
-    /*&3000 - &7FFF (RAM)*/
-    if (beebit_acccon & 0x04)
-    {
-      /*LYNNE (X)*/
-      nresult = shadow[naddress];
-    }
-    else
-      nresult = memory[naddress];
-  }
-  else if (naddress < 0x9000)
-  {
-    /*&8000 - &8FFF*/
-    if (beebit_romsel & 0x80)
-    {
-      /*RAM in ROMSEL (ANDY)*/
-      nresult = shadow[naddress];
-    }
-    else
-      nresult = memory[naddress];
-  }
-  else if (naddress < 0xC000)
-  {
-    /*&9000 - &BFFF*/
-    nresult = memory[naddress];
-  }
-  else if (naddress < 0xE000)
-  {
-    /*&C000 - &DFFF*/
-    if (beebit_acccon & 0x08)
-    {
-      /*HAZEL (Y)*/
-      nresult = shadow[naddress];
-    }
-    else
-      nresult = memory[naddress];
-  }
-  else if (naddress < 0xFC00)
-  {
-    /*&E000-&FBFF*/
-    nresult = memory[naddress];
+    /*&F000-&FBFF (OS)*/
+    nvalue = memory[naddress];
   }
   else if (naddress < 0xFE00)
   {
     /*&FC00 - &FDFF (FRED, JIM)*/
     CPU_CYCLES(2)
-    nresult = 0xFE;
+    nvalue = 0xFE;
   }
   else if (naddress < 0xFF00)
-    /*FE00 - &FEFF (SHIELA)*/
-    nresult = sheilaread(naddress);
+    /*FE00 - &FEFF (SHEILA)*/
+    nvalue = sheilaread_m(naddress);
   else
-    nresult = memory[(naddress & 0xFFFF)];
-  return (nresult);
+    nvalue = memory[(naddress & 0xFFFF)];
+  return nvalue;
 }
-#endif
 
-#ifndef __RISCOS__
-void r6502writeb(int naddress, char nvalue)
+
+void r6502write(int naddress, char nvalue)
 {
-  /*bbc b*/
-  if (naddress < 0x3000)
-  {
-    /*&0000 - &2FFF (RAM)*/
-    memory[naddress] = nvalue;
-  }
-  else if (naddress < 0x8000)
-  {
-    /*&3000 - &7FFF (RAM)*/
-    if (beebit_acccon & 0x80)
-      shadow[naddress] = nvalue;
-    else
-      memory[naddress] = nvalue;
-    fprintf(htrace,"ADDR=&%X CAL=&%X\n",naddress, nvalue);
-  }
-  else if (naddress < 0xC000)
-  {
-    /*&8000 - &BFFF (SIDEWAYS RAM)*/
-    if (beebit_romwritable[beebit_romselected])
-    {
-      /*check sideways ram write enabled*/
-      memory[naddress] = nvalue;
-      beebit_rommodified = TRUE;
-    }
-  }
-  else if (naddress < 0xFC00)
-  {
-    /*&C000 - &FBFF (OS - should not be allowed!)*/
-    /*memory[naddress] = nvalue;*/
-  }
-  else if (naddress < 0xFE00)
-  {
-    /*&FC00 - &FDFF (FRED, JIM)*/
-    r6502_cyclestogo -= 4;
-  }
-  else if (naddress < 0xFF00)
-    sheilawrite(naddress,nvalue);
-  else if (naddress < 0x10000)
-  {
-    /*not allowed*/
-  }
-  else
-  {
-    /*address wrap around*/
-    memory[(naddress & 0xFFFF)] = nvalue;
-  }
+  r6502writeoffset[naddress>>10](naddress, nvalue);
 }
-#endif
 
-#ifndef __RISCOS__
-void r6502writebp(int naddress, char nvalue)
+void r6502write0000(int naddress, char nvalue)
 {
-  /*bbc b+*/
-  if (naddress < 0x3000)
+  /*&0000 - &2FFF (RAM)*/
+  memory[naddress] = nvalue;
+}
+
+void r6502write3000(int naddress, char nvalue)
+{
+  /*&3000 - &7FFF (RAM)*/
+  memory[naddress] = nvalue;
+}
+
+void r6502write8000(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[beebit_romselected])
   {
-    /*&0000 - &2FFF (RAM)*/
-    memory[naddress] = nvalue;
-  }
-  else if (naddress < 0x8000)
-  {
-    /*&3000 - &7FFF (RAM)*/
-    if (beebit_acccon & 0x80)
-    {
-      /*shadow mode*/
-      if ((r6502_pc >= 0xC000 AND r6502_pc < 0xE000)
-        OR ((beebit_romsel & 0x80) AND r6502_pc >= 0xA000 AND r6502_pc < 0xB000))
-        shadow[naddress] = nvalue;
-      else
-        memory[naddress] = nvalue;
-    }
-    else
-      memory[naddress] = nvalue;
-  }
-  else if (naddress < 0xB000)
-  {
-    /*&8000 - &AFFF (ROM)*/
-    if (beebit_romsel & 0x80)
-      shadow[naddress] = nvalue;
-    else
-    {
-      /*check sideways ram write enabled*/
-      if (beebit_romwritable[beebit_romselected])
-      {
-        memory[naddress] = nvalue;
-        beebit_rommodified = TRUE;
-      }
-    }
-  }
-  else if (naddress < 0xC000)
-  {
-    /*&B000 - &BFFF (ROM)*/
     /*check sideways ram write enabled*/
-    if (beebit_romwritable[beebit_romselected])
-    {
-      memory[naddress] = nvalue;
-      beebit_rommodified = TRUE;
-    }
+    memory[naddress] = nvalue;
+    beebit_rommodified = TRUE;
   }
-  else if (naddress < 0xFC00)
+}
+
+void r6502writeC000(int naddress, char nvalue)
+{
+  /*&C000 - &EFFF (OS - should not be allowed!)*/
+}
+
+void r6502writebF000(int naddress, char nvalue)
+{
+  /*bbc b*/
+  if (naddress < 0xFC00)
   {
-    /*&C000 - &FBFF (OS - should not be allowed!)*/
-    /*memory[naddress] = nvalue;*/
+    /*&F000 - &FBFF (OS - should not be allowed!)*/
   }
   else if (naddress < 0xFE00)
   {
     /*&FC00 - &FDFF (FRED, JIM)*/
-    r6502_cyclestogo -= 2;
+    CPU_CYCLES(2);
   }
   else if (naddress < 0xFF00)
-    sheilawrite(naddress,nvalue);
-  else if (naddress < 0x10000)
-  {
-    /*not allowed*/
-  }
-  else
-    /*address wrap around*/
-    memory[(naddress & 0xFFFF)] = nvalue;
+    sheilawrite_b(naddress,nvalue);
+  /*else not allowed*/
 }
-#endif
 
-#ifndef __RISCOS__
-void r6502writem(int naddress, char nvalue)
+void r6502writebp3000_ram(int naddress, char nvalue)
+{
+  /*bbc b+*/
+  /*&3000 - &7FFF (RAM)*/
+  /*shadow mode*/
+  if ((r6502_pc >= 0xC000 AND r6502_pc < 0xE000)
+    OR ((beebit_romsel & 0x80) AND r6502_pc >= 0xA000 AND r6502_pc < 0xB000))
+    shadow[naddress] = nvalue;
+  else
+    memory[naddress] = nvalue;
+}
+
+void r6502writebp8000_ram(int naddress, char nvalue)
+{
+  /*bbc b+*/
+  /*&8000 - &AFFF (SHADOW RAM)*/
+  shadow[naddress - 0x8000] = nvalue;
+}
+
+void r6502writebpF000(int naddress, char nvalue)
+{
+  /*bbc b+*/
+  if (naddress < 0xFC00)
+  {
+    /*&F000 - &FBFF (OS - should not be allowed!)*/
+  }
+  else if (naddress < 0xFE00)
+  {
+    /*&FC00 - &FDFF (FRED, JIM)*/
+    CPU_CYCLES(2);
+  }
+  else if (naddress < 0xFF00)
+    sheilawrite_bp(naddress,nvalue);
+  /*else not allowed*/
+}
+
+void r6502writem3000_x(int naddress, char nvalue)
 {
   /*bbc master 128*/
-  if (naddress < 0x3000)
-  {
-    /*&0000 - &2FFF (RAM)*/
+  /*&3000 - &7FFF (RAM)*/
+  /*LYNNE (ACCCON b2) (X)*/
+  nvalue = shadow[naddress];
+}
+
+void r6502writem3000_e(int naddress, char nvalue)
+{
+  /*bbc master 128*/
+  /*&3000 - &7FFF (RAM)*/
+  /*(ACCCON b1) (E)*/
+  if (r6502_pc >= 0xC000 AND r6502_pc < 0xE000)
+    shadow[naddress] = nvalue;
+  else
     memory[naddress] = nvalue;
-  }
-  else if (naddress < 0x8000)
+}
+
+void r6502writem8000_ram(int naddress, char nvalue)
+{
+  /*bbc master 128*/
+  /*&8000 - &8FFF*/
+  /*ANDY (ROMSEL b7)*/
+  shadow[naddress - 0x8000] = nvalue;
+}
+
+void r6502writemC000_y(int naddress, char nvalue)
+{
+  /*bbc master 128*/
+  /*&C000 - &DFFF*/
+  /*HAZEL (ACCCON b3) (Y)*/
+  shadow[naddress - 0xB000] = nvalue;
+}
+
+void r6502writemF000(int naddress, char nvalue)
+{
+  /*bbc master 128*/
+  if (naddress < 0xFC00)
   {
-    if (beebit_acccon & 0x04)
-    {
-      /*LYNNE (X)*/
-      shadow[naddress] = nvalue;
-    }
-    else
-      memory[naddress] = nvalue;
-  }
-  else if (naddress < 0x9000)
-  {
-    /*&8000 - &8FFF*/
-    if (beebit_romsel & 0x80)
-    {
-      /*RAM in ROMSEL (ANDY)*/
-      shadow[naddress] = nvalue;
-    }
-    else
-    {
-      if (beebit_romwritable[beebit_romselected])
-      {
-        /*sideways ram write enabled*/
-        memory[naddress] = nvalue;
-        beebit_rommodified = TRUE;
-      }
-    }
-  }
-  else if (naddress < 0xC000)
-  {
-    /*&9000 - &BFFF (ROM)*/
-    if (beebit_romwritable[beebit_romselected])
-    {
-      /*sideways ram write enabled*/
-      memory[naddress] = nvalue;
-      beebit_rommodified = TRUE;
-    }
-  }
-  else if (naddress < 0xE000)
-  {
-    /*&C000 - &DFFF*/
-    if (beebit_acccon & 0x08)
-    {
-      /*HAZEL (Y)*/
-      shadow[naddress] = nvalue;
-    }
-    /*else
-    {*/
-      /*(OS - should not be allowed!)*/
-      /*memory[naddress] = nvalue;
-    }*/
-  }
-  else if (naddress < 0xFC00)
-  {
-    /*&E000 - &FBFF (OS - should not be allowed!)*/
-    /*memory[naddress] = nvalue;*/
+    /*&F000 - &FBFF (OS - should not be allowed!)*/
   }
   else if (naddress < 0xFE00)
   {
     /*&FC00 - &FDFF (FRED, JIM)*/
-    r6502_cyclestogo -= 2;
+    CPU_CYCLES(2);
   }
   else if (naddress < 0xFF00)
-    sheilawrite(naddress,nvalue);
-  else if (naddress < 0x10000)
-  {
-    /*not allowed*/
-  }
-  else
-    /*address wrap around*/
-    memory[(naddress & 0xFFFF)] = nvalue;
+    sheilawrite_m(naddress,nvalue);
+  /*else not allowed*/
 }
 #endif
 
@@ -775,6 +716,49 @@ void r6502reset(int lfull)
     r6502_cyclesstored = 0;
     r6502_cycle = 0;
     /*r6502_cyclecount = 0;*/
+
+    r6502readoffset[0x0] = r6502read0000;
+    r6502readoffset[0x1] = r6502read0000;
+    r6502readoffset[0x2] = r6502read0000;
+    r6502readoffset[0x3] = r6502read3000;
+    r6502readoffset[0x4] = r6502read3000;
+    r6502readoffset[0x5] = r6502read3000;
+    r6502readoffset[0x6] = r6502read3000;
+    r6502readoffset[0x7] = r6502read3000;
+    r6502readoffset[0x8] = r6502read8000;
+    r6502readoffset[0x9] = r6502read8000;
+    r6502readoffset[0xA] = r6502read8000;
+    r6502readoffset[0xB] = r6502read8000;
+    r6502readoffset[0xC] = r6502readC000;
+    r6502readoffset[0xD] = r6502readC000;
+    r6502readoffset[0xE] = r6502readC000;
+
+    r6502writeoffset[0x0] = r6502write0000;
+    r6502writeoffset[0x1] = r6502write0000;
+    r6502writeoffset[0x2] = r6502write0000;
+    r6502writeoffset[0x3] = r6502write3000;
+    r6502writeoffset[0x4] = r6502write3000;
+    r6502writeoffset[0x5] = r6502write3000;
+    r6502writeoffset[0x6] = r6502write3000;
+    r6502writeoffset[0x7] = r6502write3000;
+    r6502writeoffset[0x8] = r6502write8000;
+    r6502writeoffset[0x9] = r6502write8000;
+    r6502writeoffset[0xA] = r6502write8000;
+    r6502writeoffset[0xB] = r6502write8000;
+    r6502writeoffset[0xC] = r6502writeC000;
+    r6502writeoffset[0xD] = r6502writeC000;
+    r6502writeoffset[0xE] = r6502writeC000;
+
+    if (beebit_machinetype == MACHINE_MODELBPLUS)
+    {
+      r6502readoffset[0xF] = r6502readbpF000;
+      r6502writeoffset[0xF] = r6502writebpF000;
+    }
+    else
+    {
+      r6502readoffset[0xF] = r6502readbF000;
+      r6502writeoffset[0xF] = r6502writebF000;
+    }
   }
   r6502_pc = (memory[0xFFFD]<<8) + memory[0xFFFC];
 }

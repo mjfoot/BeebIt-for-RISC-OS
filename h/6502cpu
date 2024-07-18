@@ -37,10 +37,8 @@ extern char r6502_a, r6502_x, r6502_y; /*3 registers*/
 extern int r6502_pc; /*program counter*/
 extern char r6502_sp; /*stack pointer*/
 extern char r6502_ps; /*processor status*/
-/*extern char r6502read(int naddress);*/
-extern char (*r6502read)(int naddress);
-/*extern void r6502write(int naddress, char nvalue);*/
-extern void (*r6502write)(int naddress, char nvalue);
+extern char (*r6502readoffset[0x10])(int naddress);
+extern void (*r6502writeoffset[0x10])(int naddress, char nvalue);
 extern void (*cpu_execute)(void);
 
 /*extern int r6502_cyclestotal;*/
@@ -52,18 +50,47 @@ extern int r6502_cycle;
 extern unsigned int r6502_cyclesmonotonic;
 
 extern void r6502badopcode(void);
+extern char r6502read(int naddress);
+extern void r6502write(int naddress, char nvalue);
+
+extern char r6502read0000(int naddress);
+extern char r6502read3000(int naddress);
+extern char r6502read8000(int naddress);
+extern char r6502readC000(int naddress);
+extern void r6502write0000(int naddress, char nvalue);
+extern void r6502write3000(int naddress, char nvalue);
+extern void r6502write8000(int naddress, char nvalue);
+extern void r6502writeC000(int naddress, char nvalue);
+
+extern char r6502readbF000(int naddress);
+extern void r6502writebF000(int naddress, char nvalue);
+
+extern char r6502readbp3000_ram(int naddress);
+extern char r6502readbp8000_ram(int naddress);
+extern char r6502readbpF000(int naddress);
+extern void r6502writebp3000_ram(int naddress, char nvalue);
+extern void r6502writebp8000_ram(int naddress, char nvalue);
+extern void r6502writebpF000(int naddress, char nvalue);
+
+extern char r6502readm3000_x(int naddress);
+extern char r6502readm3000_e(int naddress);
+extern char r6502readm8000_ram(int naddress);
+extern char r6502readmC000_y(int naddress);
+extern char r6502readmF000(int naddress);
+extern void r6502writem3000_x(int naddress, char nvalue);
+extern void r6502writem3000_e(int naddress, char nvalue);
+extern void r6502writem8000_ram(int naddress, char nvalue);
+extern void r6502writemC000_y(int naddress, char nvalue);
+extern void r6502writemF000(int naddress, char nvalue);
+
 #ifndef __RISCOS__
-  /*extern char r6502read(int naddress);
-  extern void r6502write(int naddress, char nvalue);*/
   extern int r6502processorstatus(int lbreak);
 #endif
 extern void r6502reset(int lfull);
 extern void r65c12reset(int lfull);
 extern void r6502doirq(void);
 extern void r6502donmi(void);
-/*extern void r6502execute(int ncycles);*/
 extern void r6502execute(void);
 extern void r6512execute(void);
-extern void r6512execute_ram(void);
 extern void r65c12execute(void);
 extern void r6502showps(void);

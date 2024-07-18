@@ -26,6 +26,40 @@ void r65c12reset(int lfull)
     r6502_ps = 0x00;
     beebit_irq = 0x00;
     beebit_nmi = beebit_oldnmi = 0x00;
+
+    r6502readoffset[0x0] = r6502read0000;
+    r6502readoffset[0x1] = r6502read0000;
+    r6502readoffset[0x2] = r6502read0000;
+    r6502readoffset[0x3] = r6502read3000;
+    r6502readoffset[0x4] = r6502read3000;
+    r6502readoffset[0x5] = r6502read3000;
+    r6502readoffset[0x6] = r6502read3000;
+    r6502readoffset[0x7] = r6502read3000;
+    r6502readoffset[0x8] = r6502read8000;
+    r6502readoffset[0x9] = r6502read8000;
+    r6502readoffset[0xA] = r6502read8000;
+    r6502readoffset[0xB] = r6502read8000;
+    r6502readoffset[0xC] = r6502readC000;
+    r6502readoffset[0xD] = r6502readC000;
+    r6502readoffset[0xE] = r6502readC000;
+    r6502readoffset[0xF] = r6502readmF000;
+
+    r6502writeoffset[0x0] = r6502write0000;
+    r6502writeoffset[0x1] = r6502write0000;
+    r6502writeoffset[0x2] = r6502write0000;
+    r6502writeoffset[0x3] = r6502write3000;
+    r6502writeoffset[0x4] = r6502write3000;
+    r6502writeoffset[0x5] = r6502write3000;
+    r6502writeoffset[0x6] = r6502write3000;
+    r6502writeoffset[0x7] = r6502write3000;
+    r6502writeoffset[0x8] = r6502write8000;
+    r6502writeoffset[0x9] = r6502write8000;
+    r6502writeoffset[0xA] = r6502write8000;
+    r6502writeoffset[0xB] = r6502write8000;
+    r6502writeoffset[0xC] = r6502writeC000;
+    r6502writeoffset[0xD] = r6502writeC000;
+    r6502writeoffset[0xE] = r6502writeC000;
+    r6502writeoffset[0xF] = r6502writemF000;
   }
   r6502_pc = (memory[0xFFFD]<<8) + memory[0xFFFC];
 }
