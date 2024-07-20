@@ -27,6 +27,10 @@ int adc_highbyte;
 int adc_lowbyte;
 int adc_timer; /*adc timer*/
 static int adc_suppressfirst;
+static int adc_x_osunits;
+static int adc_y_osunits;
+static int adc_input_x_high;
+static int adc_input_y_low;
 
 void adcreset(void)
 {
@@ -41,6 +45,39 @@ void adcreset(void)
 void adcenter(void)
 {
   adc_suppressfirst = 0;
+  adc_x_osunits = 0;
+  adc_y_osunits = 0;
+}
+
+void adcmodevars(void)
+{
+  int xres,yres;
+  int xeig,yeig;
+
+  regs.r[0] = -1;
+  regs.r[1] = 4;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  xeig = regs.r[2];
+  regs.r[1] = 5;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  yeig = regs.r[2];
+  regs.r[1] = 11;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  xres = regs.r[2] + 1;
+  regs.r[1] = 12;
+  _kernel_swi(OS_ReadModeVariable,&regs,&regs);
+  yres = regs.r[2] + 1;
+
+  if (adc_x_osunits != (xres<<xeig))
+  {
+    adc_x_osunits = (xres<<xeig);
+    adc_input_x_high = (adc_x_osunits>>1)+255;
+  }
+  if (adc_y_osunits != (yres<<yeig))
+  {
+    adc_y_osunits = (yres<<yeig);
+    adc_input_y_low = (adc_y_osunits>>1)-255;
+  }
 }
 
 void adcpoll(void)
@@ -50,7 +87,7 @@ void adcpoll(void)
 
   if (beebit_mouseemulation == MOUSE_JOYSTICK)
   {
-    /*1280x1024*/
+    /*mouse position in OS units*/
     _kernel_swi(OS_Mouse,&regs,&regs);
 
     if (adc_suppressfirst == 0)
@@ -66,11 +103,23 @@ void adcpoll(void)
     {
       case 0:
         /*master left/right*/
-        nvalue = ((1279-regs.r[0])<<9)/10; /*(n*512)/10=n*51.2*/
+        /*sliding 512 OS unit domain*/
+        if (adc_input_x_high < regs.r[0])
+          adc_input_x_high = regs.r[0];
+        else if (adc_input_x_high - 511 > regs.r[0])
+          adc_input_x_high = regs.r[0] + 511;
+
+        nvalue = (adc_input_x_high - regs.r[0])<<7;
         break;
       case 1:
         /*master up/down*/
-        nvalue = (regs.r[1]<<6);
+        /*sliding 512 OS unit domain*/
+        if (adc_input_y_low > regs.r[1])
+          adc_input_y_low = regs.r[1];
+        else if (adc_input_y_low + 511 < regs.r[1])
+          adc_input_y_low = regs.r[1] - 511;
+
+        nvalue = (regs.r[1] - adc_input_y_low)<<7;
         break;
       case 2:
         /*secondary left/right*/

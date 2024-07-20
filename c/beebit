@@ -766,6 +766,7 @@ int beebitenter(void)
         crtcwidthextra();
         videomodechange();
         videohostmodevars();
+        adcmodevars();
         cursordisable();
       }
     }
@@ -779,7 +780,8 @@ int beebitenter(void)
       beebit_teletextmode = -1;
       videosetplot();
       videomodechange();
-      videohostmodevars();*/
+      videohostmodevars();
+      adcmodevars();*/
       /*setword((char *)nlocalscreen, (int)screen);*/
       /*initialise keyboard handler*/
       /*_kernel_swi(KeyBuffer_Claim,&regs,&regs);
