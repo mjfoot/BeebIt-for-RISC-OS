@@ -12,6 +12,7 @@
 /*Original BBC 6502 ran at 2MHz (2,000,000 cycles/second)*/
 
 #include <stdio.h>
+#include <string.h>
 #include "6502cpu.h"
 #include "6522sysvia.h"
 #include "6522usrvia.h"
@@ -338,6 +339,8 @@ char r6502_sp; /*stack pointer (MUST be a char otherwise we'll blow the stack!)*
 char r6502_ps; /*processor status*/
 char (*r6502readoffset[0x10])(int naddress);
 void (*r6502writeoffset[0x10])(int naddress, char nvalue);
+void (*swappagesintomemory)(void);
+void (*swappagesoutofmemory)(void);
 void (*cpu_execute)(void);
 
 /*int r6502_cyclestotal;*/
@@ -412,10 +415,115 @@ char r6502read3000(int naddress)
   return nvalue;
 }
 
-char r6502read8000(int naddress)
+char r6502read8000_0(int naddress)
 {
   /*&8000 - &BFFF*/
-  char nvalue = memory[naddress];
+  char nvalue = roms[0][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_1(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[1][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_2(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[2][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_3(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[3][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_4(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[4][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_5(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[5][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_6(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[6][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_7(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[7][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_8(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[8][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_9(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[9][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_A(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[10][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_B(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[11][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_C(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[12][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_D(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[13][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_E(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[14][naddress-0x8000];
+  return nvalue;
+}
+
+char r6502read8000_F(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = roms[15][naddress-0x8000];
   return nvalue;
 }
 
@@ -575,14 +683,163 @@ void r6502write3000(int naddress, char nvalue)
   memory[naddress] = nvalue;
 }
 
-void r6502write8000(int naddress, char nvalue)
+void r6502write8000_0(int naddress, char nvalue)
 {
   /*&8000 - &BFFF (SIDEWAYS RAM)*/
-  if (beebit_romwritable[beebit_romselected])
+  if (beebit_romwritable[0])
   {
     /*check sideways ram write enabled*/
-    memory[naddress] = nvalue;
-    beebit_rommodified = TRUE;
+    roms[0][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_1(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[1])
+  {
+    /*check sideways ram write enabled*/
+    roms[1][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_2(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[2])
+  {
+    /*check sideways ram write enabled*/
+    roms[2][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_3(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[3])
+  {
+    /*check sideways ram write enabled*/
+    roms[3][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_4(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[4])
+  {
+    /*check sideways ram write enabled*/
+    roms[4][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_5(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[5])
+  {
+    /*check sideways ram write enabled*/
+    roms[5][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_6(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[6])
+  {
+    /*check sideways ram write enabled*/
+    roms[6][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_7(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[7])
+  {
+    /*check sideways ram write enabled*/
+    roms[7][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_8(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[8])
+  {
+    /*check sideways ram write enabled*/
+    roms[8][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_9(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[9])
+  {
+    /*check sideways ram write enabled*/
+    roms[9][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_A(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[10])
+  {
+    /*check sideways ram write enabled*/
+    roms[10][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_B(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[11])
+  {
+    /*check sideways ram write enabled*/
+    roms[11][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_C(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[12])
+  {
+    /*check sideways ram write enabled*/
+    roms[12][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_D(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[13])
+  {
+    /*check sideways ram write enabled*/
+    roms[13][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_E(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[14])
+  {
+    /*check sideways ram write enabled*/
+    roms[14][naddress-0x8000] = nvalue;
+  }
+}
+
+void r6502write8000_F(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[15])
+  {
+    /*check sideways ram write enabled*/
+    roms[15][naddress-0x8000] = nvalue;
   }
 }
 
@@ -697,6 +954,86 @@ void r6502writemF000(int naddress, char nvalue)
 }
 #endif
 
+#ifndef __RISCOS__
+void swappages(char *address1, char *address2, int npagecount)
+{
+  char swap[256];
+  for (; npagecount > 0; npagecount--)
+  {
+    memcpy(swap,address1,256);
+    memcpy(address1,address2,256);
+    memcpy(address2,swap,256);
+    address1 += 256;
+    address2 += 256;
+  }
+}
+#endif
+
+void swappagesintomemoryb(void)
+{
+  int nrom;
+
+  nrom = beebit_romsel & 0x0F;
+  memcpy(&memory[0x8000],roms[nrom],0x4000);
+}
+
+void swappagesintomemorybp(void)
+{
+  int nrom;
+
+  if ((r6502_pc >= 0xC000 AND r6502_pc < 0xE000)
+    OR ((beebit_romsel & 0x80) AND r6502_pc >= 0xA000 AND r6502_pc < 0xB000))
+  {
+    swappages(&memory[0x3000],&shadow[0x3000],0x50);
+  }
+  
+  nrom = beebit_romsel & 0x0F;
+  if (nrom == 0x0F)
+    nrom = 0x0E;
+  if (beebit_romsel & 0x80)
+  {
+    memcpy(&memory[0x8000],shadow,0x3000);
+    memcpy(&memory[0xB000],&roms[nrom][0x3000],0x1000);
+  }
+  else
+    memcpy(&memory[0x8000],roms[nrom],0x4000);
+}
+
+void swappagesoutofmemoryb(void)
+{
+  int nrom;
+
+  nrom = beebit_romsel & 0x0F;
+  if (beebit_romwritable[nrom])
+    memcpy(roms[nrom],&memory[0x8000],0x4000);
+}
+
+void swappagesoutofmemorybp(void)
+{
+  int nrom;
+
+  if ((r6502_pc >= 0xC000 AND r6502_pc < 0xE000)
+    OR ((beebit_romsel & 0x80) AND r6502_pc >= 0xA000 AND r6502_pc < 0xB000))
+  {
+    swappages(&memory[0x3000],&shadow[0x3000],0x50);
+  }
+
+  nrom = beebit_romsel & 0x0F;
+  if (nrom == 0x0F)
+    nrom = 0x0E;  
+  if (beebit_romsel & 0x80)
+  {
+    memcpy(shadow,&memory[0x8000],0x3000);
+    if (beebit_romwritable[nrom])
+      memcpy(&roms[nrom][0x3000],&memory[0xB000],0x1000);
+  }
+  else
+  {
+    if (beebit_romwritable[nrom])
+      memcpy(roms[nrom],&memory[0x8000],0x4000);
+  }
+}
+
 void r6502reset(int lfull)
 {
   /*noldloc = memory[0x10CE];*/
@@ -725,10 +1062,10 @@ void r6502reset(int lfull)
     r6502readoffset[0x5] = r6502read3000;
     r6502readoffset[0x6] = r6502read3000;
     r6502readoffset[0x7] = r6502read3000;
-    r6502readoffset[0x8] = r6502read8000;
-    r6502readoffset[0x9] = r6502read8000;
-    r6502readoffset[0xA] = r6502read8000;
-    r6502readoffset[0xB] = r6502read8000;
+    r6502readoffset[0x8] = r6502read8000_0;
+    r6502readoffset[0x9] = r6502read8000_0;
+    r6502readoffset[0xA] = r6502read8000_0;
+    r6502readoffset[0xB] = r6502read8000_0;
     r6502readoffset[0xC] = r6502readC000;
     r6502readoffset[0xD] = r6502readC000;
     r6502readoffset[0xE] = r6502readC000;
@@ -741,10 +1078,10 @@ void r6502reset(int lfull)
     r6502writeoffset[0x5] = r6502write3000;
     r6502writeoffset[0x6] = r6502write3000;
     r6502writeoffset[0x7] = r6502write3000;
-    r6502writeoffset[0x8] = r6502write8000;
-    r6502writeoffset[0x9] = r6502write8000;
-    r6502writeoffset[0xA] = r6502write8000;
-    r6502writeoffset[0xB] = r6502write8000;
+    r6502writeoffset[0x8] = r6502write8000_0;
+    r6502writeoffset[0x9] = r6502write8000_0;
+    r6502writeoffset[0xA] = r6502write8000_0;
+    r6502writeoffset[0xB] = r6502write8000_0;
     r6502writeoffset[0xC] = r6502writeC000;
     r6502writeoffset[0xD] = r6502writeC000;
     r6502writeoffset[0xE] = r6502writeC000;
@@ -753,11 +1090,15 @@ void r6502reset(int lfull)
     {
       r6502readoffset[0xF] = r6502readbpF000;
       r6502writeoffset[0xF] = r6502writebpF000;
+      swappagesintomemory = swappagesintomemorybp;
+      swappagesoutofmemory = swappagesoutofmemorybp;
     }
     else
     {
       r6502readoffset[0xF] = r6502readbF000;
       r6502writeoffset[0xF] = r6502writebF000;
+      swappagesintomemory = swappagesintomemoryb;
+      swappagesoutofmemory = swappagesoutofmemoryb;
     }
   }
   r6502_pc = (memory[0xFFFD]<<8) + memory[0xFFFC];
@@ -1045,32 +1386,32 @@ void sbcbcd(int n)
   /*swi = (memory[cb+2] << 16) | (memory[cb+1] << 8) | memory[cb];*/
   /*swi = (swi & 0x00FFFFFF);
   fprintf(htrace,"SWI=&%X\n", swi);
-  fprintf(htrace,"COUNT=&%X\n", memory[cb+3]);
-}*/
+  fprintf(htrace,"COUNT=&%X\n", memory[cb+3]);*/
 
-  /*relocate = memory[cb+4];
-  regs.r[0] = getword(memory+cb+9]
+  /*swappagesintomemory();
+  relocate = memory[cb+4];
+  regs.r[0] = getword(memory+cb+9);
   if (relocate & 1)
     regs.r[0] += memory;
-  regs.r[1] = getword(memory+cb+13]
+  regs.r[1] = getword(memory+cb+13);
   if (relocate & 2)
     regs.r[1] += memory;
-  regs.r[2] = getword(memory+cb+17]
+  regs.r[2] = getword(memory+cb+17);
   if (relocate & 4)
     regs.r[2] += memory;
-  regs.r[3] = getword(memory+cb+21]
+  regs.r[3] = getword(memory+cb+21);
   if (relocate & 8)
     regs.r[3] += memory;
-  regs.r[4] = getword(memory+cb+25]
+  regs.r[4] = getword(memory+cb+25);
   if (relocate & 16)
     regs.r[4] += memory;
-  regs.r[5] = getword(memory+cb+29]
+  regs.r[5] = getword(memory+cb+29);
   if (relocate & 32)
     regs.r[5] += memory;
-  regs.r[6] = getword(memory+cb+33]
+  regs.r[6] = getword(memory+cb+33);
   if (relocate & 64)
     regs.r[6] += memory;
-  regs.r[7] = getword(memory+cb+37]
+  regs.r[7] = getword(memory+cb+37);
   if (relocate & 128)
     regs.r[7] += memory;
 
@@ -1105,50 +1446,51 @@ void sbcbcd(int n)
   {
     if (relocate & 1)
       regs.r[0] -= memory;
-    setword(memory+cb+9,regs.r[0]]
+    setword(memory+cb+9,regs.r[0]);
   }
   if (regcount > 1)
   {
-    regs.r[1] = getword(memory+cb+13]
+    regs.r[1] = getword(memory+cb+13);
     if (relocate & 2)
       regs.r[1] += memory;
   }
   if (regcount > 2)
   {
-    regs.r[2] = getword(memory+cb+17]
+    regs.r[2] = getword(memory+cb+17);
     if (relocate & 4)
       regs.r[2] += memory;
   }
   if (regcount > 3)
   {
-    regs.r[3] = getword(memory+cb+21]
+    regs.r[3] = getword(memory+cb+21);
     if (relocate & 8)
       regs.r[3] += memory;
   }
   if (regcount > 4)
   {
-    regs.r[4] = getword(memory+cb+25]
+    regs.r[4] = getword(memory+cb+25);
     if (relocate & 16)
       regs.r[4] += memory;
   }
   if (regcount > 5)
   {
-    regs.r[5] = getword(memory+cb+29]
+    regs.r[5] = getword(memory+cb+29);
     if (relocate & 32)
       regs.r[5] += memory;
   }
   if (regcount > 6)
   {
-    regs.r[6] = getword(memory+cb+33]
+    regs.r[6] = getword(memory+cb+33);
     if (relocate & 64)
       regs.r[6] += memory;
   }
   if (regcount > 7)
   {
-    regs.r[7] = getword(memory+cb+37]
+    regs.r[7] = getword(memory+cb+37);
     if (relocate & 128)
       regs.r[7] += memory;
-  }*/
+  }
+  swappagesoutofmemory();*/
 /*}*/
 
 #ifndef __RISCOS__

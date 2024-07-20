@@ -633,19 +633,28 @@ r6502execute_loop
   ;-------------------
 
 r6502execute_loop2
-  LDRB r3,[r12,rpc] ;get opcode
+  CMP rpc,#&8000
+  LDRLTB r0,[r12,rpc] ;get opcode
+  MOVGE r0,rpc
+  BLGE r6502read ;=r0
   ADD rpc,rpc,#1
+
   ;ANDS r0,rpc,#&10000
   ;MOVNE r0,#&FF00
   ;ORRNE r0,r0,#&00FF
   ;ANDNE rpc,rpc,r0
   ;STR rpc,[r11] ;pc
 
-  LDR r0,=r6502opcodes
+  LDR r1,=r6502opcodes
   ;STMFD sp!,{lr}
   MOV lr,pc
-  LDR pc,[r0,r3,LSL#2]
-  ;LDMFD sp!,{lr}
+  LDR pc,[r1,r0,LSL#2]
+
+  ;LDR r0,=r6502opcodes
+  ;;STMFD sp!,{lr}
+  ;MOV lr,pc
+  ;LDR pc,[r0,r3,LSL#2]
+  ;;LDMFD sp!,{lr}
 
   ;-------------------
   ;LDR r11,=beebit_trace ;trace

@@ -279,10 +279,9 @@ r6512opcode43
 |r6512opcode4C|
   ;JMP
   ;STMFD sp!,{r0-r2,rpc,r10-r12,lr}
-  ;ADDRESSOFABSOLUTE
-  ;LDR r12,=memory ;pointer to memory block
-  ;LDR r11,=r6502_pc
-  ;LDR rpc,[r11]
+  CMP rpc,#&3000
+  BGE r6512opcode4C_2
+
   LDRB r2,[r12,rpc] ;lo
   ADD rpc,rpc,#1
   LDRB r1,[r12,rpc] ;hi
@@ -292,6 +291,17 @@ r6512opcode43
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,rpc,r10-r12,pc}
   ;MOV pc,lr
+  R6512NEXTOPCODE
+
+r6512opcode4C_2
+  MOV r0,rpc
+  READMEM ;lo
+  MOV r2,r0 ;lo
+  ADD r0,rpc,#1
+  READMEM ;hi
+
+  ADD rpc,r2,r0,LSL#8 ;r0=lo+(hi<<8)
+  CPU_CYCLES 3
   R6512NEXTOPCODE
 
 |r6512opcode4D|

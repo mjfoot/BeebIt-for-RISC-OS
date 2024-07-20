@@ -73,14 +73,12 @@
 #endif
 
 extern char memory[0x10000]; /*65536 bytes*/
-extern char shadow[0x10000]; /*65536 bytes*/
-/*shadow replaces lynne,hazel and andy for speed*/
-/*extern char lynne[0x5000];*/ /*20480 bytes*/
-/*extern char hazel[0x2000];*/ /*8192 bytes*/
+extern char shadow[0x8000]; /*32768 bytes*/
+/*shadow replaces andy,hazel and lynne for speed*/
 /*extern char andy[0x1000];*/ /*4096 bytes*/
+/*extern char hazel[0x2000];*/ /*8192 bytes*/
+/*extern char lynne[0x5000];*/ /*20480 bytes*/
 extern char roms[16][0x4000];
-
-/*extern char *shadow;*/ /*pointer to 65536 bytes*/
 
 extern int beebit_trace;
 extern char beebit_osrom[MACHINE_COMPACT+1][128];
@@ -125,8 +123,6 @@ extern int beebit_romsel; /*ROMSELect*/
 extern int beebit_acccon; /*ACCCON*/
 extern int beebit_memorymap; /*flags for memory/shadow swapping*/
 extern int beebit_vdusel; /*VDUSEL (0x80) for B+, D (0x01) for Master 128*/
-extern int beebit_romselected;
-extern int beebit_rommodified;
 extern int beebit_leds,host_leds;
 extern int beebit_rommask;
 extern int beebit_yield;
@@ -136,7 +132,7 @@ extern int beebit_irq;
 extern int beebit_nmi;
 extern int beebit_oldnmi;
 
-extern void pageinrom(int nrom, int lmosram);
+extern void copyselectedromintomemory(void);
 extern int loadrom(char *cfilename,int nslot);
 extern void updateviatimers(int ncycles);
 extern void updateothertimers(int ncycles);

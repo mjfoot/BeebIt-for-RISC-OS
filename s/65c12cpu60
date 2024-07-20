@@ -320,10 +320,9 @@ r65c12opcode6B
 |r65c12opcode6C|
   ;JMP
   ;STMFD sp!,{r0-r2,rpc,r10-r12,lr}
-  CMP rpc,#&3000
-  BGE r65c12opcode6C_2
-
   ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
+  CMP r0,#&3000
+  BGE r65c12opcode6C_2
   ;ADD r10,r12,r0 ;memory+r0
   LDRB r2,[r12,r0] ;lo
   ;AND r3,r0,#&FF ;test
@@ -347,10 +346,9 @@ r65c12opcode6B
 
 r65c12opcode6C_2
   ;master 128
-  ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
   MOV r3,r0 ;store address
 
-  ;BL r6502readm ;lo
+  ;BL r6502read ;lo
   READMEM ;lo
   MOV r2,r0 ;lo
 
@@ -364,7 +362,7 @@ r65c12opcode6C_2
   AND r0,r0,#&FF00
   ORR r0,r0,r1
 
-  ;BL r6502readm ;hi
+  ;BL r6502read ;hi
   READMEM ;hi
 
   ADD rpc,r2,r0,LSL#8 ;rpc=lo+(hi<<8)

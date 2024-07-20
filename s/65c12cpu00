@@ -44,6 +44,8 @@
   IMPORT |r6502read|
   IMPORT |r6502write|
   IMPORT |r65c12opcodes|
+  IMPORT |swappagesintomemory|
+  IMPORT |swappagesoutofmemory|
 
 ; Export global symbols
 
@@ -208,7 +210,7 @@ r65c12opcode02
 
 r65c12opcode07_interface
   ;Opcode 07 Interface
-  STMFD sp!,{r0-ry,r11-r12,lr}
+  STMFD sp!,{r0-ry,r10-r12,lr}
   ;MOV r0,#31
   ;SWI OS_WriteC
   ;MOV r0,#0
@@ -221,6 +223,11 @@ r65c12opcode07_interface
   ;save the ps for later
   LDR r11,=r6502_ps
   STRB rps,[r11]
+
+  LDR r11,=swappagesintomemory
+  MOV lr,pc
+  LDR pc,[r11]
+  LDR r12,=memory
 
   ;LDR r12,=r6502_x
   ;LDRB rx,[r12]
@@ -329,11 +336,15 @@ r65c12opcode07_interface
   STR r7,[r11,#37]
 
 r65c12opcode07_2
+  LDR r11,=swappagesoutofmemory
+  MOV lr,pc
+  LDR pc,[r11]
+
   LDR r11,=r6502_ps
   LDRB rps,[r11]
   LDR r11,=r6502_pc
   LDR rpc,[r11]
-  LDMFD sp!,{r0-ry,r11-r12,pc}
+  LDMFD sp!,{r0-ry,r10-r12,pc}
 
 r65c12opcode07_error
   ;load the swi number
@@ -397,11 +408,15 @@ r65c12opcode07_error4
   STRB r8,[r10]
 
 r65c12opcode07_error5
+  LDR r11,=swappagesoutofmemory
+  MOV lr,pc
+  LDR pc,[r11]
+
   LDR r11,=r6502_ps
   LDRB rps,[r11]
   LDR r11,=r6502_pc
   LDR rpc,[r11]
-  LDMFD sp!,{r0-ry,r11-r12,pc}
+  LDMFD sp!,{r0-ry,r10-r12,pc}
 
 |r65c12opcode08|
   ;PHP

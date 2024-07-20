@@ -80,6 +80,9 @@
 
 |r6512opcode20|
   ;JSR
+  CMP rpc,#&3000
+  BGE r6512opcode20_2
+
   ADD r11,r12,rpc ;r11=memory+pc (offset)
   LDRB r2,[r11] ;lo
   LDRB r1,[r11,#1] ;hi
@@ -113,6 +116,28 @@
   ;SWI OS_WriteI+32
   ;LDMFD sp!,{rpc}
 
+  R6512NEXTOPCODE
+
+r6512opcode20_2
+  ;ADDRESSOFABSOLUTE_P
+  MOV r0,rpc
+  READMEM ;lo
+  MOV r2,r0 ;lo
+
+  ADD r0,rpc,#1 ;rpc += 1
+  READMEM ;hi
+
+  ADD r3,rpc,#1 ;jsr bug
+  ADD rpc,r2,r0,LSL#8 ;r0=lo+(hi<<8)
+
+  ;ADD rpc,rpc,#1 ;jsr bug
+  AND r2,r3,#&FF00 ;pc & 0xFF00
+  MOV r2,r2,LSR#8  ;>>8
+  STACKPUSH r2
+  AND r2,r3,#&FF ;pc & 0xFF
+  STACKPUSH r2
+  ;MOV rpc,r0
+  CPU_CYCLES 6
   R6512NEXTOPCODE
 
 ;buffer20

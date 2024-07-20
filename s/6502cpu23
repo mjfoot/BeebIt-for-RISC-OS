@@ -109,6 +109,9 @@
 
 |r6502opcode20|
   ;JSR
+  CMP rpc,#&8000
+  BGE r6502opcode20_2
+
   ADD r11,r12,rpc ;r11=memory+pc (offset)
   LDRB r2,[r11] ;lo
   LDRB r1,[r11,#1] ;hi
@@ -135,6 +138,28 @@
   ;SWI OS_WriteI+32
   ;LDMFD sp!,{rpc}
 
+  R6502NEXTOPCODE
+
+r6502opcode20_2
+  ;ADDRESSOFABSOLUTE_P
+  MOV r0,rpc
+  READMEM ;lo
+  MOV r2,r0 ;lo
+
+  ADD r0,rpc,#1 ;rpc += 1
+  READMEM ;hi
+
+  ADD r3,rpc,#1 ;jsr bug
+  ADD rpc,r2,r0,LSL#8 ;r0=lo+(hi<<8)
+
+  ;ADD rpc,rpc,#1 ;jsr bug
+  AND r2,r3,#&FF00 ;pc & 0xFF00
+  MOV r2,r2,LSR#8  ;>>8
+  STACKPUSH r2
+  AND r2,r3,#&FF ;pc & 0xFF
+  STACKPUSH r2
+  ;MOV rpc,r0
+  CPU_CYCLES 6
   R6502NEXTOPCODE
 
 buffer20
@@ -179,7 +204,7 @@ buffer20
 
 |r6502opcode24|
   ;STMFD sp!,{r0-r2,ra,rps-r12,lr}
-  VALUEOFZEROPAGE_BASE
+  VALUEOFZEROPAGE_B
   R6502BIT
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,ra,rps-r12,pc}
@@ -188,7 +213,7 @@ buffer20
 
 |r6502opcode25|
   ;STMFD sp!,{r0-r2,ra,rps-r12,lr}
-  VALUEOFZEROPAGE_BASE
+  VALUEOFZEROPAGE_B
   R6502AND
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,ra,rps-r12,pc}
@@ -197,7 +222,7 @@ buffer20
 
 |r6502opcode26|
   ;STMFD sp!,{r0-r4,rps-rpc,r10-r12,lr}
-  VALUEOFZEROPAGE_BASE
+  VALUEOFZEROPAGE_B
   R6502ROL r0
   STRB r0,[r11]
   CPU_CYCLES 5
@@ -208,7 +233,7 @@ buffer20
 |r6502opcode27|
   ;RLA
   ;STMFD sp!,{r0-ra,rps,r11,r12,lr}
-  ADDRESSOFZEROPAGE_BASE r2
+  ADDRESSOFZEROPAGE_B r2
   ;MOV r2,r0 ;store address
   LDRB r0,[r12,r2]
   R6502RLA

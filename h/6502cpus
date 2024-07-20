@@ -195,9 +195,24 @@ WRITEMEM_LEN EQU 3*4
   ;LDR rpc,[r11]
 
   ADD r11,r12,rpc ;r11=memory+pc (offset)
-  LDRB r2,[r11] ;lo
-  LDRB r1,[r11,#1] ;hi
+  CMP rpc,#&8000
+  ADDGE pc,pc,#12 ;4*4 (-4)
 
+  ;rpc < &8000
+  ADD r11,r12,rpc ;r11=memory+pc (offset)
+  LDRB r2,[r11] ;lo
+  LDRB r0,[r11,#1] ;hi
+  ADD pc,pc,#(READMEM_LEN*2)+(3*4)-4 ;13*4 (-4)
+
+  ;rpc >= &8000
+  MOV r0,rpc
+  READMEM ;3*4 ;lo
+  MOV r2,r0 ;lo
+
+  ADD r0,rpc,#1 ;rpc += 1
+  READMEM ;3*4 ;hi
+
+  ;continue
   ADD rpc,rpc,#2 ;pc+=2
   ;ANDS r0,rpc,#&10000
   ;MOVNE r0,#&FF00
@@ -206,7 +221,7 @@ WRITEMEM_LEN EQU 3*4
 
   ;STR rpc,[r11] ;pc
 
-  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ADD r0,r2,r0,LSL#8 ;r0=lo+(hi<<8)
   MEND
 
   MACRO
@@ -602,6 +617,25 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   MEND
 
   MACRO
+  ADDRESSOFZEROPAGE_B $n
+  ;OUT:$n =address
+  CMP rpc,#&8000
+  ADDGE pc,pc,#ADDRESSOFZEROPAGE_LEN ;+4-4 ;4*4 (-4)
+
+  ;rpc < &8000
+  ADDRESSOFZEROPAGE_BASE $n
+  ADD pc,pc,#READMEM_LEN+(3*4)-4 ;8(-4)
+
+  ;rpc > &8000
+  MOV r0,rpc
+  READMEM
+  MOV $n,r0
+  ADD rpc,rpc,#1 ;pc+=1
+
+  ;continue
+  MEND
+
+  MACRO
   ADDRESSOFZEROPAGE_BP $n
   ;B+ paged ram version
   ;OUT:$n =address
@@ -643,11 +677,11 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   MACRO
   ADDRESSOFINDZEROPAGE_B
   ;OUT:r0 =address
-  ADDRESSOFZEROPAGE_BASE r0
-  LDRB r1,[r12,r0] ;lo
-  ADD r0,r0,#1
-  LDRB r2,[r12,r0] ;hi
-  ADD r0,r1,r2,LSL#8
+  ADDRESSOFZEROPAGE_B r2
+  LDRB r1,[r12,r2] ;lo
+  ADD r2,r2,#1
+  LDRB r0,[r12,r2] ;hi
+  ADD r0,r1,r0,LSL#8
   MEND
 
   MACRO
@@ -722,7 +756,7 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   MACRO
   ADDRESSOFZEROPAGEX
   ;OUT:r0 =address
-  ADDRESSOFZEROPAGE_BASE r0
+  ADDRESSOFZEROPAGE_B r0
   ;LDR r11,=r6502_x
   ;LDRB rx,[r11] ;r3=x
   ADD r0,r0,rx
@@ -752,7 +786,7 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   MACRO
   ADDRESSOFZEROPAGEY
   ;OUT:r0 =address
-  ADDRESSOFZEROPAGE_BASE r0
+  ADDRESSOFZEROPAGE_BP r0
   ;LDR r11,=r6502_y
   ;LDRB ry,[r11] ;r3=y
   ADD r0,r0,ry
@@ -800,6 +834,10 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ADDRESSOFZEROPAGEX ;r0
   ;ADD r10,r12,r0 ;memory+r0
   ;LDRB r2,[r10] ;lo
+  CMP rpc,#&8000
+  ADDGE pc,pc,#(7*4)-4 ;7*4 (-4)
+
+  ;rpc < &8000
   LDRB r2,[r12,r0] ;lo
   ADD r1,r0,#1 ;r1 = (r0+1)
   AND r1,r1,#&FF ;r1 = (r1 and &FF)
@@ -808,6 +846,20 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;ADD r10,r12,r0 ;memory+r0
   ;LDRB r1,[r10] ;hi
   LDRB r1,[r12,r0] ;hi
+  ADD pc,pc,#(READMEM_LEN*2)+(7*4)-4 ;13*4 (-4)
+
+  ;rpc >= &8000
+  MOV r3,r0
+  READMEM ;r0
+  MOV r2,r0 ;lo
+  ADD r1,r3,#1 ;r1 = (r3+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r3,#&FF00
+  ORR r0,r0,r1
+  READMEM ;r0
+  MOV r1,r0 ;hi
+
+  ;continue
   ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
   CPU_CYCLES 4
   MEND
@@ -889,9 +941,13 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   MACRO
   ADDRESSOFPOSTINDEXEDY_B ;(IND),Y
   ;OUT:r0 =address
-  ADDRESSOFZEROPAGE_BASE r0
+  ADDRESSOFZEROPAGE_B r0
   ;ADD r10,r12,r0 ;memory+r0
   ;LDRB r2,[r10] ;lo
+  CMP rpc,#&8000
+  ADDGE pc,pc,#(7*4)-4 ;7*4 (-4)
+
+  ;rpc < &8000
   LDRB r2,[r12,r0] ;lo
   ADD r1,r0,#1 ;r1 = (r0+1)
   AND r1,r1,#&FF ;r1 = (r1 and &FF)
@@ -900,17 +956,32 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;ADD r10,r12,r0
   ;LDRB r1,[r10] ;hi
   LDRB r1,[r12,r0] ;hi
-  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
+  ;ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
   ;LDR r11,=r6502_y
   ;LDRB ry,[r11] ;r3=y
+  ;ADD r0,r0,ry
+  ADD pc,pc,#(READMEM_LEN*2)+(7*4)-4 ;7*4 (-4)
+
+  ;rpc >= &8000
+  MOV r3,r0
+  READMEM ;r0
+  MOV r2,r0 ;lo
+  ADD r1,r3,#1 ;r1 = (r0+1)
+  AND r1,r1,#&FF ;r1 = (r1 and &FF)
+  AND r0,r3,#&FF00
+  ORR r0,r0,r1
+  READMEM ;r0
+  MOV r1,r0
+
+  ;continue
+  ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8) ;check for page boundary cross
   ADD r0,r0,ry
   ANDS r3,r0,#&10000
   ;mask with #&FFFF
   MOVNE r3,#&FF00
   ORRNE r3,r3,#&00FF
   ANDNE r0,r0,r3
-
-  MOV r2,r0,LSR#8 ;r2=(r0>>8) ;check for page boundary cross
+  MOV r2,r0,LSR#8 ;r2=(r0>>8)
   CMP r2,r1 ;if (r2<>hi)
   ;LDRNE r11,=r6502_cyclestogo
   ;LDRNE r3,[r11] ;r6502_cyclestogo
@@ -925,7 +996,7 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ADDRESSOFPOSTINDEXEDY_BP ;(IND),Y
   ;B+ paged ram version
   ;OUT:r0 =address
-  ADDRESSOFZEROPAGE_BASE r0
+  ADDRESSOFZEROPAGE_BP r0
   ;ADD r10,r12,r0 ;memory+r0
   ;LDRB r2,[r10] ;lo
   CMP rpc,#&3000
@@ -1036,7 +1107,7 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   MACRO
   ADDRESSOFPOSTINDEXEDY_STA ;(IND),Y
   ;OUT:r0 =address
-  ADDRESSOFZEROPAGE_BASE r0
+  ADDRESSOFZEROPAGE_B r0
   ;ADD r10,r12,r0 ;memory+r0
   ;LDRB r2,[r10] ;lo
   LDRB r2,[r12,r0] ;lo
@@ -1152,7 +1223,20 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;LDR r12,=memory ;pointer to memory block
   ;LDR r11,=r6502_pc
   ;LDR rpc,[r11] ;rpc=pc
+  CMP rpc,#&8000
+  ADDGE pc,pc,#4 ;2*4 (-4)
+
+  ;rpc < &8000
   LDRB $n,[r12,rpc] ;lo
+  ADD pc,pc,#READMEM_LEN+(2*4)-4 ;12*4 (-4)
+
+  ;rpc >= &8000
+  MOV r0,rpc
+  READMEM
+  MOV $n,r0
+  ;LDRB $n,[r12,rpc] ;lo
+
+  ;continue
   ADD rpc,rpc,#1 ;pc+=1
   ;ANDS r1,rpc,#&10000
   ;MOVNE r1,#&FF00
@@ -1220,9 +1304,9 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   MEND
 
   MACRO
-  VALUEOFZEROPAGE_BASE
+  VALUEOFZEROPAGE_B
   ;OUT:r0 =value
-  ADDRESSOFZEROPAGE_BASE r0
+  ADDRESSOFZEROPAGE_B r0
   ADD r11,r12,r0 ;r11=memory+r0 (offset)
   LDRB r0,[r11] ;r0
   MEND

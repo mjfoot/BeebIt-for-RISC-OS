@@ -626,10 +626,11 @@ int snapshotsave(void)
 
 int memorysave(void)
 {
+    copyselectedromintomemory();
 /* jdl** changed so bbc b saves only 64k*/
     wimpwrite(memory,1,0x10000);
     if (beebit_machinetype !=MACHINE_MODELB)
-      wimpwrite(shadow,1,0x10000);
+      wimpwrite(shadow,1,0x8000);
   return TRUE;
 }
 
