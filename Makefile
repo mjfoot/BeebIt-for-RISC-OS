@@ -436,6 +436,7 @@ o.video:	h.swis
 o.video:	h.video
 o.video:	h.videoscale
 o.video:	h.videoula
+o.video:	h.adc
 o.videoscale:	c.videoscale
 o.videoscale:	h.beebit
 o.videoscale:	C:h.kernel
@@ -454,6 +455,7 @@ o.videoula:	h.main
 o.videoula:	h.riscos
 o.videoula:	h.scrmode
 o.videoula:	h.swis
+o.videoula:	h.adc
 o.videoula:	h.video
 o.riscos: s.riscos
 o.riscos: h.RegNames

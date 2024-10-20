@@ -31,6 +31,7 @@ static int adc_x_osunits;
 static int adc_y_osunits;
 static int adc_input_x_high;
 static int adc_input_y_low;
+static const int adc_floating_value = 0x7FFF;
 
 void adcreset(void)
 {
@@ -123,11 +124,11 @@ void adcpoll(void)
         break;
       case 2:
         /*secondary left/right*/
-        nvalue = 0x7FFF;
+        nvalue = adc_floating_value;
         break;
       case 3:
         /*secondary up/down*/
-        nvalue = 0x7FFF;
+        nvalue = adc_floating_value;
         break;
       default:
         nvalue = 0;
@@ -135,7 +136,7 @@ void adcpoll(void)
     }
   }
   else
-    nvalue = 0;
+    nvalue = adc_floating_value;
 
   adc_status |= 0x40; /*not busy*/
   adc_status |= ((nvalue & 0xC000)>>10);
