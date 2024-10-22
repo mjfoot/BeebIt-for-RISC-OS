@@ -255,7 +255,7 @@ r6502opcode43
 
 |r6502opcode45|
   ;STMFD sp!,{r0-r2,ra,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502EOR
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,ra,rps-r12,pc}
@@ -265,7 +265,7 @@ r6502opcode43
 |r6502opcode46|
   ;LSR
   ;STMFD sp!,{r0-r2,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502LSR r0
   STRB r0,[r11]
   CPU_CYCLES 5
@@ -331,9 +331,10 @@ r6502opcode43
 |r6502opcode4C|
   ;JMP
   ;STMFD sp!,{r0-r2,rpc,r10-r12,lr}
-  CMP rpc,#&8000
-  BGE r6502opcode4C_2
-
+  ;ADDRESSOFABSOLUTE
+  ;LDR r12,=memory ;pointer to memory block
+  ;LDR r11,=r6502_pc
+  ;LDR rpc,[r11]
   LDRB r2,[r12,rpc] ;lo
   ADD rpc,rpc,#1
   LDRB r1,[r12,rpc] ;hi
@@ -343,17 +344,6 @@ r6502opcode43
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,rpc,r10-r12,pc}
   ;MOV pc,lr
-  R6502NEXTOPCODE
-
-r6502opcode4C_2
-  MOV r0,rpc
-  READMEM ;lo
-  MOV r2,r0 ;lo
-  ADD r0,rpc,#1
-  READMEM ;hi
-
-  ADD rpc,r2,r0,LSL#8 ;r0=lo+(hi<<8)
-  CPU_CYCLES 3
   R6502NEXTOPCODE
 
 |r6502opcode4D|

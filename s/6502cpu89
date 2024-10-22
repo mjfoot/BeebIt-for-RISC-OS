@@ -342,7 +342,7 @@ r6502opcode7F_2
 |r6502opcode84|
   ;STY
   ;STMFD sp!,{r0-r2,rps-r12,lr}
-  ADDRESSOFZEROPAGE_B r0
+  ADDRESSOFZEROPAGE_BASE r0
   ;R6502STY ;r1=r6502_y
   STRB ry,[r12,r0]
   CPU_CYCLES 3
@@ -353,7 +353,7 @@ r6502opcode7F_2
 |r6502opcode85|
   ;STA
   ;STMFD sp!,{r0-r2,rps-r12,lr}
-  ADDRESSOFZEROPAGE_B r0
+  ADDRESSOFZEROPAGE_BASE r0
   ;R6502STA ;r1=r6502_a
   STRB ra,[r12,r0]
   CPU_CYCLES 3
@@ -364,7 +364,7 @@ r6502opcode7F_2
 |r6502opcode86|
   ;STX
   ;STMFD sp!,{r0-r2,rps-r12,lr}
-  ADDRESSOFZEROPAGE_B r0
+  ADDRESSOFZEROPAGE_BASE r0
   ;R6502STX ;r1=r6502_x
   STRB rx,[r12,r0]
   CPU_CYCLES 3
@@ -375,7 +375,7 @@ r6502opcode7F_2
 |r6502opcode87|
   ;SAX
   ;STMFD sp!,{r0-r2,ra,rx,rpc-r12,lr}
-  ADDRESSOFZEROPAGE_B r0
+  ADDRESSOFZEROPAGE_BASE r0
   ;LDR r11,=r6502_a
   ;LDRB ra,[r11] ;r6502_a
   ;LDR r11,=r6502_x
@@ -386,8 +386,6 @@ r6502opcode7F_2
   ;LDMFD sp!,{r0-r2,ra,rx,rpc-r12,pc}
   ;MOV pc,lr
   R6502NEXTOPCODE
-
-  LTORG
 
 |r6502opcode88|
   ;STMFD sp!,{r0-r2,rps-r12,lr}

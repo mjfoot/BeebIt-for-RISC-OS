@@ -415,6 +415,13 @@ char r6502read3000(int naddress)
   return nvalue;
 }
 
+char r6502read8000(int naddress)
+{
+  /*&8000 - &BFFF*/
+  char nvalue = memory[naddress];
+  return nvalue;
+}
+
 char r6502read8000_0(int naddress)
 {
   /*&8000 - &BFFF*/
@@ -681,6 +688,17 @@ void r6502write3000(int naddress, char nvalue)
 {
   /*&3000 - &7FFF (RAM)*/
   memory[naddress] = nvalue;
+}
+
+void r6502write8000(int naddress, char nvalue)
+{
+  /*&8000 - &BFFF (SIDEWAYS RAM)*/
+  if (beebit_romwritable[beebit_romselected])
+  {
+    /*check sideways ram write enabled*/
+    memory[naddress] = nvalue;
+    beebit_rommodified = TRUE;
+  }
 }
 
 void r6502write8000_0(int naddress, char nvalue)
@@ -969,14 +987,6 @@ void swappages(char *address1, char *address2, int npagecount)
 }
 #endif
 
-void swappagesintomemoryb(void)
-{
-  int nrom;
-
-  nrom = beebit_romsel & 0x0F;
-  memcpy(&memory[0x8000],roms[nrom],0x4000);
-}
-
 void swappagesintomemorybp(void)
 {
   int nrom;
@@ -997,15 +1007,6 @@ void swappagesintomemorybp(void)
   }
   else
     memcpy(&memory[0x8000],roms[nrom],0x4000);
-}
-
-void swappagesoutofmemoryb(void)
-{
-  int nrom;
-
-  nrom = beebit_romsel & 0x0F;
-  if (beebit_romwritable[nrom])
-    memcpy(roms[nrom],&memory[0x8000],0x4000);
 }
 
 void swappagesoutofmemorybp(void)
@@ -1062,10 +1063,6 @@ void r6502reset(int lfull)
     r6502readoffset[0x5] = r6502read3000;
     r6502readoffset[0x6] = r6502read3000;
     r6502readoffset[0x7] = r6502read3000;
-    r6502readoffset[0x8] = r6502read8000_0;
-    r6502readoffset[0x9] = r6502read8000_0;
-    r6502readoffset[0xA] = r6502read8000_0;
-    r6502readoffset[0xB] = r6502read8000_0;
     r6502readoffset[0xC] = r6502readC000;
     r6502readoffset[0xD] = r6502readC000;
     r6502readoffset[0xE] = r6502readC000;
@@ -1078,27 +1075,39 @@ void r6502reset(int lfull)
     r6502writeoffset[0x5] = r6502write3000;
     r6502writeoffset[0x6] = r6502write3000;
     r6502writeoffset[0x7] = r6502write3000;
-    r6502writeoffset[0x8] = r6502write8000_0;
-    r6502writeoffset[0x9] = r6502write8000_0;
-    r6502writeoffset[0xA] = r6502write8000_0;
-    r6502writeoffset[0xB] = r6502write8000_0;
     r6502writeoffset[0xC] = r6502writeC000;
     r6502writeoffset[0xD] = r6502writeC000;
     r6502writeoffset[0xE] = r6502writeC000;
 
     if (beebit_machinetype == MACHINE_MODELBPLUS)
     {
+      r6502readoffset[0x8] = r6502read8000_0;
+      r6502readoffset[0x9] = r6502read8000_0;
+      r6502readoffset[0xA] = r6502read8000_0;
+      r6502readoffset[0xB] = r6502read8000_0;
       r6502readoffset[0xF] = r6502readbpF000;
+      r6502writeoffset[0x8] = r6502write8000_0;
+      r6502writeoffset[0x9] = r6502write8000_0;
+      r6502writeoffset[0xA] = r6502write8000_0;
+      r6502writeoffset[0xB] = r6502write8000_0;
       r6502writeoffset[0xF] = r6502writebpF000;
       swappagesintomemory = swappagesintomemorybp;
       swappagesoutofmemory = swappagesoutofmemorybp;
     }
     else
     {
+      r6502readoffset[0x8] = r6502read8000;
+      r6502readoffset[0x9] = r6502read8000;
+      r6502readoffset[0xA] = r6502read8000;
+      r6502readoffset[0xB] = r6502read8000;
       r6502readoffset[0xF] = r6502readbF000;
+      r6502writeoffset[0x8] = r6502write8000;
+      r6502writeoffset[0x9] = r6502write8000;
+      r6502writeoffset[0xA] = r6502write8000;
+      r6502writeoffset[0xB] = r6502write8000;
       r6502writeoffset[0xF] = r6502writebF000;
-      swappagesintomemory = swappagesintomemoryb;
-      swappagesoutofmemory = swappagesoutofmemoryb;
+      swappagesintomemory = NULL;
+      swappagesoutofmemory = NULL;
     }
   }
   r6502_pc = (memory[0xFFFD]<<8) + memory[0xFFFC];
@@ -1388,8 +1397,7 @@ void sbcbcd(int n)
   fprintf(htrace,"SWI=&%X\n", swi);
   fprintf(htrace,"COUNT=&%X\n", memory[cb+3]);*/
 
-  /*swappagesintomemory();
-  relocate = memory[cb+4];
+  /*relocate = memory[cb+4];
   regs.r[0] = getword(memory+cb+9);
   if (relocate & 1)
     regs.r[0] += memory;
@@ -1489,8 +1497,7 @@ void sbcbcd(int n)
     regs.r[7] = getword(memory+cb+37);
     if (relocate & 128)
       regs.r[7] += memory;
-  }
-  swappagesoutofmemory();*/
+  }*/
 /*}*/
 
 #ifndef __RISCOS__

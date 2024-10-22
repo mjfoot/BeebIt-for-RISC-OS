@@ -57,6 +57,7 @@ extern void r6502write(int naddress, char nvalue);
 
 extern char r6502read0000(int naddress);
 extern char r6502read3000(int naddress);
+extern char r6502read8000(int naddress);
 extern char r6502read8000_0(int naddress);
 extern char r6502read8000_1(int naddress);
 extern char r6502read8000_2(int naddress);
@@ -76,6 +77,7 @@ extern char r6502read8000_F(int naddress);
 extern char r6502readC000(int naddress);
 extern void r6502write0000(int naddress, char nvalue);
 extern void r6502write3000(int naddress, char nvalue);
+extern void r6502write8000(int naddress, char nvalue);
 extern void r6502write8000_0(int naddress, char nvalue);
 extern void r6502write8000_1(int naddress, char nvalue);
 extern void r6502write8000_2(int naddress, char nvalue);

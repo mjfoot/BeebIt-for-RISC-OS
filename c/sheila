@@ -665,20 +665,14 @@ void sheilawrite_b(int naddress, char nvalue)
       #ifdef __DEVELOPxx__
         fprintf(htrace,"ROMSEL(&%X,&%X)",naddress,nvalue);
       #endif
+      if (beebit_romselected != nvalue)
       {
-        int nrom = (nvalue & 0x0F);
-        char (*read8000)(int) = r6502read8000s[nrom];
-        void (*write8000)(int, char) = r6502write8000s[nrom];
-        r6502readoffset[0x8] = read8000;
-        r6502readoffset[0x9] = read8000;
-        r6502readoffset[0xA] = read8000;
-        r6502readoffset[0xB] = read8000;
-        r6502writeoffset[0x8] = write8000;
-        r6502writeoffset[0x9] = write8000;
-        r6502writeoffset[0xA] = write8000;
-        r6502writeoffset[0xB] = write8000;
+        beebit_romsel = nvalue;
+        pageinrom(beebit_romsel & 0x0F, FALSE);
       }
-      beebit_romsel = nvalue;
+      #ifdef __DEVELOPxx__
+        fprintf(htrace,"=&%X\n",beebit_romsel);
+      #endif
       break;
     case 0x40:
     case 0x44:

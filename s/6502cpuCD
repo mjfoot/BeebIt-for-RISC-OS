@@ -136,7 +136,7 @@
 
 |r6502opcodeC4|
   ;STMFD sp!,{r0-r2,ry,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502CPY
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,ry,rps-r12,pc}
@@ -145,7 +145,7 @@
 
 |r6502opcodeC5|
   ;STMFD sp!,{r0-r2,ra,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502CMP
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,ra,rps-r12,pc}
@@ -154,7 +154,7 @@
 
 |r6502opcodeC6|
   ;STMFD sp!,{r0-r2,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502DEC r0
   STRB r0,[r11]
   CPU_CYCLES 5
@@ -165,7 +165,7 @@
 |r6502opcodeC7|
   ;DCP
   ;STMFD sp!,{r0-r2,ra,rps-r12,lr}
-  ADDRESSOFZEROPAGE_B r2
+  ADDRESSOFZEROPAGE_BASE r2
   ;MOV r2,r0
   LDRB r0,[r12,r2]
   R6502DEC r0

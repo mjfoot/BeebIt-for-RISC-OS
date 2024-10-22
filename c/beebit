@@ -105,6 +105,8 @@ int beebit_button2; /*joystick button 2*/
 int beebit_romsel; /*ROMSELect*/
 int beebit_acccon; /*ACCCON*/
 int beebit_vdusel; /*VDUSEL (0x80) for B+, D (0x01) for Master 128*/
+int beebit_romselected;
+int beebit_rommodified;
 int beebit_leds,host_leds;
 int beebit_rommask;
 int beebit_yield; /*yield control on a vsync*/
@@ -136,6 +138,30 @@ void copyselectedromintomemory(void)
       nrom = 0x0E;
   }
   memcpy(&memory[0x8000],roms[nrom],0x4000);
+}
+
+void pageinrom(int nrom, int lmosram)
+{
+  #ifdef __DEBUG__
+    fprintf(htrace,"paging in ROM %u",nrom);
+  #endif
+
+  if (beebit_rommodified)
+    memcpy(roms[beebit_romselected],&memory[0x8000],0x4000);
+  beebit_rommodified = FALSE;
+  if (lmosram)
+    /*&C000 - &CFFF is RAM */
+    /*copy &D000 - &FFFF only*/
+    memcpy(&memory[0x9000],roms[nrom]+0x1000,0x3000);
+  else
+    memcpy(&memory[0x8000],roms[nrom],0x4000);
+
+  beebit_romselected = nrom;
+
+  #ifdef __DEBUG__
+    fprintf(htrace,"done %X %X %X ",memory[0x8000],memory[0x8001],memory[0x8002]);
+    fprintf(htrace,"%s ",&memory[0x8009]);
+  #endif
 }
 
 int loadrom(char *cfilename,int nslot)
@@ -296,6 +322,8 @@ void beebitreset(void)
     }
     lbreak = FALSE;
     beebit_rommask = 0xFFFFFF;
+    beebit_romselected = -1;
+    beebit_rommodified = FALSE;
     /*this is used when updating the via timers*/
     /*ncounterstart = 0;*/
     /*r6502_cyclestotal = 0;*/
@@ -947,6 +975,8 @@ void beebitpoll(void)
             r65c12reset(FALSE);
             break;
         }
+        beebit_romselected = -1;
+        beebit_rommodified = FALSE;
         systemviareset(FALSE);
         userviareset(FALSE);
         w1770_initialised = FALSE; /*for the B+*/

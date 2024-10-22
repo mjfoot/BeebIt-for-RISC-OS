@@ -171,7 +171,7 @@ r6502opcodeE3_2
 
 |r6502opcodeE4|
   ;STMFD sp!,{r0-r2,rx,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502CPX
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,rx,rps-r12,pc}
@@ -181,7 +181,7 @@ r6502opcodeE3_2
 |r6502opcodeE5|
   ;SBC
   ;STMFD sp!,{r0-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   ;LDR r12,=r6502_ps ;pointer to r6502_ps
   ;LDRB rps,[r12] ;load r6502_ps
   ANDS r1,rps,#DFLAG
@@ -208,7 +208,7 @@ r6502opcodeE5_2
 
 |r6502opcodeE6|
   ;STMFD sp!,{r0-r2,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502INC r0
   STRB r0,[r11]
   CPU_CYCLES 5
@@ -362,8 +362,6 @@ r6502opcodeED_2
   ;LDMFD sp!,{pc}
   ;MOV pc,lr
   R6502NEXTOPCODE
-
-  LTORG
 
 |r6502opcodeF0|
   ;BEQ

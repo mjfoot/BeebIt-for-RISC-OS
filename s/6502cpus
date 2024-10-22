@@ -35,6 +35,8 @@
   IMPORT |shadow|
   IMPORT |roms|
   IMPORT |beebit_romwritable|
+  IMPORT |beebit_romselected|
+  IMPORT |beebit_rommodified|
   IMPORT |beebit_romsel|
   IMPORT |beebit_acccon|
   ;IMPORT |beebit_memorymap|
@@ -100,6 +102,7 @@
 
   EXPORT |r6502read0000|
   EXPORT |r6502read3000|
+  EXPORT |r6502read8000|
   EXPORT |r6502read8000_0|
   EXPORT |r6502read8000_1|
   EXPORT |r6502read8000_2|
@@ -119,6 +122,7 @@
   EXPORT |r6502readC000|
   EXPORT |r6502write0000|
   EXPORT |r6502write3000|
+  EXPORT |r6502write8000|
   EXPORT |r6502write8000_0|
   EXPORT |r6502write8000_1|
   EXPORT |r6502write8000_2|
@@ -366,6 +370,12 @@ r6502read0000
 
 r6502read3000
   ;&3000 - &7FFF
+  ;LDR r12,=memory
+  LDRB r0,[r12,r0]  ;r0 = memory[address]
+  LDMFD sp!,{r1-r9,r11-r12,pc}
+
+r6502read8000
+  ;&8000 - &BFFF
   ;LDR r12,=memory
   LDRB r0,[r12,r0]  ;r0 = memory[address]
   LDMFD sp!,{r1-r9,r11-r12,pc}
@@ -800,6 +810,22 @@ r6502write3000
   ;&3000 - &7FFF (RAM)
   ;LDR r12,=memory
   STRB r1,[r12,r0] ;memory[address] = r1;
+  LDMFD sp!,{r0-r9,r11-r12,pc}
+
+r6502write8000
+  ;&8000 - &BFFF (SIDEWAYS RAM)
+  LDR r5,=beebit_romselected
+  LDR r4,=beebit_romwritable
+  LDR r3,[r5]
+  LDR r2,[r4,r3,LSL#2] ;r2 = beebit_romwritable[beebit_romselected]
+  CMP r2,#&00 ;if beebit_romwritable[beebit_romselected]
+  LDMEQFD sp!,{r0-r9,r11-r12,pc}
+
+  ;LDR r12,=memory
+  STRB r1,[r12,r0] ;memory[address] = r1;
+  MOV r3,#&FF
+  LDR r4,=beebit_rommodified
+  STR r3,[r4] ;beebit_rommodifed = TRUE
   LDMFD sp!,{r0-r9,r11-r12,pc}
 
 r6502write8000_0

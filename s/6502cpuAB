@@ -209,7 +209,7 @@
   ;LDY
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFZEROPAGE
-  ADDRESSOFZEROPAGE_B r0
+  ADDRESSOFZEROPAGE_BASE r0
   ;R6502LDY
   LDRB ry,[r12,r0] ;r0
   SETNFLAG ry
@@ -223,7 +223,7 @@
   ;LDA
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFZEROPAGE
-  ADDRESSOFZEROPAGE_B r0
+  ADDRESSOFZEROPAGE_BASE r0
   ;R6502LDA
   LDRB ra,[r12,r0] ;r0
   SETNFLAG ra
@@ -237,7 +237,7 @@
   ;LDX
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFZEROPAGE
-  ADDRESSOFZEROPAGE_B r0
+  ADDRESSOFZEROPAGE_BASE r0
   ;R6502LDX
   LDRB rx,[r12,r0] ;r0
   SETNFLAG rx
@@ -250,7 +250,7 @@
 |r6502opcodeA7|
   ;LAX
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
-  ADDRESSOFZEROPAGE_B r0
+  ADDRESSOFZEROPAGE_BASE r0
   LDRB ra,[r12,r0] ;r0=ra
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0
@@ -377,8 +377,6 @@
   ;LDMFD sp!,{r0-r2,rpc-r12,pc}
   ;MOV pc,lr
   R6502NEXTOPCODE
-
-  LTORG
 
 |r6502opcodeB0|
   ;BCS

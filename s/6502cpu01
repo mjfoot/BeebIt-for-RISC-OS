@@ -44,8 +44,6 @@
   IMPORT |r6502read|
   IMPORT |r6502write|
   IMPORT |r6502opcodes|
-  IMPORT |swappagesintomemory|
-  IMPORT |swappagesoutofmemory|
 
 ; Export global symbols
 
@@ -158,7 +156,7 @@
 |r6502opcode05|
   ;ORA
   ;STMFD sp!,{r0-r2,ra,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502ORA
   CPU_CYCLES 3
   ;LDMFD sp!,{r0-r2,ra,rps-r12,pc}
@@ -168,7 +166,7 @@
 |r6502opcode06|
   ;ASL
   ;STMFD sp!,{r0-r2,rps-r12,lr}
-  VALUEOFZEROPAGE_B
+  VALUEOFZEROPAGE_BASE
   R6502ASL r0
   STRB r0,[r11]
   CPU_CYCLES 5
@@ -182,7 +180,7 @@
   BNE r6502opcode07_interface
   ;ASO
   ;STMFD sp!,{r0-r2,ra,rps-r12,lr}
-  ADDRESSOFZEROPAGE_B r2
+  ADDRESSOFZEROPAGE_BASE r2
   ;MOV r2,r0 ;store address
   LDRB r0,[r12,r2]
   R6502ASO
@@ -194,7 +192,7 @@
 
 r6502opcode07_interface
   ;Opcode 07 Interface
-  STMFD sp!,{r0-ry,r10-r12,lr}
+  STMFD sp!,{r0-ry,r11-r12,lr}
   ;MOV r0,#31
   ;SWI OS_WriteC
   ;MOV r0,#0
@@ -207,11 +205,6 @@ r6502opcode07_interface
   ;save the ps for later
   LDR r11,=r6502_ps
   STRB rps,[r11]
-
-  LDR r11,=swappagesintomemory
-  MOV lr,pc
-  LDR pc,[r11]
-  LDR r12,=memory
 
   ;LDR r12,=r6502_x
   ;LDRB rx,[r12]
@@ -320,15 +313,11 @@ r6502opcode07_interface
   STR r7,[r11,#37]
 
 r6502opcode07_2
-  LDR r11,=swappagesoutofmemory
-  MOV lr,pc
-  LDR pc,[r11]
-
   LDR r11,=r6502_ps
   LDRB rps,[r11]
   LDR r11,=r6502_pc
   LDR rpc,[r11]
-  LDMFD sp!,{r0-ry,r10-r12,pc}
+  LDMFD sp!,{r0-ry,r11-r12,pc}
 
 r6502opcode07_error
   ;load the swi number
@@ -392,15 +381,11 @@ r6502opcode07_error4
   STRB r8,[r10]
 
 r6502opcode07_error5
-  LDR r11,=swappagesoutofmemory
-  MOV lr,pc
-  LDR pc,[r11]
-
   LDR r11,=r6502_ps
   LDRB rps,[r11]
   LDR r11,=r6502_pc
   LDR rpc,[r11]
-  LDMFD sp!,{r0-ry,r10-r12,pc}
+  LDMFD sp!,{r0-ry,r11-r12,pc}
 
 |r6502opcode08|
   ;PHP
@@ -506,8 +491,6 @@ r6502opcode07_error5
   ;LDMFD sp!,{r0-r2,ra,rps-r12,pc}
   ;MOV pc,lr
   R6502NEXTOPCODE
-
-  LTORG
 
 |r6502opcode10|
   ;BPL
