@@ -2,9 +2,11 @@
  *
  * BeebIt - BBC Micro Model B Emulator
  *
- * (C) Copyright Michael J Foot, 1998-2024
+ * Enhanced host screen mode detection
  *
- * Email: <mjfoot.nz@gmail.com>
+ * (C) Copyright Crispian Daniels, 2024
+ *
+ * Email: <convertedgames@3insdale.me.uk>
  */
 
 #include <stdlib.h>

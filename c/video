@@ -5,6 +5,11 @@
  * (C) Copyright Michael J Foot, 1998-2024
  *
  * Email: <mjfoot.nz@gmail.com>
+ *
+ * Enhanced host screen mode compatibility (and more)
+ *   contributed by Crispian Daniels in 2024
+ *
+ * Email: <convertedgames@3insdale.me.uk>
  */
 
 /*on the 3dpool disc is a demo called BBoing! It uses an extra wide screen mode which does not get emulated here properly*/
