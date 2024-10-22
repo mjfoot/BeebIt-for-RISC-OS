@@ -387,6 +387,8 @@ r6502opcode7F_2
   ;MOV pc,lr
   R6502NEXTOPCODE
 
+  LTORG
+
 |r6502opcode88|
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;LDR r12,=r6502_y

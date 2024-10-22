@@ -363,6 +363,8 @@ r6502opcodeED_2
   ;MOV pc,lr
   R6502NEXTOPCODE
 
+  LTORG
+
 |r6502opcodeF0|
   ;BEQ
   ;if condition succeeds

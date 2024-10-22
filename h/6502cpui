@@ -13,7 +13,7 @@
 ;rockwell 6502 cpu
 ;
   MACRO
-  R6502NEXTOPCODE ;rename for tracing
+  R6502NEXTOPCODE_SLOW ;rename for tracing
   MOV pc,lr
   MEND
 
@@ -21,9 +21,10 @@
 ;rockwell 6502 cpu
 ;
   MACRO
-  R6502NEXTOPCODE_FAST ;rename for tracing
+  R6502NEXTOPCODE ;_FAST ;rename for tracing
   ;no good for B+ emulation because of reading from shadow RAM
   CMP rcycles,#0
+  RSBGTS r3,rpc,#&8000
   MOVLE pc,lr
   LDRB r3,[r12,rpc] ;get opcode
   ADD rpc,rpc,#1
