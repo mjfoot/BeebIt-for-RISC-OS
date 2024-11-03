@@ -2,15 +2,20 @@
  *
  * BeebIt - BBC Micro Model B Emulator
  *
- * (C) Copyright Michael J Foot, 1998-2023
+ * (C) Copyright Michael J Foot, 1998-2024
  *
  * Email: <mjfoot.nz@gmail.com>
+ *
+ * Enhanced host screen mode compatibility (and more)
+ *   contributed by Crispian Daniels in 2024
+ *
+ * Email: <convertedgames@3insdale.me.uk>
  */
 
 /* DEFINES */
 
 #define APP_NAME "BeebIt"
-#define APP_VERSION "0.76"
+#define APP_VERSION "0.77"
 
 #define Wimp_GetMenuState 0x0400F4
 
@@ -626,10 +631,12 @@ int snapshotsave(void)
 
 int memorysave(void)
 {
+  if (beebit_machinetype != MACHINE_MODELB)
+    copyselectedromintomemory();
 /* jdl** changed so bbc b saves only 64k*/
     wimpwrite(memory,1,0x10000);
     if (beebit_machinetype !=MACHINE_MODELB)
-      wimpwrite(shadow,1,0x10000);
+      wimpwrite(shadow,1,0x8000);
   return TRUE;
 }
 

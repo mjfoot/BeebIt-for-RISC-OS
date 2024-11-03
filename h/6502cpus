@@ -146,87 +146,21 @@ rsp RN 4
   SUB rcycles,rcycles,#$n
   MEND
 
-;READMEM_LEN EQU 5*4
-
-  ;MACRO
-  ;READMEM
-  ;;store variables here!
-  ;;STMFD sp!,{r1-r9,r11-r12}
-  ;LDR r11,=r6502read
-  ;STMFD sp!,{lr}
-  ;MOV lr,pc
-  ;LDR pc,[r11]
-  ;LDMFD sp!,{lr}
-  ;;read variables here!
-  ;;LDMFD sp!,{r1-r9,r11-r12}
-  ;MEND
-
-READMEMB_LEN EQU 5*4
+READMEM_LEN EQU 3*4
 
   MACRO
-  READMEMB
+  READMEM
   STR lr,[sp,#-4]! ;STMFD sp!,{lr}
-  BL r6502readb
+  BL r6502read
   LDR lr,[sp],#4 ;LDMFD sp!,{lr}
   MEND
 
-READMEMBP_LEN EQU 3*4
+WRITEMEM_LEN EQU 3*4
 
   MACRO
-  READMEMBP
+  WRITEMEM
   STR lr,[sp,#-4]! ;STMFD sp!,{lr}
-  BL r6502readbp
-  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
-  MEND
-
-READMEMM_LEN EQU 3*4
-
-  MACRO
-  READMEMM
-  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
-  BL r6502readm
-  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
-  MEND
-
-;WRITEMEM_LEN EQU 5*4
-
-;  MACRO
-;  WRITEMEM
-;  ;store variables here!
-;  ;STMFD sp!,{r0-r9,r11-r12}
-;  LDR r11,=r6502write
-;  STMFD sp!,{lr}
-;  MOV lr,pc
-;  LDR pc,[r11]
-;  LDMFD sp!,{lr}
-;  ;read variables here!
-;  ;LDMFD sp!,{r0-r9,r11-r12}
-;  MEND
-
-WRITEMEMB_LEN EQU 5*4
-
-  MACRO
-  WRITEMEMB
-  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
-  BL r6502writeb
-  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
-  MEND
-
-WRITEMEMBP_LEN EQU 3*4
-
-  MACRO
-  WRITEMEMBP
-  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
-  BL r6502writebp
-  LDR lr,[sp],#4 ;LDMFD sp!,{lr}
-  MEND
-
-WRITEMEMM_LEN EQU 3*4
-
-  MACRO
-  WRITEMEMM
-  STR lr,[sp,#-4]! ;STMFD sp!,{lr}
-  BL r6502writem
+  BL r6502write
   LDR lr,[sp],#4 ;LDMFD sp!,{lr}
   MEND
 
@@ -342,15 +276,15 @@ WRITEMEMM_LEN EQU 3*4
   ADD r11,r12,rpc ;r11=memory+pc (offset)
   LDRB r2,[r11] ;lo
   LDRB r0,[r11,#1] ;hi
-  ADD pc,pc,#(READMEMBP_LEN*2)+(3*4)-4 ;13*4 (-4)
+  ADD pc,pc,#(READMEM_LEN*2)+(3*4)-4 ;13*4 (-4)
 
   ;rpc >= &3000
   MOV r0,rpc
-  READMEMBP ;5*4 ;lo
+  READMEM ;3*4 ;lo
   MOV r2,r0 ;lo
 
   ADD r0,rpc,#1 ;rpc += 1
-  READMEMBP ;5*4 ;hi
+  READMEM ;3*4 ;hi
 
   ;continue
   ADD rpc,rpc,#2 ;pc += 2
@@ -384,16 +318,16 @@ WRITEMEMM_LEN EQU 3*4
   ADD r11,r12,rpc ;r11=memory+pc (offset)
   LDRB r2,[r11] ;lo
   LDRB r0,[r11,#1] ;hi
-  ADD pc,pc,#(READMEMM_LEN*2)+(3*4)-4 ;13*4 (-4)
+  ADD pc,pc,#(READMEM_LEN*2)+(3*4)-4 ;13*4 (-4)
 
   ;rpc >= &3000
   MOV r0,rpc
-  READMEMM ;5*4
+  READMEM ;3*4
   MOV r2,r0 ;lo
 
   ADD r0,rpc,#1 ;rpc += 1
   ;BL r6502readm ;hi
-  READMEMM ;5*4
+  READMEM ;3*4
 
   ;continue
   ADD rpc,rpc,#2 ;pc += 2
@@ -676,11 +610,11 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
 
   ;rpc < &3000
   ADDRESSOFZEROPAGE_BASE $n
-  ADD pc,pc,#READMEMBP_LEN+(3*4)-4 ;8(-4)
+  ADD pc,pc,#READMEM_LEN+(3*4)-4 ;8(-4)
 
   ;rpc > &3000
   MOV r0,rpc
-  READMEMBP
+  READMEM
   MOV $n,r0
   ADD rpc,rpc,#1 ;pc+=1
 
@@ -695,11 +629,11 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
 
   ;rpc < &3000
   ADDRESSOFZEROPAGE_BASE $n
-  ADD pc,pc,#READMEMM_LEN+(3*4)-4 ;8(-4)
+  ADD pc,pc,#READMEM_LEN+(3*4)-4 ;8(-4)
 
   ;rpc > &3000
   MOV r0,rpc
-  READMEMM
+  READMEM
   MOV $n,r0
   ADD rpc,rpc,#1 ;pc+=1
 
@@ -729,19 +663,19 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   LDRB r1,[r12,r2] ;lo
   ADD r2,r2,#1
   LDRB r0,[r12,r2] ;hi
-  ;ADD pc,pc,#ADDRESSOFZEROPAGE_LEN+(READMEMM_LEN*2)+(3*4)-4 ;13*4 (-4)
+  ;ADD pc,pc,#ADDRESSOFZEROPAGE_LEN+(READMEM_LEN*2)+(3*4)-4 ;13*4 (-4)
 
   ;rpc >= &3000
   ;ADDRESSOFZEROPAGE r2
   ;;LDRB r1,[r12,r0] ;lo
   ;MOV r0,r2
-  ;READMEMM ;r0
+  ;READMEM ;r0
   ;MOV r1,r0
   ;;ADD r0,r0,#1
   ;ADD r0,r2,#1
   ;;LDRB r2,[r12,r0] ;hi
   ;;CPU_CYCLES x
-  ;READMEMM
+  ;READMEM
 
   ;continue
   ADD r0,r1,r0,LSL#8
@@ -762,24 +696,24 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   LDRB r0,[r12,r2] ;hi
 
   ;MOV r0,r2
-  ;READMEMM ;r0
+  ;READMEM ;r0
   ;MOV r1,r0
   ;ADD r0,r2,#1
-  ;READMEMM ;r0
+  ;READMEM ;r0
 
-  ;ADD pc,pc,#ADDRESSOFZEROPAGE_LEN+(READMEMM_LEN*2)+(3*4)-4 ;13*4 (-4)
+  ;ADD pc,pc,#ADDRESSOFZEROPAGE_LEN+(READMEM_LEN*2)+(3*4)-4 ;13*4 (-4)
 
   ;rpc >= &3000
   ;ADDRESSOFZEROPAGE r2
   ;;LDRB r1,[r12,r0] ;lo
   ;MOV r0,r2
-  ;READMEMM ;r0
+  ;READMEM ;r0
   ;MOV r1,r0
   ;;ADD r0,r0,#1
   ;ADD r0,r2,#1
   ;;LDRB r2,[r12,r0] ;hi
   ;;CPU_CYCLES x
-  ;READMEMM
+  ;READMEM
 
   ;continue
   ADD r0,r1,r0,LSL#8
@@ -897,17 +831,17 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;ADD r10,r12,r0 ;memory+r0
   ;LDRB r1,[r10] ;hi
   LDRB r1,[r12,r0] ;hi
-  ADD pc,pc,#(READMEMBP_LEN*2)+(7*4)-4 ;13*4 (-4)
+  ADD pc,pc,#(READMEM_LEN*2)+(7*4)-4 ;13*4 (-4)
 
   ;rpc >= &3000
   MOV r3,r0
-  READMEMBP ;r0
+  READMEM ;r0
   MOV r2,r0 ;lo
   ADD r1,r3,#1 ;r1 = (r3+1)
   AND r1,r1,#&FF ;r1 = (r1 and &FF)
   AND r0,r3,#&FF00
   ORR r0,r0,r1
-  READMEMBP ;r0
+  READMEM ;r0
   MOV r1,r0 ;hi
 
   ;continue
@@ -934,17 +868,17 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;ADD r10,r12,r0 ;memory+r0
   ;LDRB r1,[r10] ;hi
   LDRB r1,[r12,r0] ;hi
-  ADD pc,pc,#(READMEMM_LEN*2)+(7*4)-4 ;13*4 (-4)
+  ADD pc,pc,#(READMEM_LEN*2)+(7*4)-4 ;13*4 (-4)
 
   ;rpc >= &3000
   MOV r3,r0
-  READMEMM ;r0
+  READMEM ;r0
   MOV r2,r0 ;lo
   ADD r1,r3,#1 ;r1 = (r3+1)
   AND r1,r1,#&FF ;r1 = (r1 and &FF)
   AND r0,r3,#&FF00
   ORR r0,r0,r1
-  READMEMM ;r0
+  READMEM ;r0
   MOV r1,r0 ;hi
 
   ;continue
@@ -991,7 +925,7 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ADDRESSOFPOSTINDEXEDY_BP ;(IND),Y
   ;B+ paged ram version
   ;OUT:r0 =address
-  ADDRESSOFZEROPAGE_BASE r0
+  ADDRESSOFZEROPAGE_BP r0
   ;ADD r10,r12,r0 ;memory+r0
   ;LDRB r2,[r10] ;lo
   CMP rpc,#&3000
@@ -1010,17 +944,17 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;LDR r11,=r6502_y
   ;LDRB ry,[r11] ;r3=y
   ;ADD r0,r0,ry
-  ADD pc,pc,#(READMEMBP_LEN*2)+(7*4)-4 ;7*4 (-4)
+  ADD pc,pc,#(READMEM_LEN*2)+(7*4)-4 ;7*4 (-4)
 
   ;rpc >= &3000
   MOV r3,r0
-  READMEMBP ;r0
+  READMEM ;r0
   MOV r2,r0 ;lo
   ADD r1,r3,#1 ;r1 = (r0+1)
   AND r1,r1,#&FF ;r1 = (r1 and &FF)
   AND r0,r3,#&FF00
   ORR r0,r0,r1
-  READMEMBP ;r0
+  READMEM ;r0
   MOV r1,r0
 
   ;continue
@@ -1067,17 +1001,17 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;LDR r11,=r6502_y
   ;LDRB ry,[r11] ;r3=y
   ;ADD r0,r0,ry
-  ADD pc,pc,#(READMEMM_LEN*2)+(7*4)-4 ;7*4 (-4)
+  ADD pc,pc,#(READMEM_LEN*2)+(7*4)-4 ;7*4 (-4)
 
   ;rpc >= &3000
   MOV r3,r0
-  READMEMM ;r0
+  READMEM ;r0
   MOV r2,r0 ;lo
   ADD r1,r3,#1 ;r1 = (r0+1)
   AND r1,r1,#&FF ;r1 = (r1 and &FF)
   AND r0,r3,#&FF00
   ORR r0,r0,r1
-  READMEMM ;r0
+  READMEM ;r0
   MOV r1,r0
 
   ;continue
@@ -1181,7 +1115,6 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;VALUEOFABSOLUTE
   ;;OUT:r0 =value
   ;ADDRESSOFABSOLUTE_BASE ;r0
-  ;;BL r6502readmem ;r0
   ;READMEM
   ;MEND
 
@@ -1189,7 +1122,7 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;VALUEOFABSOLUTE_B
   ;;OUT:r0 =value
   ;ADDRESSOFABSOLUTE_BASE ;r0
-  ;READMEMB
+  ;READMEM
   ;MEND
 
   ;MACRO
@@ -1210,7 +1143,6 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;VALUEOFABSOLUTEYPLUS
   ;;OUT:r0 =value
   ;ADDRESSOFABSOLUTEYPLUS ;r0
-  ;;BL r6502readmem ;r0
   ;READMEM
   ;MEND
 
@@ -1241,11 +1173,11 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
 
   ;rpc < &3000
   LDRB $n,[r12,rpc] ;lo
-  ADD pc,pc,#READMEMBP_LEN+(2*4)-4 ;12*4 (-4)
+  ADD pc,pc,#READMEM_LEN+(2*4)-4 ;12*4 (-4)
 
   ;rpc >= &3000
   MOV r0,rpc
-  READMEMBP
+  READMEM
   MOV $n,r0
   ;LDRB $n,[r12,rpc] ;lo
 
@@ -1270,11 +1202,11 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
 
   ;rpc < &3000
   LDRB $n,[r12,rpc] ;lo
-  ADD pc,pc,#READMEMM_LEN+(2*4)-4 ;12*4 (-4)
+  ADD pc,pc,#READMEM_LEN+(2*4)-4 ;12*4 (-4)
 
   ;rpc >= &3000
   MOV r0,rpc
-  READMEMM
+  READMEM
   MOV $n,r0
   ;LDRB $n,[r12,rpc] ;lo
 
@@ -1312,7 +1244,7 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ADD r11,r12,r0 ;r11=memory+r0 (offset)
   LDRB r0,[r11] ;r0
   ;ADD r0,r12,r0
-  ;READMEMM
+  ;READMEM
   MEND
 
   MACRO
@@ -1367,7 +1299,6 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;VALUEOFPREINDEXED
   ;;OUT:r0 =value
   ;ADDRESSOFPREINDEXED ;r0
-  ;;BL r6502readmem ;r0
   ;READMEM
   ;MEND
 
@@ -1375,7 +1306,6 @@ ADDRESSOFZEROPAGE_LEN EQU 2*4
   ;VALUEOFPOSTINDEXEDY
   ;;OUT:r0=value
   ;ADDRESSOFPOSTINDEXEDY ;r0
-  ;;BL r6502readmem ;r0
   ;READMEM
   ;MEND
 

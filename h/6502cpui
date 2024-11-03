@@ -64,10 +64,10 @@
   MOVLE pc,lr
   CMP rpc,#&3000
   LDRLTB r0,[r12,rpc] ;get opcode
-  ADDLT pc,pc,#(READMEMBP_LEN+4)-4 ;4*4 (-4)
+  ADDLT pc,pc,#(READMEM_LEN+4)-4 ;4*4 (-4)
 
   MOV r0,rpc ;1*4
-  READMEMBP ;3*4
+  READMEM ;3*4
 
   ADD rpc,rpc,#1
   LDR r1,=r6512opcodes
@@ -95,7 +95,7 @@
   ADDLT pc,pc,#12 ;20 ;6*4 (-4)
 
   MOV r0,rpc ;1*4
-  READMEMM ;3*4
+  READMEM ;3*4
 
   ADD rpc,rpc,#1
   LDR r1,=r65c12opcodes

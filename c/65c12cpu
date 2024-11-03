@@ -11,8 +11,59 @@
 
 /*Original BBC 6502 ran at 2MHz (2,000,000 cycles)*/
 
+#include <string.h>
 #include "6502cpu.h"
 #include "beebit.h"
+
+void swappagesintomemorym(void)
+{
+  int nrom;
+
+  if ((beebit_acccon & 0x04)
+    OR ((beebit_acccon & 0x02) AND r6502_pc >= 0xC000 AND r6502_pc < 0xE000))
+  {
+    swappages(&memory[0x3000],&shadow[0x3000],0x50);
+  }
+
+  nrom = beebit_romsel & 0x0F;
+  if (beebit_romsel & 0x80)
+  {
+    memcpy(&memory[0x8000],shadow,0x1000);
+    memcpy(&memory[0x9000],&roms[nrom][0x1000],0x3000);
+  }
+  else
+    memcpy(&memory[0x8000],roms[nrom],0x4000);
+  
+  if (beebit_acccon & 0x04)
+    swappages(&memory[0xC000],&shadow[0x1000],0x20);
+}
+
+void swappagesoutofmemorym(void)
+{
+  int nrom;
+
+  if ((beebit_acccon & 0x04)
+    OR ((beebit_acccon & 0x02) AND r6502_pc >= 0xC000 AND r6502_pc < 0xE000))
+  {
+    swappages(&memory[0x3000],&shadow[0x3000],0x50);
+  }
+
+  nrom = beebit_romsel & 0x0F;  
+  if (beebit_romsel & 0x80)
+  {
+    memcpy(shadow,&memory[0x8000],0x1000);
+    if (beebit_romwritable[nrom])
+      memcpy(&roms[nrom][0x1000],&memory[0x9000],0x1000);
+  }
+  else
+  {
+    if (beebit_romwritable[nrom])
+      memcpy(roms[nrom],&memory[0x8000],0x4000);
+  }
+  
+  if (beebit_acccon & 0x04)
+    swappages(&memory[0xC000],&shadow[0x1000],0x20);
+}
 
 void r65c12reset(int lfull)
 {
@@ -26,6 +77,43 @@ void r65c12reset(int lfull)
     r6502_ps = 0x00;
     beebit_irq = 0x00;
     beebit_nmi = beebit_oldnmi = 0x00;
+
+    r6502readoffset[0x0] = r6502read0000;
+    r6502readoffset[0x1] = r6502read0000;
+    r6502readoffset[0x2] = r6502read0000;
+    r6502readoffset[0x3] = r6502read3000;
+    r6502readoffset[0x4] = r6502read3000;
+    r6502readoffset[0x5] = r6502read3000;
+    r6502readoffset[0x6] = r6502read3000;
+    r6502readoffset[0x7] = r6502read3000;
+    r6502readoffset[0x8] = r6502read8000_0;
+    r6502readoffset[0x9] = r6502read8000_0;
+    r6502readoffset[0xA] = r6502read8000_0;
+    r6502readoffset[0xB] = r6502read8000_0;
+    r6502readoffset[0xC] = r6502readC000;
+    r6502readoffset[0xD] = r6502readC000;
+    r6502readoffset[0xE] = r6502readC000;
+    r6502readoffset[0xF] = r6502readmF000;
+
+    r6502writeoffset[0x0] = r6502write0000;
+    r6502writeoffset[0x1] = r6502write0000;
+    r6502writeoffset[0x2] = r6502write0000;
+    r6502writeoffset[0x3] = r6502write3000;
+    r6502writeoffset[0x4] = r6502write3000;
+    r6502writeoffset[0x5] = r6502write3000;
+    r6502writeoffset[0x6] = r6502write3000;
+    r6502writeoffset[0x7] = r6502write3000;
+    r6502writeoffset[0x8] = r6502write8000_0;
+    r6502writeoffset[0x9] = r6502write8000_0;
+    r6502writeoffset[0xA] = r6502write8000_0;
+    r6502writeoffset[0xB] = r6502write8000_0;
+    r6502writeoffset[0xC] = r6502writeC000;
+    r6502writeoffset[0xD] = r6502writeC000;
+    r6502writeoffset[0xE] = r6502writeC000;
+    r6502writeoffset[0xF] = r6502writemF000;
+
+    swappagesintomemory = swappagesintomemorym;
+    swappagesoutofmemory = swappagesoutofmemorym;
   }
   r6502_pc = (memory[0xFFFD]<<8) + memory[0xFFFC];
 }

@@ -44,8 +44,6 @@
   IMPORT |r6502_cyclestogo|
   IMPORT |r6502read|
   IMPORT |r6502write|
-  IMPORT |r6502readbp|
-  IMPORT |r6502writebp|
   IMPORT |sbcbcd|
   IMPORT |r6512loadregs|
   IMPORT |r6512saveregs|
@@ -60,7 +58,6 @@
   EXPORT |r6512opcodeE4|
   EXPORT |r6512opcodeE5|
   EXPORT |r6512opcodeE6|
-  ;EXPORT |r6512opcodeE6_ram|
   EXPORT |r6512opcodeE7|
   EXPORT |r6512opcodeE8|
   EXPORT |r6512opcodeE9|
@@ -85,7 +82,7 @@
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFPREINDEXED
   ADDRESSOFPREINDEXED_BP ;r0 ;4 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   ;LDR r12,=r6502_ps ;pointer to r6502_ps
   ;LDRB rps,[r12] ;load r6502_ps
@@ -125,12 +122,12 @@ r6512opcodeE1_2
   ;STMFD sp!,{r0-r12,lr}
   ADDRESSOFPREINDEXED_BP ;r0 ;4 cycles
   MOV r2,r0
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ADD r0,r0,#1
   AND r0,r0,#&FF
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   MOV r0,r1 ;r0=value
   ;SBC
   ;LDR r12,=r6502_ps ;pointer to r6502_ps
@@ -303,7 +300,7 @@ r6512opcodeEB_2
   ;STMFD sp!,{r0-r2,rx,rps-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502CPX ;1 cycle
   CPU_CYCLES 2
@@ -316,7 +313,7 @@ r6512opcodeEB_2
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   ;LDR r12,=r6502_ps ;pointer to r6502_ps
   ;LDRB rps,[r12] ;load r6502_ps
@@ -347,11 +344,11 @@ r6512opcodeED_2
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
   MOV r2,r0 ;store address
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   R6502INC r0 ;2 cycles
   MOV r1,r0 ;value
   MOV r0,r2 ;address
-  WRITEMEMBP ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 4
   ;LDMFD sp!,{r0-r2,rps-r12,pc}
   ;MOV pc,lr

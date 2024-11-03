@@ -18,6 +18,7 @@ extern int adc_timer; /*adc timer*/
 
 extern void adcreset(void);
 extern void adcenter(void);
+extern void adcmodevars(void);
 extern void adcpoll(void);
 extern char adcread(int naddress);
 extern void adcwrite(int naddress,int nvalue);

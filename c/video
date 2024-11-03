@@ -5,6 +5,11 @@
  * (C) Copyright Michael J Foot, 1998-2024
  *
  * Email: <mjfoot.nz@gmail.com>
+ *
+ * Enhanced host screen mode compatibility (and more)
+ *   contributed by Crispian Daniels in 2024
+ *
+ * Email: <convertedgames@3insdale.me.uk>
  */
 
 /*on the 3dpool disc is a demo called BBoing! It uses an extra wide screen mode which does not get emulated here properly*/
@@ -28,6 +33,7 @@
 #include "video.h"
 #include "videoscale.h"
 #include "videoula.h"
+#include "adc.h"
 
 #ifndef ColourTrans_ReturnColourNumber
 #define ColourTrans_ReturnColourNumber 0x040744
@@ -3618,6 +3624,7 @@ void videoscanline(void)
               bbcvdu(7);
             }
             videohostmodevars();
+            adcmodevars();
             cursordisable();
           }
           else if (ncurrentmode == 7 OR ncurrentmode == -1)
@@ -3635,6 +3642,7 @@ void videoscanline(void)
               bbcvdu(beebit_graphicsmodespecifier);
             }
             videohostmodevars();
+            adcmodevars();
             cursordisable();
           }
         }

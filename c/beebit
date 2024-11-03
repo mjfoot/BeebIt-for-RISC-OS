@@ -2,9 +2,14 @@
  *
  * BeebIt - BBC Micro Model B Emulator
  *
- * (C) Copyright Michael J Foot, 1998-2023
+ * (C) Copyright Michael J Foot, 1998-2024
  *
  * Email: <mjfoot.nz@gmail.com>
+ *
+ * Enhanced host screen mode compatibility (and more)
+ *   contributed by Crispian Daniels in 2024
+ *
+ * Email: <convertedgames@3insdale.me.uk>
  */
 
 #include <stdio.h>
@@ -53,14 +58,12 @@ extern _kernel_swi_regs regs;
 int zeribeep_workspace;*/
 
 char memory[0x10000]; /*65536 bytes*/
-char shadow[0x10000]; /*65536 bytes*/
-/*shadow replaces lynne,hazel and andy for speed*/
-/*char lynne[0x5000];*/ /*20480 bytes*/
-/*char hazel[0x2000];*/ /*8192 bytes*/
+char shadow[0x8000]; /*32768 bytes*/
+/*shadow replaces andy,hazel and lynne for speed*/
 /*char andy[0x1000];*/ /*4096 bytes*/
+/*char hazel[0x2000];*/ /*8192 bytes*/
+/*char lynne[0x5000];*/ /*20480 bytes*/
 char roms[16][0x4000];
-
-/*char *shadow;*/ /*pointer to 65536 bytes*/
 
 int beebit_trace;
 char beebit_osrom[MACHINE_COMPACT+1][128];
@@ -123,49 +126,42 @@ int lexit, lbreak, lprintscreen;
   #endif
 #endif
 
+void copyselectedromintomemory(void)
+{
+  int nrom;
+
+  nrom = beebit_romsel & 0x0F;
+  if (beebit_machinetype == MACHINE_MODELBPLUS)
+  {
+    /*rom F uses rom E*/
+    if (nrom == 0x0F)
+      nrom = 0x0E;
+  }
+  memcpy(&memory[0x8000],roms[nrom],0x4000);
+}
+
 void pageinrom(int nrom, int lmosram)
 {
   #ifdef __DEBUG__
     fprintf(htrace,"paging in ROM %u",nrom);
   #endif
 
-  /*bbcvdu(82);
-  bbcvdu(79);
-  bbcvdu(77);
-  bbcvdu(32);
-  inttohex4(nrom);
-  bbcvdu(32);
-  inttohex4(lmosram);
-  bbcvdu(32);*/
+  if (beebit_rommodified)
+    memcpy(roms[beebit_romselected],&memory[0x8000],0x4000);
+  beebit_rommodified = FALSE;
+  if (lmosram)
+    /*&C000 - &CFFF is RAM */
+    /*copy &D000 - &FFFF only*/
+    memcpy(&memory[0x9000],roms[nrom]+0x1000,0x3000);
+  else
+    memcpy(&memory[0x8000],roms[nrom],0x4000);
 
-  /*if (beebit_romselected != nrom)
-  {*/
-    if (beebit_rommodified)
-      memcpy(roms[beebit_romselected],&memory[0x8000],0x4000);
-    beebit_rommodified = FALSE;
-    if (lmosram)
-      /*&C000 - &CFFF is RAM */
-      /*copy &D000 - &FFFF only*/
-      memcpy(&memory[0x9000],roms[nrom]+0x1000,0x3000);
-    else
-      memcpy(&memory[0x8000],roms[nrom],0x4000);
+  beebit_romselected = nrom;
 
-    beebit_romselected = nrom;
-    /*inttohex4(memory[0x8000]);
-    bbcvdu(32);
-    inttohex4(memory[0x8001]);
-    bbcvdu(32);
-    inttohex4(memory[0x8002]);
-    bbcvdu(32);
-    inttohex4(memory[0x8003]);
-    bbcvdu(10);
-    bbcvdu(13);*/
-
-    #ifdef __DEBUG__
-      fprintf(htrace,"done %X %X %X ",memory[0x8000],memory[0x8001],memory[0x8002]);
-      fprintf(htrace,"%s ",&memory[0x8009]);
-    #endif
-  /*}*/
+  #ifdef __DEBUG__
+    fprintf(htrace,"done %X %X %X ",memory[0x8000],memory[0x8001],memory[0x8002]);
+    fprintf(htrace,"%s ",&memory[0x8009]);
+  #endif
 }
 
 int loadrom(char *cfilename,int nslot)
@@ -622,19 +618,13 @@ int beebitenter(void)
     switch (beebit_machinetype)
     {
       case MACHINE_MODELB:
-        r6502read = r6502readb;
-        r6502write = r6502writeb;
         cpu_execute = r6502execute;
         break;
       case MACHINE_MODELBPLUS:
-        r6502read = r6502readbp;
-        r6502write = r6502writebp;
         cpu_execute = r6512execute;
         break;
       case MACHINE_MASTER128:
       case MACHINE_COMPACT:
-        r6502read = r6502readm;
-        r6502write = r6502writem;
         cpu_execute = r65c12execute;
         if (beebit_machinetype == MACHINE_MASTER128)
         {
@@ -661,8 +651,6 @@ int beebitenter(void)
         }
         break;
       default:
-        r6502read = r6502readb;
-        r6502write = r6502writeb;
         break;
     }
 
@@ -811,6 +799,7 @@ int beebitenter(void)
         crtcwidthextra();
         videomodechange();
         videohostmodevars();
+        adcmodevars();
         cursordisable();
       }
     }
@@ -824,7 +813,8 @@ int beebitenter(void)
       beebit_teletextmode = -1;
       videosetplot();
       videomodechange();
-      videohostmodevars();*/
+      videohostmodevars();
+      adcmodevars();*/
       /*setword((char *)nlocalscreen, (int)screen);*/
       /*initialise keyboard handler*/
       /*_kernel_swi(KeyBuffer_Claim,&regs,&regs);

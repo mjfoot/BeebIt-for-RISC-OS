@@ -49,22 +49,15 @@
   ;IMPORT |r6502_z|
   ;IMPORT |r6502_c|
   IMPORT |r6502_cyclestogo|
-  ;IMPORT |r6502read|
-  ;IMPORT |r6502write|
-  IMPORT |r6502readbp|
-  ;IMPORT |r6502writebp|
+  IMPORT |r6502read|
   IMPORT |r6512loadregs|
   IMPORT |r6512saveregs|
   IMPORT |r6512opcodes|
-
-  ;IMPORT |sheilaread|
-  ;IMPORT |sheilawrite|
 
 ; Export global symbols
 
   EXPORT |r6512opcodeB0|
   EXPORT |r6512opcodeB1|
-  ;EXPORT |r6512opcodeB1_ram|
   EXPORT |r6512opcodeB2|
   EXPORT |r6512opcodeB3|
   EXPORT |r6512opcodeB4|
@@ -151,7 +144,7 @@ r6512opcodeB0end
   ;STMFD sp!,{r0-r2,ry,rps-r12,lr}
   ;VALUEOFPOSTINDEXEDY
 ;  ADDRESSOFPOSTINDEXEDY ;r0 ;3+ cycles
-;  READMEMBP ;1 cycle
+;  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
 ;  R6502LDA ;1 cycle
 ;  CPU_CYCLES 2
@@ -167,7 +160,7 @@ r6512opcodeB0end
   ADDRESSOFZEROPAGE_BP r0
   ;LDRB r2,[r12,r0] ;lo
   MOV r3,r0
-  READMEMBP ;lo
+  READMEM ;lo
   MOV r2,r0 ;lo
   MOV r0,r3
   ADD r1,r0,#1 ;r1 = (r0+1)
@@ -176,7 +169,7 @@ r6512opcodeB0end
   ORR r0,r0,r1
   ;ADD r10,r12,r0
   ;LDRB r1,[r10] ;hi
-  READMEMBP ;hi
+  READMEM ;hi
   MOV r1,r0
   ;LDRB r1,[r12,r0] ;hi
   ADD r0,r2,r1,LSL#8 ;r0=lo+(hi<<8)
@@ -198,7 +191,7 @@ r6512opcodeB0end
   SUBEQ rcycles,rcycles,#3 ;r6502_cyclestogo -= 3
   SUBNE rcycles,rcycles,#4 ;r6502_cyclestogo -= 4
 
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,ry,rps-r12,pc}
@@ -218,7 +211,7 @@ r6512opcodeB0end
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
   ;VALUEOFPOSTINDEXEDY
   ADDRESSOFPOSTINDEXEDY_BP ;r0 ;3+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0
@@ -297,7 +290,7 @@ r6512opcodeB0end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEYPLUS
   ADDRESSOFABSOLUTEYPLUS_BP ;r0 ;2+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
@@ -328,7 +321,7 @@ r6512opcodeB0end
   ;STMFD sp!,{lr}
   ;VALUEOFABSOLUTEYPLUS
   ADDRESSOFABSOLUTEYPLUS_BP ;r0 ;2+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   ANDS ra,r0,rsp ;r0 = r0 and sp
   ;STRB ra,[r12] ;save a
@@ -350,7 +343,7 @@ r6512opcodeB0end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEXPLUS
   ADDRESSOFABSOLUTEXPLUS_BP ;r0 ;2+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502LDY ;1 cycle
   CPU_CYCLES 2
@@ -363,7 +356,7 @@ r6512opcodeB0end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEXPLUS
   ADDRESSOFABSOLUTEXPLUS_BP ;r0 ;2+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
@@ -376,7 +369,7 @@ r6512opcodeB0end
   ;STMFD sp!,{r0-r12,lr}
   ;VALUEOFABSOLUTEYPLUS
   ADDRESSOFABSOLUTEYPLUS_BP ;r0 ;2+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502LDX ;1 cycle
   CPU_CYCLES 2
@@ -389,7 +382,7 @@ r6512opcodeB0end
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
   ;VALUEOFABSOLUTEYPLUS ;r0=ra
   ADDRESSOFABSOLUTEYPLUS_BP ;r0 ;2+ cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0

@@ -1,10 +1,12 @@
-;>riscos.s
+;>riscosvid4.s
 ;
 ; BeebIt - BBC Micro Model B Emulator
 ;
-; (C) Copyright Michael J Foot, 1998-2003
+; Enhanced host screen mode compatibility
 ;
-; Email: <mjfoot@paradise.net.nz>
+; (C) Copyright Crispian Daniels, 2024
+;
+; Email: <convertedgames@3insdale.me.uk>
 ;
 ; Use the GET directive to include register definitions as if typed here
 

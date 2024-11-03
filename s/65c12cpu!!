@@ -300,8 +300,6 @@
   IMPORT |r6502_y|
   IMPORT |r6502_cyclestogo|
   IMPORT |r6502read|
-  IMPORT |r6502readm|
-  IMPORT |r6502write|
   IMPORT |beebit_acccon|
   IMPORT |beebit_trace|
   IMPORT |beebit_romsel|
@@ -660,7 +658,7 @@ r65c12execute_loop2
   CMP rpc,#&3000
   LDRLTB r0,[r12,rpc] ;get opcode
   MOVGE r0,rpc
-  BLGE r6502readm ;=r0
+  BLGE r6502read ;=r0
   ;LDRB r3,[r12,rpc] ;get opcode
   ADD rpc,rpc,#1
   ;ANDS r0,rpc,#&10000

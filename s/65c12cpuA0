@@ -47,15 +47,11 @@
   ;IMPORT |r6502_z|
   ;IMPORT |r6502_c|
   IMPORT |r6502_cyclestogo|
-  ;IMPORT |r6502read|
-  IMPORT |r6502readm|
-  IMPORT |r6502writem|
+  IMPORT |r6502read|
+  IMPORT |r6502write|
   IMPORT |r65c12loadregs|
   IMPORT |r65c12saveregs|
   IMPORT |r65c12opcodes|
-
-  ;IMPORT |sheilaread|
-  ;IMPORT |sheilawrite|
 
 ; Export global symbols
 
@@ -84,8 +80,7 @@
   ADDRESSOFABSOLUTEX_M ;;; ;r0 ;3 cycles
   ;R6502STA ;r1=r6502_a
   MOV r1,ra ;1 cycle
-  ;BL r6502writemem ;(n,r6502_a)
-  WRITEMEMM ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,rx,rps-r12,pc}
   ;MOV pc,lr
@@ -96,7 +91,7 @@
   ;STMFD sp!,{lr}
   ADDRESSOFABSOLUTEX_M ;;; ;r0 ;3 cycles
   MOV r1,#0 ;1 cycle
-  WRITEMEMM ;1 cycle
+  WRITEMEM ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{pc}
   ;MOV pc,lr
@@ -126,7 +121,7 @@
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFPREINDEXED
   ADDRESSOFPREINDEXED_M ;r0 ;4 cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,rps-r12,pc}
@@ -149,7 +144,7 @@
   ;LAX
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
   ADDRESSOFPREINDEXED_M ;r0 ;4 cycles
-  READMEMM ;r0=ra ;1 cycle
+  READMEM ;r0=ra ;1 cycle
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0
   MOV ra,r0
@@ -171,7 +166,7 @@
   ;R6502LDY
   ;---
   ;MOV r1,r0
-  ;READMEMM
+  ;READMEM
   ;MOV ry,r0
   ;---
   LDRB ry,[r12,r0] ;r0
@@ -190,7 +185,7 @@
   ;R6502LDA
   ;---
   ;MOV r1,r0
-  ;READMEMM
+  ;READMEM
   ;MOV ra,r0
   ;---
   LDRB ra,[r12,r0] ;r0
@@ -209,7 +204,7 @@
   ;R6502LDX
   ;---
   ;MOV r1,r0
-  ;READMEMM
+  ;READMEM
   ;MOV rx,r0
   ;---
   LDRB rx,[r12,r0] ;r0
@@ -295,7 +290,7 @@
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDY ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,rps-r12,pc}
@@ -306,7 +301,7 @@
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFABSOLUTE ;2 cycles
   ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,rps-r12,pc}
@@ -317,7 +312,7 @@
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   R6502LDX ;1 cycle
   CPU_CYCLES 2
   ;LDMFD sp!,{r0-r2,rps-r12,pc}
@@ -329,7 +324,7 @@
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_M ;r0 ;2 cycles
-  READMEMM ;1 cycle
+  READMEM ;1 cycle
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0
   MOV ra,r0

@@ -1,10 +1,10 @@
-;>riscosvid.s
+;>riscosvid1.s
 ;
 ; BeebIt - BBC Micro Model B Emulator
 ;
-; (C) Copyright Michael J Foot, 1998-2003
+; (C) Copyright Michael J Foot, 1998-2024
 ;
-; Email: <mjfoot@paradise.net.nz>
+; Email: <mjfoot.nz@gmail.com>
 ;
 ; Use the GET directive to include register definitions as if typed here
 
@@ -36,10 +36,8 @@
 
   EXPORT |nhostscreen|
   EXPORT |nhostscreenlinelength|
-  EXPORT |roundteletextalpha|
   EXPORT |blankrow|
   EXPORT |blankrowx|
-  ;EXPORT |swapbanks|
 
   EXPORT |screenstartandlinelength|
   EXPORT |vsync|
@@ -47,86 +45,6 @@
 ;
 ;RISC OS
 ;
-
-|roundteletextalpha|
-  ;r0=address of character data to read
-  ;r1=address of upper half-line character data to write
-  ;r2=address of lower half-line character data to write
-  STMFD sp!,{r4-r12,lr}
-  MOV r3,#10
-  LDMIA r0,{r4-r5}
-  LDMIA r0!,{r6-r7}
-  LDR r12,=0x0F0F0F0F
-roundteletextalpha1
-  MOV r8,r4,LSL #8
-  MOV r9,r6,LSL #8
-  AND r10,r4,r9
-  BIC r10,r10,r8
-  AND r10,r10,r12
-  MOV r8,r4,LSR #8
-  MOV r9,r6,LSR #8
-  ORR r8,r8,r5,LSL #24
-  ORR r9,r9,r7,LSL #24
-  AND r11,r4,r9
-  BIC r11,r11,r8
-  AND r11,r11,r12,LSL #4
-  ORR r10,r10,r11
-  ORR r10,r10,r6
-  STR r10,[r1],#4
-  MOV r8,r5,LSL #8
-  MOV r9,r7,LSL #8
-  ORR r8,r8,r4,LSR #24
-  ORR r9,r9,r6,LSR #24
-  AND r10,r5,r9
-  BIC r10,r10,r8
-  AND r10,r10,r12
-  MOV r8,r5,LSR #8
-  MOV r9,r7,LSR #8
-  AND r11,r5,r9
-  BIC r11,r11,r8
-  AND r11,r11,r12,LSL #4
-  ORR r10,r10,r11
-  ORR r10,r10,r7
-  STR r10,[r1],#4
-  SUBS r3,r3,#1
-  BEQ roundteletextalpha2
-  MOV r4,r6
-  MOV r5,r7
-  LDMIA r0!,{r6-r7}
-  MOV r8,r4,LSL #8
-  MOV r9,r6,LSL #8
-  AND r10,r6,r8
-  BIC r10,r10,r9
-  AND r10,r10,r12
-  MOV r8,r4,LSR #8
-  MOV r9,r6,LSR #8
-  ORR r8,r8,r5,LSL #24
-  ORR r9,r9,r7,LSL #24
-  AND r11,r6,r8
-  BIC r11,r11,r9
-  AND r11,r11,r12,LSL #4
-  ORR r10,r10,r11
-  ORR r10,r10,r4
-  STR r10,[r2],#4
-  MOV r8,r5,LSL #8
-  MOV r9,r7,LSL #8
-  ORR r8,r8,r4,LSR #24
-  ORR r9,r9,r6,LSR #24
-  AND r10,r7,r8
-  BIC r10,r10,r9
-  AND r10,r10,r12
-  MOV r8,r5,LSR #8
-  MOV r9,r7,LSR #8
-  AND r11,r7,r8
-  BIC r11,r11,r9
-  AND r11,r11,r12,LSL #4
-  ORR r10,r10,r11
-  ORR r10,r10,r5
-  STR r10,[r2],#4
-  B roundteletextalpha1
-roundteletextalpha2
-  STMIA r2!,{r6-r7}
-  LDMFD sp!,{r4-r12,pc}
 
 ;|blankrowold|
 ;  ;r0=address to write to
@@ -198,42 +116,6 @@ blankrowx3
   ADD r0,r0,r3
   B blankrowx1
   LDMFD sp!,{r0-r4,r10,pc}
-
-;|swapbanks|
-;  ;r0=start address
-;  ;r1=length
-;  STMFD sp!,{r0-r3,r11,r12,lr}
-;  CMP r1,#0
-;  LDMEQFD sp!,{r0-r3,r11,r12,pc}
-;  LDR r12,=memory
-;  LDR r11,=shadow
-;  ADD r1,r0,r1
-;  SUB r1,r1,#4
-;
-;swapbanks1
-;  LDR r2,[r12,r1]
-;  LDR r3,[r11,r1]
-;  STR r2,[r11,r1]
-;  STR r3,[r12,r1]
-;  SUB r1,r1,#4
-;  LDR r2,[r12,r1]
-;  LDR r3,[r11,r1]
-;  STR r2,[r11,r1]
-;  STR r3,[r12,r1]
-;  SUB r1,r1,#4
-;  LDR r2,[r12,r1]
-;  LDR r3,[r11,r1]
-;  STR r2,[r11,r1]
-;  STR r3,[r12,r1]
-;  SUB r1,r1,#4
-;  LDR r2,[r12,r1]
-;  LDR r3,[r11,r1]
-;  STR r2,[r11,r1]
-;  STR r3,[r12,r1]
-;  SUB r1,r1,#4
-;  CMP r1,r0
-;  BGE swapbanks1
-;  LDMFD sp!,{r0-r3,r11,r12,pc}
 
 ;|mode0plot_old|
 ;  ;r0 = byte to plot (n)

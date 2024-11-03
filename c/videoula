@@ -29,6 +29,7 @@
 #include "riscos.h"
 #include "scrmode.h"
 #include "swis.h"
+#include "adc.h"
 #include "video.h"
 
 extern _kernel_swi_regs regs;
@@ -559,6 +560,7 @@ void videoulawrite(int naddress, char nvalue)
       ncurrentmode = video_mode;
       /*videomodechange();*/
       videohostmodevars();
+      adcmodevars();
       cursordisable();
       crtcscreen();
       crtccursor();

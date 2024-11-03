@@ -51,30 +51,22 @@
   IMPORT |r6502_cyclestogo|
   IMPORT |r6502read|
   IMPORT |r6502write|
-  IMPORT |r6502readbp|
-  IMPORT |r6502writebp|
   IMPORT |r6512loadregs|
   IMPORT |r6512saveregs|
   IMPORT |r6512opcodes|
 
-  ;IMPORT |sheilaread|
-  ;IMPORT |sheilawrite|
-
 ; Export global symbols
 
   EXPORT |r6512opcodeA0|
-  ;EXPORT |r6512opcodeA0_ram|
   EXPORT |r6512opcodeA1|
   EXPORT |r6512opcodeA2|
   EXPORT |r6512opcodeA3|
   EXPORT |r6512opcodeA4|
   EXPORT |r6512opcodeA5|
-  ;EXPORT |r6512opcodeA5_ram|
   EXPORT |r6512opcodeA6|
   EXPORT |r6512opcodeA7|
   EXPORT |r6512opcodeA8|
   EXPORT |r6512opcodeA9|
-  ;EXPORT |r6512opcodeA9_ram|
   EXPORT |r6512opcodeAA|
   EXPORT |r6512opcodeAB|
   EXPORT |r6512opcodeAC|
@@ -112,7 +104,7 @@
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFPREINDEXED
   ADDRESSOFPREINDEXED_BP ;r0 ;4 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
@@ -136,7 +128,7 @@
   ;LAX
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
   ADDRESSOFPREINDEXED_BP ;r0 ;4 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0
@@ -346,7 +338,7 @@
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502LDY ;1 cycle
   CPU_CYCLES 2
@@ -358,7 +350,7 @@
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFABSOLUTE ;2 cycles
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502LDA ;1 cycle
   CPU_CYCLES 2
@@ -371,7 +363,7 @@
   ;STMFD sp!,{r0-r2,rps-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   R6502LDX ;1 cycle
   CPU_CYCLES 2
@@ -384,7 +376,7 @@
   ;STMFD sp!,{r0-r2,rpc-r12,lr}
   ;VALUEOFABSOLUTE
   ADDRESSOFABSOLUTE_BP ;r0 ;2 cycles
-  READMEMBP ;1 cycle
+  READMEM ;1 cycle
   ;BL r6502readbp; 1 cycle
   ;LDR r11,=r6502_a
   ;STRB r0,[r11] ;ra=r0
