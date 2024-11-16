@@ -982,7 +982,6 @@ void beebitpoll(void)
         beebit_rommodified = FALSE;
         systemviareset(FALSE);
         userviareset(FALSE);
-        w1770_initialised = FALSE; /*for the B+*/
         sheilareset();
         /*videoulareset(FALSE);*/
         i8271reset();

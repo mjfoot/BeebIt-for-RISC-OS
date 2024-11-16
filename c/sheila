@@ -361,15 +361,10 @@ char sheilaread_bp(int naddress)
     case 0x98:
     case 0x9C:
       /*&FE80-&FE9F (8271 or 1770)*/
-      if ((naddress & 0xFF) == 0x80)
-        nresult = w1770controlread();
-      else if ((naddress & 0xFF) == 0x85 AND !w1770_initialised)
-      {
-        nresult = w1770controlread();
-        w1770_initialised = TRUE;
-      }
-      else
+      if (naddress & 0x04)
         nresult = w1770read(naddress);
+      else
+        nresult = w1770controlread();
       break;
     case 0xA0:
     case 0xA4:
@@ -933,12 +928,10 @@ void sheilawrite_bp(int naddress, char nvalue)
     case 0x98:
     case 0x9C:
       /*&FE80 - &FE9F (8271 or 1770)*/
-      if ((naddress & 0xFF) == 0x80)
-        w1770controlwrite(nvalue);
-      else if ((naddress & 0xFF) == 0x85 AND !w1770_initialised)
-        w1770controlwrite(nvalue);
-      else
+      if (naddress & 0x04)
         w1770write(naddress,nvalue);
+      else
+        w1770controlwrite(nvalue);
       break;
     case 0xC0:
     case 0xC4:
