@@ -349,6 +349,10 @@ keyupdown3
   MOV r8,#&FF
   STRB r8,[r11,r9] ;set status to &FF
 
+  ;check for <Shift> and <Ctrl>
+  CMP r9,#&01
+  LDMLSFD sp!,{r0-r3,r8-r12,pc} ;if shift or ctrl, exit
+
   ;CMP r9,#&50 ;shift lock
   ;BNE keyupdown4
 
