@@ -658,10 +658,7 @@ void sheilawrite_b(int naddress, char nvalue)
       videoulawrite(naddress, nvalue);
       break;
     case 0x30:
-    case 0x34:
-    case 0x38:
-    case 0x3C:
-      /*&FE30 - &FE3F (ROMSEL)*/
+      /*&FE30 - &FE33 (ROMSEL)*/
       #ifdef __DEVELOPxx__
         fprintf(htrace,"ROMSEL(&%X,&%X)",naddress,nvalue);
       #endif
@@ -673,6 +670,18 @@ void sheilawrite_b(int naddress, char nvalue)
       #ifdef __DEVELOPxx__
         fprintf(htrace,"=&%X\n",beebit_romsel);
       #endif
+      break;
+    case 0x34:
+      /*&FE34 - &FE37 (ROMSEL in place of ACCCON)*/
+      /*ignoring writes directed at B+ or Master*/
+      break;
+    case 0x38:
+      /*&FE38 - &FE3B (ROMSEL in place of INTOFF)*/
+      /*ignoring writes directed at Master*/
+      break;
+    case 0x3C:
+      /*&FE3C - &FE3F (ROMSEL in place of INTON)*/
+      /*ignoring writes directed at Master*/
       break;
     case 0x40:
     case 0x44:
