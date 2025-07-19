@@ -26,6 +26,8 @@
 char m6845_r[18]; /*18 registers*/
 int m6845_vt;
 int m6845_sl;
+int m6845_slplus;
+int m6845_scstep;
 int m6845_vd;
 int m6845_hsp;
 int m6845_vsp;
@@ -39,6 +41,7 @@ int m6845_rightoffscreen;
 int m6845_leftextra; /*extra pixels on the left*/
 int m6845_rightextra; /*extra pixels on the right*/
 int m6845_interlaceon;
+int m6845_interlacesl;
 int m6845_displayskew;
 int m6845_cursorskew;
 int m6845_addressreg;
@@ -256,8 +259,11 @@ void crtcwrite(int naddress,int nvalue)
       /* 1  0=Two character delay*/
       /* 1  1=Disable cursor output*/
       m6845_interlaceon = (nvalue & 0x01);
+      m6845_interlacesl = (nvalue & 0x03) == 0x03;
       m6845_displayskew = (nvalue & 0x30)>>4;
       m6845_cursorskew = (nvalue & 0xC0)>>6;
+      m6845_scstep = m6845_interlacesl+1;
+      m6845_slplus = m6845_sl+m6845_scstep;
       /*if (!m6845_interlaceon)
         video_field = 0;*/
       video_display = (video_de AND m6845_displayskew != 3);
@@ -277,7 +283,8 @@ void crtcwrite(int naddress,int nvalue)
     case 9:
       /*5 bit*/
       /*number of scan lines per character row*/
-      m6845_sl = (nvalue & 0x1F)+1;
+      m6845_sl = (nvalue & 0x1F);
+      m6845_slplus = m6845_sl+m6845_scstep;
       crtcvertical();
       break;
     case 10:
@@ -468,7 +475,7 @@ void crtcwidthextra(void)
 
 void crtchorizontal(void)
 {
-  if (videoula_clockrate OR lteletextmode)
+  if (videoula_clockrate)
     /*fast clock mode (2MHz cycles) */
     m6845_horizontaltotal = (m6845_r[0x00] + 1);
   else
@@ -478,19 +485,19 @@ void crtchorizontal(void)
 
 void crtcvertical(void)
 {
-  if ((m6845_vd*m6845_sl) == MODE12_Y)
-    video_display0 = ((m6845_vt-m6845_vsp)*m6845_sl)+m6845_adj/*-m6845_vsw*/;
+  if ((m6845_vd*m6845_slplus) == MODE12_Y)
+    video_display0 = ((m6845_vt-m6845_vsp)*m6845_slplus)+m6845_adj/*-m6845_vsw*/;
   else
   {
     /*MODES 3,6*/
-    if ((m6845_vd*m6845_sl) == 250)
+    if ((m6845_vd*m6845_slplus) == 250)
       /*Botch for Master Compact Modes 3 and 6*/
-      video_display0 = ((m6845_vt-m6845_vsp)*m6845_sl)+m6845_adj/*-m6845_vsw*/;
+      video_display0 = ((m6845_vt-m6845_vsp)*m6845_slplus)+m6845_adj/*-m6845_vsw*/;
     else
       video_display0 = 32;
     /*video_display0 = 32+((MODE12_Y-(m6845_vd*m6845_sl)+m6845_adj)/2);*/
   }
-  video_display1 = video_display0+MODE12_Y; /*(m6845_vd*m6845_sl)+m6845_adj;*/
+  video_display1 = video_display0+MODE12_Y; /*(m6845_vd*m6845_slplus)+m6845_adj;*/
   video_totalend = ((m6845_vt << 8) | m6845_adj);
 
 /*    bbcvdu(32);

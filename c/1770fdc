@@ -99,13 +99,12 @@ int w1770_side;
 int w1770_density;
 int w1770_timer;
 int w1770_byteinsector;
-int w1770_initialised; /*for the B+*/
 int w1770_writegate;
 int w1770_lastbyte;
 
 void w1770reset(void)
 {
-  w1770_controlreg = 0;
+  w1770_controlreg = 1;
   w1770_statusreg = 0;
   w1770_trackreg = w1770_track = 0;
   w1770_sectorreg = 0;
@@ -116,7 +115,6 @@ void w1770reset(void)
   w1770_timer = 0;
   w1770_lastbyte = FALSE;
   w1770_writegate = FALSE;
-  w1770_initialised = FALSE;
 }
 
 /*void w1770setnmi(char nvalue)

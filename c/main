@@ -15,7 +15,7 @@
 /* DEFINES */
 
 #define APP_NAME "BeebIt"
-#define APP_VERSION "0.77"
+#define APP_VERSION "0.78"
 
 #define Wimp_GetMenuState 0x0400F4
 

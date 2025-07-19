@@ -361,15 +361,10 @@ char sheilaread_bp(int naddress)
     case 0x98:
     case 0x9C:
       /*&FE80-&FE9F (8271 or 1770)*/
-      if ((naddress & 0xFF) == 0x80)
-        nresult = w1770controlread();
-      else if ((naddress & 0xFF) == 0x85 AND !w1770_initialised)
-      {
-        nresult = w1770controlread();
-        w1770_initialised = TRUE;
-      }
-      else
+      if (naddress & 0x04)
         nresult = w1770read(naddress);
+      else
+        nresult = w1770controlread();
       break;
     case 0xA0:
     case 0xA4:
@@ -658,10 +653,7 @@ void sheilawrite_b(int naddress, char nvalue)
       videoulawrite(naddress, nvalue);
       break;
     case 0x30:
-    case 0x34:
-    case 0x38:
-    case 0x3C:
-      /*&FE30 - &FE3F (ROMSEL)*/
+      /*&FE30 - &FE33 (ROMSEL)*/
       #ifdef __DEVELOPxx__
         fprintf(htrace,"ROMSEL(&%X,&%X)",naddress,nvalue);
       #endif
@@ -673,6 +665,18 @@ void sheilawrite_b(int naddress, char nvalue)
       #ifdef __DEVELOPxx__
         fprintf(htrace,"=&%X\n",beebit_romsel);
       #endif
+      break;
+    case 0x34:
+      /*&FE34 - &FE37 (ROMSEL in place of ACCCON)*/
+      /*ignoring writes directed at B+ or Master*/
+      break;
+    case 0x38:
+      /*&FE38 - &FE3B (ROMSEL in place of INTOFF)*/
+      /*ignoring writes directed at Master*/
+      break;
+    case 0x3C:
+      /*&FE3C - &FE3F (ROMSEL in place of INTON)*/
+      /*ignoring writes directed at Master*/
       break;
     case 0x40:
     case 0x44:
@@ -924,12 +928,10 @@ void sheilawrite_bp(int naddress, char nvalue)
     case 0x98:
     case 0x9C:
       /*&FE80 - &FE9F (8271 or 1770)*/
-      if ((naddress & 0xFF) == 0x80)
-        w1770controlwrite(nvalue);
-      else if ((naddress & 0xFF) == 0x85 AND !w1770_initialised)
-        w1770controlwrite(nvalue);
-      else
+      if (naddress & 0x04)
         w1770write(naddress,nvalue);
+      else
+        w1770controlwrite(nvalue);
       break;
     case 0xC0:
     case 0xC4:

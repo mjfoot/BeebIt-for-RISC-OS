@@ -20,6 +20,8 @@
 #define ADFS_NON_INTERLEAVED 0x10 /*non interleaved*/
 #define ADFS_INTERLEAVED 0x11 /*interleaved*/
 
+typedef char I8271_REMOVED_DATA[ADFS_SECTOR_SIZE > DFS_SECTOR_SIZE ? ADFS_SECTOR_SIZE : DFS_SECTOR_SIZE];
+
 /*Intel 8271*/
 /*extern int i8271_writeprotect[2];*/
 extern char i8271_commandreg;

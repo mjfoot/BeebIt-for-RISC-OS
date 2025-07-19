@@ -13,6 +13,8 @@
 extern char m6845_r[18]; /*18 registers*/
 extern int m6845_vt;
 extern int m6845_sl;
+extern int m6845_slplus;
+extern int m6845_scstep;
 extern int m6845_vd;
 extern int m6845_hsp;
 extern int m6845_vsp;
@@ -26,6 +28,7 @@ extern int m6845_rightoffscreen;
 extern int m6845_leftextra; /*extra pixels on the left*/
 extern int m6845_rightextra; /*extra pixels on the right*/
 extern int m6845_interlaceon;
+extern int m6845_interlacesl;
 extern int m6845_displayskew;
 extern int m6845_cursorskew;
 extern int m6845_addressreg;
