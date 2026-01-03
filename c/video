@@ -328,6 +328,7 @@ void videosetscale(void)
     videographicsscale = NULL;
     videoteletextscale = NULL;
   }
+  nclock = clock();
 }
 
 void videosetplot(void)
@@ -551,7 +552,7 @@ void videoreset(int lfull)
   /*video_phase = VIDEO_DRAWWAIT;*/
   video_field = 0;
   video_drawline = 0;
-  nclock = clock()+TIME_50HZ;
+  nclock = clock();
   m6845_scstep = 1;
   m6845_vc = 0; /*m6845_vsp;*/
   m6845_sc = -1;
@@ -3504,6 +3505,9 @@ void videoscanline(void)
   int naddress,localrow,nscaledscreen;
   int displaycursorx,displaycursorwidth;
   int charstodisplayline;
+#ifdef __RISCOS__
+  int clockdiff;
+#endif
 
   /*---counter---*/
 
@@ -3669,11 +3673,13 @@ void videoscanline(void)
       /*sync emulated BBC clock with PC clock*/
       if (beebit_cpuspeed == CPU_2MHZ)
       {
-        vsync(); /*wait for native scren vsync*/
-        while (clock() < nclock)
+        nclock += TIME_50HZ;
+        clockdiff = (int)(nclock - clock());
+        while (clockdiff >= 5)
         {
+          vsync(); /*wait for native screen vsync*/
+          clockdiff = (int)(nclock - clock());
         }
-        nclock = clock()+TIME_50HZ;
       }
       /*}*/
     }
