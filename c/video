@@ -3680,6 +3680,8 @@ void videoscanline(void)
           vsync(); /*wait for native screen vsync*/
           clockdiff = (int)(nclock - clock());
         }
+        if (clockdiff < -25)
+          nclock += (-25 - clockdiff);
       }
       /*}*/
     }
