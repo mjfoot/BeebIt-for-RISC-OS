@@ -205,11 +205,11 @@ host_r6502opcode07_interface
 
 host_r6502opcode07_2
   ;swap out memory overlays
-  LDR r0,[sp],#4
+  LDMFD sp!,{r0,r4-r12}
   MOV lr,pc
   LDR pc,[r0,#:INDEX:HOST_PAGING+:INDEX:HOSTPAGING_SWAPOUTOFMEMORY]
 
-  LDMFD sp!,{r4-r12,lr}
+  LDR lr, [sp], #4
   R6502_CYCLE_UPDATE_POP
   LDR r1,[r0,#:INDEX:R6502_ADDRESS_CODE]
   R6502_CYCLE_FETCH_RETURN interrupt
@@ -279,11 +279,11 @@ host_r6502opcode07_error4
 
 host_r6502opcode07_error5
   ;swap out memory overlays
-  LDR r0,[sp],#4
+  LDMFD sp!,{r0,r4-r12}
   MOV lr,pc
   LDR pc,[r0,#:INDEX:HOST_PAGING+:INDEX:HOSTPAGING_SWAPOUTOFMEMORY]
 
-  LDMFD sp!,{r4-r12,lr}
+  LDR lr, [sp], #4
   R6502_CYCLE_UPDATE_POP
   LDR r1,[r0,#:INDEX:R6502_ADDRESS_CODE]
   R6502_CYCLE_FETCH_RETURN interrupt
