@@ -148,13 +148,13 @@ host_r6502opcode07_interface
   ORR r10,r10,#&20000
   SWI OS_CallASWI
 
-  LDR r8,[sp,#20]
+  LDR r8,[sp,#8]
   BIC r8,r8,#&C3 ;%11000011 ;clear NVubdiZC
   ORRMI r8,r8,#NFLAG
   ORREQ r8,r8,#ZFLAG
   ORRCS r8,r8,#CFLAG
   ORRVS r8,r8,#VFLAG
-  STR r8,[sp,#20]
+  STR r8,[sp,#8]
 
   BVS host_r6502opcode07_error
 
