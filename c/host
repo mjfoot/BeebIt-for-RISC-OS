@@ -36,6 +36,7 @@
 extern _kernel_swi_regs regs;
 #endif
 
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201710L
 static_assert(offsetof(HOSTMAP, m_shift) + sizeof(R6502ZONEMAP) == offsetof(R6502ZONEMAP, m_shift) + sizeof(HOSTMAP), "Expecting consistent data bus value offsets");
 static_assert(offsetof(HOSTMAP, m) + sizeof(R6502ZONEMAP) == offsetof(R6502ZONEMAP, m) + sizeof(HOSTMAP), "Expecting consistent data bus value offsets");
 
@@ -43,6 +44,7 @@ static_assert(offsetof(HOSTMAP, DC) + sizeof(R6502ZONEMAP) == offsetof(R6502ZONE
 static_assert(offsetof(HOSTMAP, CC) + sizeof(R6502ZONEMAP) == offsetof(R6502ZONEMAP, CC) + sizeof(HOSTMAP), "Expecting consistent zone offsets");
 static_assert(offsetof(HOSTMAP, BC) + sizeof(R6502ZONEMAP) == offsetof(R6502ZONEMAP, BC) + sizeof(HOSTMAP), "Expecting consistent zone offsets");
 static_assert(offsetof(HOSTMAP, AC) + sizeof(R6502ZONEMAP) == offsetof(R6502ZONEMAP, AC) + sizeof(HOSTMAP), "Expecting consistent zone offsets");
+#endif
 
 extern R6502CPUMAP* host_r6502touch0000(R6502CPUMAP* ctop, uintptr_t address_code, const R6502ADDRESSINGCALLBACKS* callbacks);
 extern R6502CPUMAP* host_r6502touchbp3000_ram(R6502CPUMAP* ctop, uintptr_t address_code, const R6502ADDRESSINGCALLBACKS* callbacks);

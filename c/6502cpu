@@ -17,6 +17,7 @@
 #include "beebit.h"
 #include "6502cpu.h"
 
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201710L
 static_assert(offsetof(R6502ZONEMAP, DC) == 0, "Expecting zones at specific offsets");
 static_assert(offsetof(R6502ZONEMAP, CC) == (0x3000>>2) * sizeof(uintptr_t), "Expecting zones at specific offsets");
 static_assert(offsetof(R6502ZONEMAP, BC) == ((0x3C00>>2)+4) * sizeof(uintptr_t), "Expecting zones at specific offsets");
@@ -35,6 +36,7 @@ static_assert(sizeof(R6502CPUMAP) == sizeof(R6502ZONEMAP), "Expecting consistent
 static_assert(R6502_SEQUENCE_COUNT <= R6502_SEQUENCE_ALLOWANCE, "Expecting R6502_SEQUENCE_COUNT not to exceed R6502_SEQUENCE_ALLOWANCE");
 
 static_assert(offsetof(R6502CPUMAP, addressingops) == sizeof(R6502CPUMAP) - ((ADDRESSING_BASECODE<<4)|0xF)*4*sizeof(uintptr_t), "Expecting addressingops at specific offset");
+#endif
 
 
 const R6502OP r6502_nopsequence[] = R6502_IMPLIED_SEQUENCE(r6502nopstep);
